@@ -1,19 +1,27 @@
 extends Node3D
-## Missile Tycoon Islands 3.0
-## Airport-sized islands, layered air defense, modern missiles and AI rivals that
-## start from zero just like the player. (Godot 4.x, Compatibility renderer)
+## Missile Tycoon Islands 4.0
+## Big empty square plots (like a Roblox baseplate). Everyone starts with $0 and one house.
+## Rivals build an economy, stockpile missiles, attack in waves, then rest again.
+## Procedural sound, animated water, layered air defense. (Godot 4.x, Compatibility renderer)
 ## Left half of the screen = floating joystick, right half = drag to look around.
 
-const SAVE_PATH := "user://missile_tycoon_v3.json"
-const ISLAND_R := 24.0
-const RING := [0.0, 0.0, 55.0, 60.0, 72.0]
-const WALK_SPEED := 9.0
-const PLAYER_LIMIT := 22.0
-const MAX_HOUSES := 18
+const SAVE_PATH := "user://missile_tycoon_v4.json"
+const SETTINGS_PATH := "user://settings_v1.json"
+const PLOT_HALF := 50.0
+const PLAYER_HALF := 47.0
+const RING := [0.0, 0.0, 100.0, 115.0, 135.0]
+const WALK_SPEED := 12.0
+const MAX_HOUSES := 24
 const MAX_DEFENSES := 10
-const PRICE_REPAIR := 100
-const START_MONEY := 400
+const MAX_HP := 300
+const PRICE_REPAIR := 150
+const REPAIR_AMOUNT := 60
+const START_MONEY := 0
+const PEACE_TIME := 240.0
 const LAUNCH_PRICES := [250, 500, 1000, 1800]
+const LOOK_SENS := [0.006, 0.010, 0.016]
+const SENS_NAMES := ["LOW", "MEDIUM", "HIGH"]
+const RATE := 16000
 const TEAM_COLORS := [
     Color(0.2, 0.55, 1.0),
     Color(0.9, 0.22, 0.2),
@@ -22,31 +30,75 @@ const TEAM_COLORS := [
 ]
 const MISSILES := [
     {"name": "Cruise Missile", "cls": "Tomahawk class", "short": "Cruise", "price": 60, "dmg": 15,
-        "speed": 38.0, "arc": 0.05, "resist": 1.0, "warheads": 1, "cool": 1.3},
+        "speed": 45.0, "arc": 0.05, "resist": 1.0, "warheads": 1, "cool": 1.5},
     {"name": "Ballistic Missile", "cls": "Iskander class", "short": "Ballistic", "price": 150, "dmg": 30,
-        "speed": 55.0, "arc": 0.45, "resist": 0.75, "warheads": 1, "cool": 2.2},
+        "speed": 70.0, "arc": 0.4, "resist": 0.75, "warheads": 1, "cool": 2.5},
     {"name": "Hypersonic Missile", "cls": "Zircon / Kinzhal class", "short": "Hyper", "price": 320, "dmg": 45,
-        "speed": 110.0, "arc": 0.12, "resist": 0.35, "warheads": 1, "cool": 3.5},
+        "speed": 140.0, "arc": 0.1, "resist": 0.35, "warheads": 1, "cool": 4.0},
     {"name": "MIRV Strategic", "cls": "Sarmat class, 3 warheads", "short": "MIRV", "price": 650, "dmg": 26,
-        "speed": 85.0, "arc": 0.55, "resist": 0.5, "warheads": 3, "cool": 5.0},
+        "speed": 105.0, "arc": 0.5, "resist": 0.5, "warheads": 3, "cool": 6.0},
 ]
 const DEFENSES := [
-    {"name": "CIWS Gun", "cls": "Phalanx class", "price": 150, "range": 16.0, "chance": 0.6},
-    {"name": "Short-Range SAM", "cls": "Pantsir / Tor class", "price": 300, "range": 30.0, "chance": 0.6},
-    {"name": "Medium-Range SAM", "cls": "NASAMS / Patriot class", "price": 600, "range": 50.0, "chance": 0.7},
-    {"name": "Long-Range SAM", "cls": "S-400 / THAAD class", "price": 1200, "range": 85.0, "chance": 0.8},
+    {"name": "CIWS Gun", "cls": "Phalanx class", "price": 150, "range": 20.0, "chance": 0.6},
+    {"name": "Short-Range SAM", "cls": "Pantsir / Tor class", "price": 300, "range": 40.0, "chance": 0.6},
+    {"name": "Medium-Range SAM", "cls": "NASAMS / Patriot class", "price": 600, "range": 65.0, "chance": 0.7},
+    {"name": "Long-Range SAM", "cls": "S-400 / THAAD class", "price": 1200, "range": 110.0, "chance": 0.8},
 ]
+
+const WATER_SHADER := """
+shader_type spatial;
+uniform vec3 deep_color : source_color = vec3(0.02, 0.2, 0.42);
+uniform vec3 shallow_color : source_color = vec3(0.12, 0.58, 0.82);
+varying vec3 wpos;
+float wave(vec2 p, float t) {
+    return sin(p.x * 0.35 + t * 1.1) * 0.5 + sin(p.y * 0.27 - t * 0.9) * 0.5 + sin((p.x + p.y) * 0.18 + t * 0.6) * 0.5;
+}
+void vertex() {
+    wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+    vec2 p = wpos.xz;
+    float e = 0.6;
+    float h = wave(p, TIME);
+    float hx = wave(p + vec2(e, 0.0), TIME);
+    float hz = wave(p + vec2(0.0, e), TIME);
+    vec3 n = normalize(vec3((h - hx) * 0.8, e, (h - hz) * 0.8));
+    NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
+    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 2.5);
+    ALBEDO = mix(deep_color, shallow_color, fres);
+    ROUGHNESS = 0.1;
+    SPECULAR = 0.8;
+}
+"""
+
+const CHECKER_SHADER := """
+shader_type spatial;
+uniform vec3 c1 : source_color = vec3(0.3, 0.62, 0.25);
+uniform vec3 c2 : source_color = vec3(0.26, 0.56, 0.22);
+uniform float tile = 10.0;
+varying vec3 lp;
+void vertex() {
+    lp = VERTEX;
+}
+void fragment() {
+    vec2 g = floor(lp.xz / tile);
+    float m = mod(g.x + g.y, 2.0);
+    ALBEDO = mix(c1, c2, m);
+    ROUGHNESS = 0.95;
+}
+"""
 
 # ---- game state ----
 var emp: Array = []  # one Dictionary per island; index 0 = the player
 var island_count := 2
-var island_hp: Array = [100, 100]
+var island_hp: Array = [MAX_HP, MAX_HP]
 var selected_enemy := 1
 var cur_ammo := 0
 var game_state := "menu"  # menu, playing, paused, won, lost
 var elapsed := 0.0
 var income_timer := 0.0
 var placing_type := -1
+var look_sens_idx := 1
 
 # ---- world ----
 var level_root: Node3D
@@ -55,20 +107,21 @@ var island_nodes: Array = []
 var island_pos: Array = []
 var island_labels: Array = []
 var launcher_pivots: Array = []
-var npcs: Array = []
 var clouds: Array = []
 var projectiles: Array = []
 var place_ring: MeshInstance3D
 var player: Node3D
-var player_off := Vector3(0.0, 0.0, 2.0)
+var player_off := Vector3(0.0, 0.0, 5.0)
 var walk_amount := 0.0
 var walk_phase := 0.0
 var mat_cache := {}
+var sounds := {}
+var shake := 0.0
 
 # ---- camera ----
 var cam_yaw := 0.0
 var cam_pitch := 0.38
-var cam_dist := 11.0
+var cam_dist := 12.0
 var cam_goal := 0.0
 var cam_auto := 0.0
 
@@ -105,16 +158,20 @@ var ov_sub: Label
 var btn_resume: Button
 var btn_continue: Button
 var btn_place: Button
+var btn_sens: Button
 
 
 func _ready() -> void:
     randomize()
+    _load_settings()
+    _build_sounds()
     _build_environment()
     _build_ui()
     _reset_state(2)
     _build_world()
     get_viewport().size_changed.connect(_reset_joystick)
-    _show_overlay("MISSILE TYCOON", "Start from zero. Build houses, a launcher, missiles and air defense. Your rivals do the same!")
+    _update_sens_text()
+    _show_overlay("MISSILE TYCOON", "Everyone starts with $0 and one house. Earn money, build, stockpile missiles and defend. Rivals do exactly the same!")
     _refresh_ui()
 
 
@@ -208,12 +265,149 @@ func _ammo_total(e: Dictionary) -> int:
 
 func _income(i: int) -> int:
     var e: Dictionary = emp[i]
-    return 15 + int(e["houses"]) * 6
+    return 4 + int(e["houses"]) * 6
 
 
 func _house_price(i: int) -> int:
     var e: Dictionary = emp[i]
-    return 100 + int(e["houses"]) * 15
+    return 100 + int(e["houses"]) * 25
+
+
+# =====================================================================
+# Sound (all generated in code, no audio files needed)
+# =====================================================================
+func _wav(samples: PackedFloat32Array, loop: bool = false) -> AudioStreamWAV:
+    var bytes := PackedByteArray()
+    bytes.resize(samples.size() * 2)
+    for i in range(samples.size()):
+        var v: int = clampi(int(samples[i] * 32767.0), -32768, 32767)
+        bytes.encode_s16(i * 2, v)
+    var w := AudioStreamWAV.new()
+    w.format = AudioStreamWAV.FORMAT_16_BITS
+    w.mix_rate = RATE
+    w.stereo = false
+    w.data = bytes
+    if loop:
+        w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+        w.loop_begin = 0
+        w.loop_end = samples.size()
+    return w
+
+
+func _build_sounds() -> void:
+    var n: int
+    var s: PackedFloat32Array
+    var y := 0.0
+    var t := 0.0
+
+    # rocket launch: rumbling whoosh
+    n = int(RATE * 1.0)
+    s = PackedFloat32Array()
+    s.resize(n)
+    y = 0.0
+    for i in range(n):
+        t = float(i) / float(RATE)
+        y += ((randf() * 2.0 - 1.0) - y) * 0.25
+        var env := minf(t * 12.0, 1.0) * exp(-t * 3.0)
+        s[i] = (y * 0.9 + sin(TAU * 70.0 * t) * 0.4) * env * 0.8
+    sounds["launch"] = _wav(s)
+
+    # explosion: deep boom
+    n = int(RATE * 1.8)
+    s = PackedFloat32Array()
+    s.resize(n)
+    y = 0.0
+    for i in range(n):
+        t = float(i) / float(RATE)
+        y += ((randf() * 2.0 - 1.0) - y) * 0.08
+        var env2 := exp(-t * 2.2)
+        s[i] = (y * 1.8 + sin(TAU * (55.0 - 20.0 * t) * t) * 0.7) * env2 * 0.9
+    sounds["boom"] = _wav(s)
+
+    # air-defense hit: short pop
+    n = int(RATE * 0.35)
+    s = PackedFloat32Array()
+    s.resize(n)
+    for i in range(n):
+        t = float(i) / float(RATE)
+        s[i] = ((randf() * 2.0 - 1.0) * 0.5 + sin(TAU * 1100.0 * t) * 0.5) * exp(-t * 14.0) * 0.7
+    sounds["pop"] = _wav(s)
+
+    # interceptor launch: chirp
+    n = int(RATE * 0.3)
+    s = PackedFloat32Array()
+    s.resize(n)
+    for i in range(n):
+        t = float(i) / float(RATE)
+        s[i] = sin(TAU * (1500.0 - 2500.0 * t) * t) * exp(-t * 9.0) * 0.4
+    sounds["blip"] = _wav(s)
+
+    # button click
+    n = int(RATE * 0.07)
+    s = PackedFloat32Array()
+    s.resize(n)
+    for i in range(n):
+        t = float(i) / float(RATE)
+        s[i] = sin(TAU * 800.0 * t) * exp(-t * 50.0) * 0.5
+    sounds["click"] = _wav(s)
+
+    # build / buy: two rising notes
+    n = int(RATE * 0.45)
+    s = PackedFloat32Array()
+    s.resize(n)
+    for i in range(n):
+        t = float(i) / float(RATE)
+        var f := 523.0 if t < 0.18 else 784.0
+        s[i] = sin(TAU * f * t) * exp(-t * 5.0) * 0.5
+    sounds["build"] = _wav(s)
+
+    # base hit alarm
+    n = int(RATE * 0.9)
+    s = PackedFloat32Array()
+    s.resize(n)
+    for i in range(n):
+        t = float(i) / float(RATE)
+        var f2 := 650.0 if fmod(t, 0.3) < 0.15 else 850.0
+        s[i] = sin(TAU * f2 * t) * 0.35 * minf(1.0, (0.9 - t) * 5.0)
+    sounds["alarm"] = _wav(s)
+
+    # ocean ambience (loops)
+    n = int(RATE * 3.0)
+    s = PackedFloat32Array()
+    s.resize(n)
+    y = 0.0
+    for i in range(n):
+        t = float(i) / float(RATE)
+        y += ((randf() * 2.0 - 1.0) - y) * 0.03
+        var sw := sin(PI * t / 3.0)
+        s[i] = y * (0.1 + 0.9 * sw * sw) * 2.2
+    sounds["waves"] = _wav(s, true)
+
+
+func _play_ui(sound: String, vol: float = -4.0) -> void:
+    if not sounds.has(sound):
+        return
+    var p := AudioStreamPlayer.new()
+    p.stream = sounds[sound]
+    p.volume_db = vol
+    add_child(p)
+    p.finished.connect(p.queue_free)
+    p.play()
+
+
+func _play3d(sound: String, pos: Vector3, vol: float = 0.0, pitch: float = 1.0) -> void:
+    if not sounds.has(sound) or level_root == null:
+        return
+    var p := AudioStreamPlayer3D.new()
+    p.stream = sounds[sound]
+    p.volume_db = vol
+    p.pitch_scale = pitch
+    p.unit_size = 40.0
+    p.max_distance = 900.0
+    level_root.add_child(p)
+    p.global_position = pos
+    p.finished.connect(p.queue_free)
+    p.play()
 
 
 # =====================================================================
@@ -224,39 +418,39 @@ func _build_environment() -> void:
     env.background_mode = Environment.BG_SKY
     var sky := Sky.new()
     var sky_mat := ProceduralSkyMaterial.new()
-    sky_mat.sky_top_color = Color(0.2, 0.48, 0.9)
-    sky_mat.sky_horizon_color = Color(0.72, 0.87, 0.98)
-    sky_mat.ground_horizon_color = Color(0.72, 0.87, 0.98)
+    sky_mat.sky_top_color = Color(0.16, 0.42, 0.88)
+    sky_mat.sky_horizon_color = Color(0.74, 0.88, 0.98)
+    sky_mat.ground_horizon_color = Color(0.74, 0.88, 0.98)
     sky_mat.ground_bottom_color = Color(0.3, 0.55, 0.78)
     sky.sky_material = sky_mat
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color(0.82, 0.9, 1.0)
-    env.ambient_light_energy = 0.75
+    env.ambient_light_energy = 0.8
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
     env.fog_enabled = true
-    env.fog_light_color = Color(0.72, 0.87, 0.98)
-    env.fog_density = 0.0022
+    env.fog_light_color = Color(0.74, 0.88, 0.98)
+    env.fog_density = 0.0012
     var we := WorldEnvironment.new()
     we.environment = env
     add_child(we)
 
     var sun := DirectionalLight3D.new()
-    sun.rotation_degrees = Vector3(-50.0, -35.0, 0.0)
-    sun.light_energy = 1.25
+    sun.rotation_degrees = Vector3(-48.0, -35.0, 0.0)
+    sun.light_energy = 1.3
     sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 80.0
+    sun.directional_shadow_max_distance = 90.0
     add_child(sun)
 
     var water := MeshInstance3D.new()
     var pm := PlaneMesh.new()
-    pm.size = Vector2(3000.0, 3000.0)
+    pm.size = Vector2(6000.0, 6000.0)
     water.mesh = pm
     water.position.y = -0.45
-    var wm := StandardMaterial3D.new()
-    wm.albedo_color = Color(0.1, 0.5, 0.82)
-    wm.roughness = 0.12
-    wm.metallic = 0.1
+    var shader := Shader.new()
+    shader.code = WATER_SHADER
+    var wm := ShaderMaterial.new()
+    wm.shader = shader
     water.material_override = wm
     water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(water)
@@ -264,9 +458,9 @@ func _build_environment() -> void:
     var cloud_mat := StandardMaterial3D.new()
     cloud_mat.albedo_color = Color(1.0, 1.0, 1.0)
     cloud_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    for k in range(10):
+    for k in range(12):
         var c := Node3D.new()
-        c.position = Vector3(randf_range(-300.0, 300.0), randf_range(70.0, 110.0), randf_range(-300.0, 300.0))
+        c.position = Vector3(randf_range(-600.0, 600.0), randf_range(90.0, 140.0), randf_range(-600.0, 600.0))
         for j in range(4):
             var m := MeshInstance3D.new()
             var s := SphereMesh.new()
@@ -275,8 +469,8 @@ func _build_environment() -> void:
             s.radial_segments = 12
             s.rings = 6
             m.mesh = s
-            m.scale = Vector3(randf_range(12.0, 20.0), randf_range(5.0, 7.0), randf_range(10.0, 16.0))
-            m.position = Vector3(float(j) * 13.0 - 20.0, randf_range(-2.0, 2.0), randf_range(-6.0, 6.0))
+            m.scale = Vector3(randf_range(18.0, 30.0), randf_range(7.0, 10.0), randf_range(14.0, 24.0))
+            m.position = Vector3(float(j) * 20.0 - 30.0, randf_range(-3.0, 3.0), randf_range(-8.0, 8.0))
             m.material_override = cloud_mat
             m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
             c.add_child(m)
@@ -285,9 +479,15 @@ func _build_environment() -> void:
 
     camera = Camera3D.new()
     camera.fov = 70.0
-    camera.far = 1500.0
+    camera.far = 3000.0
     camera.current = true
     add_child(camera)
+
+    var amb := AudioStreamPlayer.new()
+    amb.stream = sounds["waves"]
+    amb.volume_db = -14.0
+    add_child(amb)
+    amb.play()
 
 
 # =====================================================================
@@ -295,8 +495,9 @@ func _build_environment() -> void:
 # =====================================================================
 func _new_empire(aggr: float) -> Dictionary:
     return {
-        "money": START_MONEY, "houses": 0, "launcher": 0, "ammo": [0, 0, 0, 0], "def": [],
+        "money": START_MONEY, "houses": 1, "launcher": 0, "ammo": [0, 0, 0, 0], "def": [],
         "cool": 4.0, "think": randf_range(2.0, 4.0), "aggr": aggr, "grudge": -1,
+        "phase": "build", "salvo": randi_range(3, 4), "rest": 0.0,
         "house_nodes": [], "launcher_node": null,
     }
 
@@ -306,14 +507,14 @@ func _reset_state(count: int) -> void:
     island_hp = []
     emp = []
     for i in range(count):
-        island_hp.append(100)
+        island_hp.append(MAX_HP)
         emp.append(_new_empire(randf_range(0.3, 0.9)))
     selected_enemy = 1
     cur_ammo = 0
     elapsed = 0.0
     income_timer = 0.0
     placing_type = -1
-    player_off = Vector3(0.0, 0.0, 2.0)
+    player_off = Vector3(0.0, 0.0, 5.0)
 
 
 # =====================================================================
@@ -328,7 +529,6 @@ func _build_world() -> void:
     island_pos.clear()
     island_labels.clear()
     launcher_pivots.clear()
-    npcs.clear()
     projectiles.clear()
     place_ring = null
     placing_type = -1
@@ -359,11 +559,25 @@ func _build_world() -> void:
             _build_defense_node(i, df)
         if int(island_hp[i]) <= 0:
             var dead: Node3D = island_nodes[i]
-            dead.position.y = -6.0
+            dead.position.y = -8.0
 
     _ensure_target()
     _update_hp_widgets()
     _look_at_target(false)
+
+
+func _checker_mat(i: int) -> ShaderMaterial:
+    var shader := Shader.new()
+    shader.code = CHECKER_SHADER
+    var m := ShaderMaterial.new()
+    m.shader = shader
+    var team := _team(i)
+    var g1 := Color(0.3, 0.62, 0.25).lerp(team, 0.06)
+    var g2 := Color(0.25, 0.55, 0.22).lerp(team, 0.06)
+    m.set_shader_parameter("c1", g1)
+    m.set_shader_parameter("c2", g2)
+    m.set_shader_parameter("tile", 10.0)
+    return m
 
 
 func _make_island(i: int, p: Vector3) -> Node3D:
@@ -372,67 +586,19 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     root.position = p
     root.rotation.y = _yaw_to(-p)
     var team := _team(i)
-
-    _cyl(root, ISLAND_R + 2.5, ISLAND_R, 1.0, Vector3(0.0, -0.2, 0.0), Color(0.86, 0.75, 0.5))
-    var grass_col := Color(0.3, 0.7, 0.28) if i == 0 else Color(0.36, 0.62, 0.28)
-    _cyl(root, ISLAND_R, ISLAND_R - 0.4, 0.4, Vector3(0.0, 0.4, 0.0), grass_col)
-
-    for k in range(12):
-        var a: float = float(k) * 0.55 + 0.3
-        var rock := _sphere(root, 1.6, Vector3(cos(a) * (ISLAND_R + 3.0), 0.2, sin(a) * (ISLAND_R + 3.0)), Color(0.5, 0.52, 0.55))
-        rock.scale = Vector3(1.0, 0.6, 0.8)
-
-    for k in range(10):
-        var a2: float = float(k) * TAU / 10.0 + 0.2
-        _add_palm(root, Vector3(cos(a2) * (ISLAND_R - 3.0), 0.6, sin(a2) * (ISLAND_R - 3.0)))
-
-    # airport: runway, markings, tower and a parked plane
-    _box(root, Vector3(32.0, 0.08, 5.0), Vector3(0.0, 0.62, 16.0), Color(0.18, 0.19, 0.21))
-    for k in range(8):
-        _box(root, Vector3(2.0, 0.09, 0.3), Vector3(-14.0 + float(k) * 4.0, 0.64, 16.0), Color(0.95, 0.95, 0.95))
-    _box(root, Vector3(1.8, 6.0, 1.8), Vector3(-17.0, 3.6, 11.5), Color(0.8, 0.8, 0.82))
-    _box(root, Vector3(3.4, 1.4, 3.4), Vector3(-17.0, 7.0, 11.5), Color(0.35, 0.55, 0.7))
-    _box(root, Vector3(3.6, 0.3, 3.6), Vector3(-17.0, 7.9, 11.5), Color(0.25, 0.25, 0.28))
-    var plane := Node3D.new()
-    plane.position = Vector3(-4.0, 1.5, 20.2)
-    root.add_child(plane)
-    var fus := _cyl(plane, 0.9, 0.9, 8.0, Vector3.ZERO, Color(0.92, 0.92, 0.95))
-    fus.rotation.z = PI / 2.0
-    _box(plane, Vector3(1.8, 0.15, 10.0), Vector3(0.5, 0.0, 0.0), Color(0.85, 0.86, 0.9))
-    _box(plane, Vector3(1.4, 0.12, 3.6), Vector3(-3.4, 0.2, 0.0), Color(0.85, 0.86, 0.9))
-    _box(plane, Vector3(1.4, 1.8, 0.12), Vector3(-3.4, 1.0, 0.0), team)
-
-    # team flag
-    _cyl(root, 0.1, 0.1, 8.0, Vector3(-5.0, 4.6, -14.0), Color(0.8, 0.8, 0.8))
-    _box(root, Vector3(0.1, 1.6, 2.6), Vector3(-5.0, 7.8, -15.4), team)
-
+    var side := PLOT_HALF * 2.0
+    # team-coloured rim, then a checkered grass baseplate on top (completely empty)
+    _box(root, Vector3(side + 4.0, 1.2, side + 4.0), Vector3(0.0, -0.3, 0.0), team.darkened(0.25))
+    var top := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(side, 0.3, side)
+    top.mesh = bm
+    top.position = Vector3(0.0, 0.45, 0.0)
+    top.material_override = _checker_mat(i)
+    root.add_child(top)
     var title := "YOU" if i == 0 else "ENEMY %d" % i
     island_labels.append(_make_hp_widget(root, title, team))
-
-    if i > 0:
-        var guard := _make_character(team)
-        guard.position = Vector3(3.0, 0.6, 3.0)
-        root.add_child(guard)
-        npcs.append(guard)
     return root
-
-
-func _add_palm(parent: Node3D, pos: Vector3) -> void:
-    var palm := Node3D.new()
-    palm.position = pos
-    palm.rotation.z = randf_range(-0.12, 0.12)
-    palm.scale = Vector3.ONE * 2.2
-    parent.add_child(palm)
-    _cyl(palm, 0.12, 0.2, 2.6, Vector3(0.0, 1.3, 0.0), Color(0.5, 0.33, 0.16))
-    var top := Node3D.new()
-    top.position = Vector3(0.0, 2.6, 0.0)
-    palm.add_child(top)
-    for k in range(5):
-        var piv := Node3D.new()
-        piv.rotation.y = float(k) * TAU / 5.0
-        top.add_child(piv)
-        var leaf := _box(piv, Vector3(1.6, 0.06, 0.55), Vector3(0.8, 0.0, 0.0), Color(0.14, 0.55, 0.2))
-        leaf.rotation.z = -0.35
 
 
 func _add_house(parent: Node3D, pos: Vector3, color: Color) -> Node3D:
@@ -452,13 +618,14 @@ func _add_house(parent: Node3D, pos: Vector3, color: Color) -> Node3D:
     for sx in [-0.5, 0.5]:
         var wm := _box(h, Vector3(0.3, 0.3, 0.05), Vector3(sx, 0.7, -0.66), Color.WHITE)
         wm.material_override = win
+    _box(h, Vector3(0.22, 0.5, 0.22), Vector3(0.45, 1.6, 0.25), Color(0.4, 0.4, 0.42))
     return h
 
 
 func _house_pos(k: int) -> Vector3:
-    var col := k % 6
-    var row := int(floor(float(k) / 6.0))
-    return Vector3(-17.0 + float(col) * 3.8, 0.6, -6.0 + float(row) * 3.8)
+    var col := k % 8
+    var row := int(floor(float(k) / 8.0))
+    return Vector3(-44.0 + float(col) * 5.0, 0.6, 10.0 + float(row) * 5.0)
 
 
 func _build_house_node(i: int, k: int, animate: bool) -> void:
@@ -468,13 +635,13 @@ func _build_house_node(i: int, k: int, animate: bool) -> void:
     if i > 0:
         color = _team(i).lightened(0.15 * float(k % 3))
     var h := _add_house(_isl(i), _house_pos(k), color)
-    h.scale = Vector3.ONE * 1.6
+    h.scale = Vector3.ONE * 2.2
     var nodes: Array = e["house_nodes"]
     nodes.append(h)
     if animate:
         h.scale = Vector3(0.01, 0.01, 0.01)
         var tw := create_tween()
-        tw.tween_property(h, "scale", Vector3.ONE * 1.6, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        tw.tween_property(h, "scale", Vector3.ONE * 2.2, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _build_launcher(i: int) -> void:
@@ -490,8 +657,8 @@ func _build_launcher(i: int) -> void:
         return
     var team := _team(i)
     var piv := Node3D.new()
-    piv.position = Vector3(6.0, 0.6, -13.0)
-    piv.scale = Vector3.ONE * 2.0
+    piv.position = Vector3(22.0, 0.6, -30.0)
+    piv.scale = Vector3.ONE * 2.8
     _isl(i).add_child(piv)
     _cyl(piv, 1.2, 1.4, 0.5, Vector3(0.0, 0.25, 0.0), Color(0.25, 0.27, 0.3))
     _box(piv, Vector3(0.8 + 0.7 * float(level), 0.6, 1.4), Vector3(0.0, 0.8, 0.0), team.darkened(0.3))
@@ -511,8 +678,8 @@ func _build_launcher(i: int) -> void:
 func _make_ring(radius: float, col: Color) -> MeshInstance3D:
     var m := MeshInstance3D.new()
     var t := TorusMesh.new()
-    t.inner_radius = maxf(radius - 0.3, 0.1)
-    t.outer_radius = radius + 0.3
+    t.inner_radius = maxf(radius - 0.4, 0.1)
+    t.outer_radius = radius + 0.4
     t.rings = 96
     t.ring_segments = 6
     m.mesh = t
@@ -526,7 +693,7 @@ func _make_ring(radius: float, col: Color) -> MeshInstance3D:
 
 
 func _defense_model(n: Node3D, t: int, team: Color) -> void:
-    var s: float = [1.4, 1.7, 2.0, 2.4][t]
+    var s: float = [2.0, 2.4, 2.8, 3.3][t]
     n.scale = Vector3.ONE * s
     var gray := Color(0.35, 0.38, 0.4)
     var white := Color(0.9, 0.92, 0.95)
@@ -592,6 +759,9 @@ func _make_character(shirt: Color) -> Node3D:
     _box(root, Vector3(0.1, 0.12, 0.04), Vector3(-0.15, 2.12, -0.33), Color(0.05, 0.05, 0.05))
     _box(root, Vector3(0.1, 0.12, 0.04), Vector3(0.15, 2.12, -0.33), Color(0.05, 0.05, 0.05))
     _box(root, Vector3(0.28, 0.06, 0.04), Vector3(0.0, 1.93, -0.33), Color(0.3, 0.1, 0.05))
+    _box(root, Vector3(0.72, 0.2, 0.72), Vector3(0.0, 2.45, 0.0), shirt.darkened(0.2))
+    _box(root, Vector3(0.5, 0.06, 0.3), Vector3(0.0, 2.4, -0.45), shirt.darkened(0.2))
+    _box(root, Vector3(0.7, 0.8, 0.25), Vector3(0.0, 1.3, 0.35), Color(0.25, 0.25, 0.3))
     for side in [-1, 1]:
         var arm := Node3D.new()
         arm.position = Vector3(float(side) * 0.62, 1.65, 0.0)
@@ -612,22 +782,22 @@ func _make_character(shirt: Color) -> Node3D:
 
 func _make_hp_widget(parent: Node3D, title: String, col: Color) -> Dictionary:
     var root := Node3D.new()
-    root.position = Vector3(0.0, 17.0, 0.0)
+    root.position = Vector3(0.0, 28.0, 0.0)
     parent.add_child(root)
     var lab := Label3D.new()
     lab.text = title
     lab.font_size = 72
-    lab.pixel_size = 0.05
+    lab.pixel_size = 0.08
     lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     lab.no_depth_test = true
     lab.render_priority = 3
     lab.outline_size = 16
     lab.modulate = col.lightened(0.3)
-    lab.position = Vector3(0.0, 3.4, 0.0)
+    lab.position = Vector3(0.0, 5.5, 0.0)
     root.add_child(lab)
-    var bg := _bar_quad(Vector2(18.8, 2.1), Color(0.0, 0.0, 0.0, 0.6), 0)
+    var bg := _bar_quad(Vector2(30.0, 3.4), Color(0.0, 0.0, 0.0, 0.6), 0)
     root.add_child(bg)
-    var fg := _bar_quad(Vector2(18.0, 1.6), Color(0.2, 0.9, 0.3, 0.95), 1)
+    var fg := _bar_quad(Vector2(29.0, 2.6), Color(0.2, 0.9, 0.3, 0.95), 1)
     root.add_child(fg)
     return {"root": root, "label": lab, "bar": fg, "name": title}
 
@@ -654,7 +824,7 @@ func _update_hp_widgets() -> void:
     for i in range(island_labels.size()):
         var w: Dictionary = island_labels[i]
         var hp: int = int(island_hp[i])
-        var frac: float = clampf(float(hp) / 100.0, 0.0, 1.0)
+        var frac: float = clampf(float(hp) / float(MAX_HP), 0.0, 1.0)
         var bar: MeshInstance3D = w["bar"]
         bar.scale.x = maxf(frac, 0.001)
         var mat := bar.material_override as StandardMaterial3D
@@ -725,7 +895,7 @@ func _do_build_defense(i: int, t: int, lx: float, lz: float) -> int:
         return 1
     for d in defs:
         var dd: Dictionary = d
-        if Vector2(float(dd["lx"]) - lx, float(dd["lz"]) - lz).length() < 5.0:
+        if Vector2(float(dd["lx"]) - lx, float(dd["lz"]) - lz).length() < 6.0:
             return 2
     e["money"] = int(e["money"]) - price
     var df := {"type": t, "lx": lx, "lz": lz, "node": null, "ring": null}
@@ -736,18 +906,19 @@ func _do_build_defense(i: int, t: int, lx: float, lz: float) -> int:
 
 func _do_repair(i: int) -> int:
     var e: Dictionary = emp[i]
-    if int(island_hp[i]) >= 100:
+    if int(island_hp[i]) >= MAX_HP:
         return 2
     if int(e["money"]) < PRICE_REPAIR:
         return 1
     e["money"] = int(e["money"]) - PRICE_REPAIR
-    island_hp[i] = mini(100, int(island_hp[i]) + 30)
+    island_hp[i] = mini(MAX_HP, int(island_hp[i]) + REPAIR_AMOUNT)
     _update_hp_widgets()
     return 0
 
 
 # =====================================================================
-# Rival AI: starts from zero, builds an economy, then an army
+# Rival AI: starts with one house and $0, builds an economy, stockpiles
+# missiles, attacks in waves, then rests while it earns again.
 # =====================================================================
 func _ai_tick(i: int, delta: float) -> void:
     if int(island_hp[i]) <= 0:
@@ -755,11 +926,22 @@ func _ai_tick(i: int, delta: float) -> void:
     var e: Dictionary = emp[i]
     e["think"] = float(e["think"]) - delta
     e["cool"] = float(e["cool"]) - delta
+    e["rest"] = maxf(0.0, float(e["rest"]) - delta)
     if float(e["think"]) <= 0.0:
         e["think"] = randf_range(2.5, 4.5)
         _ai_think(i)
-    if float(e["cool"]) <= 0.0:
-        _ai_attack(i)
+    var phase := str(e["phase"])
+    if phase == "build":
+        if elapsed > PEACE_TIME and float(e["rest"]) <= 0.0 and int(e["launcher"]) >= 1 and _ammo_total(e) >= int(e["salvo"]):
+            e["phase"] = "attack"
+            e["cool"] = randf_range(1.0, 3.0)
+    elif phase == "attack":
+        if _ammo_total(e) <= 0:
+            e["phase"] = "build"
+            e["rest"] = randf_range(70.0, 120.0) * (1.3 - 0.6 * float(e["aggr"]))
+            e["salvo"] = randi_range(3, 5) + int(elapsed / 300.0)
+        elif float(e["cool"]) <= 0.0:
+            _ai_attack(i)
 
 
 func _ai_best_missile(i: int) -> int:
@@ -782,30 +964,29 @@ func _ai_think(i: int) -> void:
     var launcher_i: int = e["launcher"]
     var aggr: float = e["aggr"]
     var defs: Array = e["def"]
-    # 1. get an economy and a launcher
-    if houses_i < 1 and money_i >= _house_price(i):
-        _do_build_house(i)
-        return
-    if launcher_i == 0:
-        if money_i >= int(LAUNCH_PRICES[0]):
-            _do_launcher(i)
-        elif houses_i < 3 and money_i >= _house_price(i):
+    var hp_i: int = int(island_hp[i])
+    # 1. economy first: a second house
+    if houses_i < 2:
+        if money_i >= _house_price(i):
             _do_build_house(i)
         return
-    # 2. emergency repair
-    if int(island_hp[i]) < 50 and money_i >= PRICE_REPAIR:
+    # 2. first launcher (after a third house), otherwise keep saving
+    if launcher_i == 0:
+        if houses_i < 3:
+            if money_i >= _house_price(i):
+                _do_build_house(i)
+            return
+        if money_i >= int(LAUNCH_PRICES[0]):
+            _do_launcher(i)
+        return
+    # 3. repair when badly damaged
+    if hp_i < int(float(MAX_HP) * 0.45) and money_i >= PRICE_REPAIR:
         _do_repair(i)
         return
-    # 3. keep a few missiles in stock
-    if _ammo_total(e) < 2:
-        var t := _ai_best_missile(i)
-        if t >= 0:
-            _do_buy_missile(i, t)
-            return
-    # 4. air defense grows with time (cautious rivals build more)
-    var want_def: int = mini(8, 1 + int(elapsed / 70.0) - int(aggr * 1.5))
+    # 4. air defense grows with time (cautious rivals build earlier)
+    var want_def: int = mini(8, int(elapsed / 100.0) - int(aggr * 1.5))
     if defs.size() < want_def:
-        var tier: int = mini(3, int(elapsed / 150.0))
+        var tier: int = mini(3, int(elapsed / 200.0))
         var dt := -1
         for t2 in range(tier, -1, -1):
             if money_i >= int(DEFENSES[t2]["price"]):
@@ -813,22 +994,21 @@ func _ai_think(i: int) -> void:
                 break
         if dt >= 0:
             for attempt in range(12):
-                var a: float = randf() * TAU
-                var r: float = sqrt(randf()) * 17.0
-                var lx: float = cos(a) * r
-                var lz: float = sin(a) * r
+                var lx: float = randf_range(-40.0, 40.0)
+                var lz: float = randf_range(-40.0, 40.0)
                 if _do_build_defense(i, dt, lx, lz) == 0:
                     return
-    # 5. economy
-    if houses_i < 5 + int(aggr * 6.0) and money_i >= _house_price(i):
+    # 5. more houses = more income
+    var house_goal: int = mini(MAX_HOUSES, 3 + int(elapsed / 50.0) + int(aggr * 3.0))
+    if houses_i < house_goal and money_i >= _house_price(i):
         _do_build_house(i)
         return
-    # 6. better launcher unlocks better missiles
-    if launcher_i < 4 and houses_i >= 3 + launcher_i * 2 and money_i >= int(LAUNCH_PRICES[launcher_i]):
+    # 6. a better launcher unlocks better missiles
+    if launcher_i < 4 and houses_i >= 4 + launcher_i * 2 and money_i >= int(LAUNCH_PRICES[launcher_i]):
         _do_launcher(i)
         return
-    # 7. stock up
-    if _ammo_total(e) < 6:
+    # 7. stockpile missiles for the next salvo
+    if str(e["phase"]) == "build" and _ammo_total(e) < int(e["salvo"]):
         var t3 := _ai_best_missile(i)
         if t3 >= 0:
             _do_buy_missile(i, t3)
@@ -866,7 +1046,7 @@ func _ai_attack(i: int) -> void:
     if target < 0:
         return
     ammo[mt] = int(ammo[mt]) - 1
-    e["cool"] = float(MISSILES[mt]["cool"]) * randf_range(1.5, 2.5)
+    e["cool"] = float(MISSILES[mt]["cool"]) * randf_range(2.0, 3.5)
     _launch(i, target, mt)
 
 
@@ -905,14 +1085,9 @@ func _pay_income() -> void:
 func _animate_world(delta: float) -> void:
     for c in clouds:
         var cn: Node3D = c
-        cn.position.x += delta * 2.0
-        if cn.position.x > 330.0:
-            cn.position.x = -330.0
-    var tt: float = Time.get_ticks_msec() * 0.001
-    for k in range(npcs.size()):
-        var n: Node3D = npcs[k]
-        if is_instance_valid(n):
-            n.rotation.y = sin(tt * 0.7 + float(k) * 2.0) * 0.9
+        cn.position.x += delta * 3.0
+        if cn.position.x > 650.0:
+            cn.position.x = -650.0
 
 
 func _player_world() -> Vector3:
@@ -924,18 +1099,18 @@ func _move_player(delta: float) -> void:
     var fwd := Vector3(-sin(cam_yaw), 0.0, -cos(cam_yaw))
     var right := Vector3(cos(cam_yaw), 0.0, -sin(cam_yaw))
     var mv := joy_vec
-    var moving := mv.length() > 0.12
+    var moving := mv.length() > 0.1
     if moving:
         var dir := right * mv.x + fwd * (-mv.y)
         if dir.length() > 1.0:
             dir = dir.normalized()
         player_off += dir * WALK_SPEED * delta
-        if player_off.length() > PLAYER_LIMIT:
-            player_off = player_off.normalized() * PLAYER_LIMIT
+        player_off.x = clampf(player_off.x, -PLAYER_HALF, PLAYER_HALF)
+        player_off.z = clampf(player_off.z, -PLAYER_HALF, PLAYER_HALF)
         if dir.length() > 0.05:
             player.rotation.y = lerp_angle(player.rotation.y, _yaw_to(dir), clampf(delta * 12.0, 0.0, 1.0))
         walk_amount = minf(1.0, walk_amount + delta * 6.0)
-        walk_phase += delta * 11.0
+        walk_phase += delta * 12.0
     else:
         walk_amount = maxf(0.0, walk_amount - delta * 6.0)
     player.position = _player_world()
@@ -961,6 +1136,9 @@ func _update_camera(delta: float) -> void:
     want.y = maxf(want.y, 1.2)
     camera.position = camera.position.lerp(want, clampf(delta * 10.0, 0.0, 1.0))
     camera.look_at(focus + fwd * 3.0 + Vector3(0.0, 0.4, 0.0), Vector3.UP)
+    if shake > 0.0:
+        camera.position += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * shake
+        shake = maxf(0.0, shake - delta * 2.5)
 
 
 # =====================================================================
@@ -969,7 +1147,7 @@ func _update_camera(delta: float) -> void:
 func _make_missile_model(friendly: bool, mtype: int) -> Node3D:
     var root := Node3D.new()
     var model := Node3D.new()
-    var sc: float = [1.5, 2.0, 1.8, 2.2][mtype]
+    var sc: float = [2.2, 2.8, 2.6, 3.2][mtype]
     model.scale = Vector3.ONE * sc
     root.add_child(model)
     var body_col := Color(0.93, 0.93, 0.96) if friendly else Color(0.4, 0.08, 0.08)
@@ -999,14 +1177,14 @@ func _make_missile_model(friendly: bool, mtype: int) -> Node3D:
     flame.scale = Vector3(1.0, 1.0, 1.8)
     flame.material_override = _glow_mat(flame_col)
     model.add_child(flame)
-    _add_trail(model, 0.7 if mtype == 2 else 0.4)
+    _add_trail(model, 0.9 if mtype == 2 else 0.6)
     return root
 
 
 func _add_trail(parent: Node3D, size: float) -> void:
     var p := CPUParticles3D.new()
-    p.amount = 36
-    p.lifetime = 0.9
+    p.amount = 40
+    p.lifetime = 1.2
     p.local_coords = false
     p.direction = Vector3(0.0, 0.0, 1.0)
     p.spread = 20.0
@@ -1014,10 +1192,10 @@ func _add_trail(parent: Node3D, size: float) -> void:
     p.initial_velocity_max = 0.8
     p.gravity = Vector3.ZERO
     var pm := SphereMesh.new()
-    pm.radius = size * 0.35
-    pm.height = size * 0.7
+    pm.radius = size * 0.4
+    pm.height = size * 0.8
     var pmat := StandardMaterial3D.new()
-    pmat.albedo_color = Color(0.9, 0.9, 0.9)
+    pmat.albedo_color = Color(0.92, 0.92, 0.92)
     pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     pm.material = pmat
     p.mesh = pm
@@ -1045,14 +1223,14 @@ func _muzzle(i: int) -> Vector3:
     var piv: Node3D = launcher_pivots[i]
     var yaw := piv.global_rotation.y
     var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
-    return piv.global_position + Vector3(0.0, 3.6, 0.0) + fwd * 2.0
+    return piv.global_position + Vector3(0.0, 5.0, 0.0) + fwd * 3.0
 
 
 func _launch(attacker: int, target: int, mtype: int) -> void:
     var info: Dictionary = MISSILES[mtype]
     var tpos: Vector3 = island_pos[target]
     var wh: int = info["warheads"]
-    var spread := 6.0 if wh == 1 else 14.0
+    var spread := 16.0 if wh == 1 else 30.0
     for w in range(wh):
         var to_pos := tpos + Vector3(randf_range(-1.0, 1.0) * spread, 1.4, randf_range(-1.0, 1.0) * spread)
         _aim_launcher(attacker, to_pos)
@@ -1067,22 +1245,25 @@ func _launch(attacker: int, target: int, mtype: int) -> void:
             "attacker": attacker, "target": target, "dmg": int(info["dmg"]),
             "resist": float(info["resist"]), "tried": [], "kill": -1.0,
         })
+        if w == 0:
+            _play3d("launch", from_pos, 4.0, 1.0 + float(mtype) * 0.12)
 
 
 func _spawn_interceptor(from_pos: Vector3, to_pos: Vector3, success: bool) -> void:
     var n := MeshInstance3D.new()
     var sm := SphereMesh.new()
-    sm.radius = 0.5
-    sm.height = 1.0
+    sm.radius = 0.8
+    sm.height = 1.6
     n.mesh = sm
     n.material_override = _glow_mat(Color(0.5, 0.95, 1.0))
     n.position = from_pos
     level_root.add_child(n)
-    _add_trail(n, 0.5)
+    _add_trail(n, 0.7)
+    _play3d("blip", from_pos, 0.0)
     var tw := create_tween()
     tw.tween_property(n, "position", to_pos, 0.35)
     if not success:
-        tw.tween_callback(_explode.bind(to_pos, Color(0.9, 0.9, 0.9), 0.8))
+        tw.tween_callback(_explode.bind(to_pos, Color(0.9, 0.9, 0.9), 1.2))
     tw.tween_callback(n.queue_free)
 
 
@@ -1115,7 +1296,8 @@ func _update_projectiles(delta: float) -> void:
             kill -= delta
             d["kill"] = kill
             if kill <= 0.0:
-                _explode(node.position, Color(0.6, 0.9, 1.0), 2.5)
+                _explode(node.position, Color(0.6, 0.9, 1.0), 3.5)
+                _play3d("pop", node.position, 6.0)
                 node.queue_free()
                 projectiles.remove_at(i)
                 if target == 0:
@@ -1141,7 +1323,7 @@ func _update_projectiles(delta: float) -> void:
                 var chance: float = float(DEFENSES[dtype]["chance"]) * float(d["resist"])
                 var ok := randf() < chance
                 var meet := _arc(s, e, minf(t + 0.35 / dur, 1.0), h)
-                _spawn_interceptor(dpos + Vector3(0.0, 3.0, 0.0), meet, ok)
+                _spawn_interceptor(dpos + Vector3(0.0, 5.0, 0.0), meet, ok)
                 if ok:
                     d["kill"] = 0.35
                     break
@@ -1152,7 +1334,8 @@ func _on_hit(d: Dictionary) -> void:
     var attacker: int = d["attacker"]
     var dmg: int = d["dmg"]
     var pos: Vector3 = d["end"]
-    _explode(pos, Color(1.0, 0.5, 0.1), 3.0)
+    _explode(pos, Color(1.0, 0.5, 0.1), 5.0)
+    _play3d("boom", pos, 10.0)
     if int(island_hp[target]) <= 0 or game_state != "playing":
         return
     island_hp[target] = maxi(0, int(island_hp[target]) - dmg)
@@ -1160,6 +1343,8 @@ func _on_hit(d: Dictionary) -> void:
     te["grudge"] = attacker
     if target == 0:
         _vibrate(150)
+        shake = 0.7
+        _play_ui("alarm", -2.0)
         _say("Your base was hit by Enemy %d! -%d HP" % [attacker, dmg])
     elif attacker == 0:
         _say("Direct hit on Enemy %d! (%d HP left)" % [target, int(island_hp[target])])
@@ -1175,14 +1360,14 @@ func _island_destroyed(i: int, by: int) -> void:
         _game_over(false)
         return
     var be: Dictionary = emp[by]
-    be["money"] = int(be["money"]) + 200
+    be["money"] = int(be["money"]) + 300
     if by == 0:
-        _say("Enemy %d destroyed! +$200" % i)
+        _say("Enemy %d destroyed! +$300" % i)
     else:
         _say("Enemy %d was destroyed by Enemy %d!" % [i, by])
     var isl: Node3D = island_nodes[i]
     var tw := create_tween()
-    tw.tween_property(isl, "position:y", -6.0, 3.0)
+    tw.tween_property(isl, "position:y", -8.0, 3.5)
     var any_alive := false
     for k in range(1, island_count):
         if int(island_hp[k]) > 0:
@@ -1219,6 +1404,23 @@ func _fire() -> void:
     _refresh_ui()
 
 
+func _make_shock(color: Color) -> MeshInstance3D:
+    var m := MeshInstance3D.new()
+    var t := TorusMesh.new()
+    t.inner_radius = 0.93
+    t.outer_radius = 1.0
+    t.rings = 48
+    t.ring_segments = 4
+    m.mesh = t
+    var mat := StandardMaterial3D.new()
+    mat.albedo_color = Color(color.r, color.g, color.b, 0.7)
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    m.material_override = mat
+    m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    return m
+
+
 func _explode(pos: Vector3, color: Color, size: float) -> void:
     var flash := MeshInstance3D.new()
     var sm := SphereMesh.new()
@@ -1243,6 +1445,7 @@ func _explode(pos: Vector3, color: Color, size: float) -> void:
     tw.tween_property(mat, "albedo_color:a", 0.0, 0.4)
     tw.chain().tween_callback(flash.queue_free)
 
+    # sparks
     var p := CPUParticles3D.new()
     p.one_shot = true
     p.amount = 40
@@ -1252,7 +1455,7 @@ func _explode(pos: Vector3, color: Color, size: float) -> void:
     p.spread = 180.0
     p.initial_velocity_min = 3.0 * size
     p.initial_velocity_max = 8.0 * size
-    p.gravity = Vector3(0.0, -7.0, 0.0)
+    p.gravity = Vector3(0.0, -9.0, 0.0)
     var pm := SphereMesh.new()
     pm.radius = 0.16 * size
     pm.height = 0.32 * size
@@ -1262,6 +1465,51 @@ func _explode(pos: Vector3, color: Color, size: float) -> void:
     level_root.add_child(p)
     p.emitting = true
     get_tree().create_timer(1.8).timeout.connect(p.queue_free)
+
+    if size >= 4.0:
+        # shockwave ring + rising smoke for big hits
+        var ring := _make_shock(color)
+        ring.position = pos
+        ring.scale = Vector3.ONE * 0.5 * size
+        level_root.add_child(ring)
+        var rmat := ring.material_override as StandardMaterial3D
+        var tw2 := create_tween()
+        tw2.set_parallel(true)
+        tw2.tween_property(ring, "scale", Vector3.ONE * 7.0 * size, 0.7)
+        tw2.tween_property(rmat, "albedo_color:a", 0.0, 0.7)
+        tw2.chain().tween_callback(ring.queue_free)
+
+        var smoke := CPUParticles3D.new()
+        smoke.one_shot = true
+        smoke.amount = 18
+        smoke.lifetime = 3.0
+        smoke.explosiveness = 0.6
+        smoke.direction = Vector3.UP
+        smoke.spread = 30.0
+        smoke.initial_velocity_min = 3.0
+        smoke.initial_velocity_max = 7.0
+        smoke.gravity = Vector3(0.0, 1.5, 0.0)
+        smoke.scale_amount_min = 1.0
+        smoke.scale_amount_max = 2.5
+        var smesh := SphereMesh.new()
+        smesh.radius = 1.4
+        smesh.height = 2.8
+        smesh.radial_segments = 8
+        smesh.rings = 4
+        var smat := StandardMaterial3D.new()
+        smat.vertex_color_use_as_albedo = true
+        smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+        smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        smesh.material = smat
+        smoke.mesh = smesh
+        var grad := Gradient.new()
+        grad.set_color(0, Color(0.25, 0.23, 0.22, 0.85))
+        grad.set_color(1, Color(0.55, 0.55, 0.55, 0.0))
+        smoke.color_ramp = grad
+        smoke.position = pos
+        level_root.add_child(smoke)
+        smoke.emitting = true
+        get_tree().create_timer(3.6).timeout.connect(smoke.queue_free)
 
 
 # =====================================================================
@@ -1320,7 +1568,7 @@ func _start_new(count: int) -> void:
     overlay.hide()
     build_panel.hide()
     game_state = "playing"
-    _say("Walk with the joystick, drag the right side to look around. Start with a house, then a launcher!")
+    _say("You own one house. Earn money, then build more houses, a launcher, missiles and air defense. Rivals attack after the peace time!")
     _refresh_ui()
     _save_game()
 
@@ -1348,8 +1596,9 @@ func _game_over(won: bool) -> void:
     _vibrate(300)
     _cancel_place()
     build_panel.hide()
-    await get_tree().create_timer(1.8).timeout
+    await get_tree().create_timer(2.0).timeout
     if game_state == "won":
+        _play_ui("build")
         _show_overlay("VICTORY!", "All rival islands are destroyed. You are the missile tycoon!")
     elif game_state == "lost":
         _show_overlay("YOUR ISLAND FELL", "Layer your air defense and keep your base repaired next time.")
@@ -1366,17 +1615,19 @@ func _after_buy() -> void:
 func _buy_house() -> void:
     var code := _do_build_house(0)
     if code == 0:
+        _play_ui("build")
         _say("House built! Income is now $%d / 2s." % _income(0))
     elif code == 1:
         _say("Need $%d for a house." % _house_price(0))
     else:
-        _say("Your island is full of houses!")
+        _say("Your plot is full of houses!")
     _after_buy()
 
 
 func _buy_repair() -> void:
     var code := _do_repair(0)
     if code == 0:
+        _play_ui("build")
         _say("Base repaired.")
     elif code == 1:
         _say("Need $%d to repair." % PRICE_REPAIR)
@@ -1390,6 +1641,7 @@ func _buy_launcher() -> void:
     var lvl: int = e["launcher"]
     var code := _do_launcher(0)
     if code == 0:
+        _play_ui("build")
         _say("Launcher level %d ready. %s unlocked!" % [lvl + 1, MISSILES[lvl]["name"]])
     elif code == 1:
         _say("Need $%d for the launcher." % int(LAUNCH_PRICES[lvl]))
@@ -1402,6 +1654,7 @@ func _buy_missile(t: int) -> void:
     var code := _do_buy_missile(0, t)
     if code == 0:
         cur_ammo = t
+        _play_ui("build")
         _say("%s bought." % MISSILES[t]["name"])
     elif code == 1:
         _say("Need $%d for a %s." % [int(MISSILES[t]["price"]), MISSILES[t]["name"]])
@@ -1444,6 +1697,7 @@ func _confirm_place() -> void:
     var t := placing_type
     var code := _do_build_defense(0, t, local.x, local.z)
     if code == 0:
+        _play_ui("build")
         _say("%s built. Range %d." % [DEFENSES[t]["name"], int(DEFENSES[t]["range"])])
         _cancel_place()
         _after_buy()
@@ -1484,9 +1738,10 @@ func _save_game() -> void:
         arr.append({
             "money": e["money"], "houses": e["houses"], "launcher": e["launcher"],
             "ammo": e["ammo"], "def": defs, "aggr": e["aggr"], "grudge": e["grudge"],
+            "phase": e["phase"], "salvo": e["salvo"], "rest": e["rest"],
         })
     var data := {
-        "v": 3, "island_count": island_count, "hp": island_hp, "emp": arr,
+        "v": 4, "island_count": island_count, "hp": island_hp, "emp": arr,
         "selected": selected_enemy, "elapsed": elapsed, "cur_ammo": cur_ammo,
     }
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -1503,7 +1758,7 @@ func _load_game() -> bool:
     var parsed = JSON.parse_string(f.get_as_text())
     if typeof(parsed) != TYPE_DICTIONARY:
         return false
-    if int(parsed.get("v", 0)) != 3:
+    if int(parsed.get("v", 0)) != 4:
         return false
     var count := clampi(int(parsed.get("island_count", 2)), 2, 4)
     var hp_raw = parsed.get("hp", [])
@@ -1516,14 +1771,17 @@ func _load_game() -> bool:
         return false
     _reset_state(count)
     for i in range(count):
-        island_hp[i] = clampi(int(hp_raw[i]), 0, 100)
+        island_hp[i] = clampi(int(hp_raw[i]), 0, MAX_HP)
         var src: Dictionary = emp_raw[i]
         var e: Dictionary = emp[i]
         e["money"] = int(src.get("money", START_MONEY))
-        e["houses"] = clampi(int(src.get("houses", 0)), 0, MAX_HOUSES)
+        e["houses"] = clampi(int(src.get("houses", 1)), 0, MAX_HOUSES)
         e["launcher"] = clampi(int(src.get("launcher", 0)), 0, 4)
         e["aggr"] = float(src.get("aggr", 0.5))
         e["grudge"] = int(src.get("grudge", -1))
+        e["phase"] = str(src.get("phase", "build"))
+        e["salvo"] = int(src.get("salvo", 3))
+        e["rest"] = float(src.get("rest", 0.0))
         var am = src.get("ammo", [])
         var ammo: Array = e["ammo"]
         for t in range(4):
@@ -1541,6 +1799,34 @@ func _load_game() -> bool:
     elapsed = float(parsed.get("elapsed", 0.0))
     cur_ammo = clampi(int(parsed.get("cur_ammo", 0)), 0, 3)
     return true
+
+
+func _load_settings() -> void:
+    if not FileAccess.file_exists(SETTINGS_PATH):
+        return
+    var f := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+    if not f:
+        return
+    var parsed = JSON.parse_string(f.get_as_text())
+    if typeof(parsed) == TYPE_DICTIONARY:
+        look_sens_idx = clampi(int(parsed.get("sens", 1)), 0, 2)
+
+
+func _save_settings() -> void:
+    var f := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+    if f:
+        f.store_string(JSON.stringify({"sens": look_sens_idx}))
+
+
+func _cycle_sens() -> void:
+    look_sens_idx = (look_sens_idx + 1) % 3
+    _save_settings()
+    _update_sens_text()
+
+
+func _update_sens_text() -> void:
+    if btn_sens:
+        btn_sens.text = "LOOK SENSITIVITY: %s  (tap to change)" % SENS_NAMES[look_sens_idx]
 
 
 # =====================================================================
@@ -1580,6 +1866,7 @@ func _make_button(text: String, col: Color, cb: Callable) -> Button:
     b.text = text
     b.custom_minimum_size = Vector2(300.0, 62.0)
     _style_button(b, col)
+    b.pressed.connect(_play_ui.bind("click", -8.0))
     b.pressed.connect(cb)
     return b
 
@@ -1619,7 +1906,7 @@ func _build_ui() -> void:
     hv.add_child(stats_label)
     status_label = Label.new()
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    status_label.custom_minimum_size = Vector2(520.0, 0.0)
+    status_label.custom_minimum_size = Vector2(540.0, 0.0)
     status_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
     hv.add_child(status_label)
 
@@ -1746,15 +2033,15 @@ func _build_ui() -> void:
     overlay.add_child(cc)
     cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     var ov := VBoxContainer.new()
-    ov.add_theme_constant_override("separation", 14)
+    ov.add_theme_constant_override("separation", 12)
     cc.add_child(ov)
     ov_title = Label.new()
-    ov_title.add_theme_font_size_override("font_size", 60)
+    ov_title.add_theme_font_size_override("font_size", 56)
     ov_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     ov.add_child(ov_title)
     ov_sub = Label.new()
     ov_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    ov_sub.custom_minimum_size = Vector2(720.0, 0.0)
+    ov_sub.custom_minimum_size = Vector2(760.0, 0.0)
     ov_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     ov.add_child(ov_sub)
     btn_resume = _make_button("RESUME", Color(0.2, 0.6, 0.35), _resume_game)
@@ -1764,10 +2051,12 @@ func _build_ui() -> void:
     ov.add_child(_make_button("NEW GAME: 1 vs 1 (2 islands)", Color(0.8, 0.35, 0.2), _start_new.bind(2)))
     ov.add_child(_make_button("NEW GAME: 1 vs 1 vs 1 (3 islands)", Color(0.8, 0.35, 0.2), _start_new.bind(3)))
     ov.add_child(_make_button("NEW GAME: 4 islands battle", Color(0.8, 0.35, 0.2), _start_new.bind(4)))
+    btn_sens = _make_button("", Color(0.3, 0.35, 0.5), _cycle_sens)
+    ov.add_child(btn_sens)
     for c in ov.get_children():
         if c is Button:
             var cb: Button = c
-            cb.custom_minimum_size = Vector2(520.0, 66.0)
+            cb.custom_minimum_size = Vector2(560.0, 60.0)
 
 
 func _show_overlay(title: String, sub: String) -> void:
@@ -1814,9 +2103,14 @@ func _refresh_ui() -> void:
     var ammo: Array = e["ammo"]
     var defs: Array = e["def"]
     var hp0: int = int(island_hp[0])
+    var peace_txt := "Rivals may attack at any time!"
+    if elapsed < PEACE_TIME:
+        var left := int(PEACE_TIME - elapsed)
+        peace_txt = "Peace time left: %d:%02d" % [int(left / 60), left % 60]
     money_label.text = "$%d   (+$%d / 2s)" % [money, _income(0)]
-    stats_label.text = "HP %d   Launcher Lv%d   Air defense %d/%d\nCruise %d  Ballistic %d  Hyper %d  MIRV %d" % [
-        hp0, launcher, defs.size(), MAX_DEFENSES, int(ammo[0]), int(ammo[1]), int(ammo[2]), int(ammo[3])]
+    stats_label.text = "HP %d/%d   Launcher Lv%d   Air defense %d/%d\nCruise %d  Ballistic %d  Hyper %d  MIRV %d\n%s" % [
+        hp0, MAX_HP, launcher, defs.size(), MAX_DEFENSES,
+        int(ammo[0]), int(ammo[1]), int(ammo[2]), int(ammo[3]), peace_txt]
     if island_count > 1 and selected_enemy < island_hp.size():
         var te: Dictionary = emp[selected_enemy]
         var tdefs: Array = te["def"]
@@ -1829,8 +2123,8 @@ func _refresh_ui() -> void:
     # economy tab
     btn_house.text = "Build House  $%d   (%d/%d)\nIncome +$6 per 2s" % [_house_price(0), int(e["houses"]), MAX_HOUSES]
     btn_house.disabled = int(e["houses"]) >= MAX_HOUSES or money < _house_price(0)
-    btn_repair.text = "Repair Base +30 HP  $%d\nBase HP %d / 100" % [PRICE_REPAIR, hp0]
-    btn_repair.disabled = hp0 >= 100 or money < PRICE_REPAIR
+    btn_repair.text = "Repair Base +%d HP  $%d\nBase HP %d / %d" % [REPAIR_AMOUNT, PRICE_REPAIR, hp0, MAX_HP]
+    btn_repair.disabled = hp0 >= MAX_HP or money < PRICE_REPAIR
     # missiles tab
     if launcher < 4:
         btn_launcher.text = "Launcher Lv%d -> Lv%d  $%d\nUnlocks %s" % [launcher, launcher + 1, int(LAUNCH_PRICES[launcher]), MISSILES[launcher]["name"]]
@@ -1894,9 +2188,9 @@ func _reset_joystick() -> void:
 
 func _update_joystick(pos: Vector2) -> void:
     var d := pos - joy_center
-    if d.length() > 80.0:
-        d = d.normalized() * 80.0
-    joy_vec = d / 80.0
+    if d.length() > 60.0:
+        d = d.normalized() * 60.0
+    joy_vec = d / 60.0
     joy_knob.position = joy_center + d - joy_knob.size / 2.0
 
 
@@ -1931,6 +2225,7 @@ func _input(event: InputEvent) -> void:
         if de.index == joy_id:
             _update_joystick(de.position)
         elif de.index == look_id:
-            cam_yaw += de.relative.x * 0.006
-            cam_pitch = clampf(cam_pitch - de.relative.y * 0.004, 0.12, 1.1)
+            var sens: float = LOOK_SENS[look_sens_idx]
+            cam_yaw += de.relative.x * sens
+            cam_pitch = clampf(cam_pitch - de.relative.y * sens * 0.7, 0.12, 1.1)
             cam_auto = 0.0
