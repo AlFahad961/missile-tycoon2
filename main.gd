@@ -525,7 +525,7 @@ func _build_environment() -> void:
     env.background_mode = Environment.BG_SKY
     var sky := Sky.new()
     var sky_mat := ProceduralSkyMaterial.new()
-    sky_mat.sky_top_color = Color(0.16, 0.42, 0.88)
+    sky_mat.sky_top_color = Color(0.08, 0.36, 0.92)
     sky_mat.sky_horizon_color = Color(0.74, 0.88, 0.98)
     sky_mat.ground_horizon_color = Color(0.74, 0.88, 0.98)
     sky_mat.ground_bottom_color = Color(0.3, 0.55, 0.78)
@@ -533,18 +533,19 @@ func _build_environment() -> void:
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color(0.82, 0.9, 1.0)
-    env.ambient_light_energy = 0.8
+    env.ambient_light_energy = 1.0
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
     env.fog_enabled = true
     env.fog_light_color = Color(0.74, 0.88, 0.98)
-    env.fog_density = 0.0012
+    env.fog_density = 0.0008
     var we := WorldEnvironment.new()
     we.environment = env
     add_child(we)
 
     var sun := DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48.0, -35.0, 0.0)
-    sun.light_energy = 1.3
+    sun.light_energy = 1.55
+    sun.light_color = Color(1.0, 0.96, 0.88)
     sun.shadow_enabled = true
     sun.directional_shadow_max_distance = 90.0
     add_child(sun)
@@ -565,7 +566,7 @@ func _build_environment() -> void:
     var cloud_mat := StandardMaterial3D.new()
     cloud_mat.albedo_color = Color(1.0, 1.0, 1.0)
     cloud_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    for k in range(12):
+    for k in range(22):
         var c := Node3D.new()
         c.position = Vector3(randf_range(-600.0, 600.0), randf_range(90.0, 140.0), randf_range(-600.0, 600.0))
         for j in range(4):
@@ -584,6 +585,7 @@ func _build_environment() -> void:
         add_child(c)
         clouds.append(c)
 
+    get_viewport().msaa_3d = Viewport.MSAA_4X
     camera = Camera3D.new()
     camera.fov = 70.0
     camera.far = 3000.0
@@ -713,6 +715,7 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     top.position = Vector3(0.0, 0.45, 0.0)
     top.material_override = _checker_mat(i)
     root.add_child(top)
+    _island_props(root)
     # grey military apron behind the houses (missiles and air defense stand here)
     _box(root, Vector3(side - 4.0, 0.06, 50.0), Vector3(0.0, 0.63, -23.0), Color(0.34, 0.36, 0.41))
     var lab := Label3D.new()
@@ -759,19 +762,30 @@ func _house_model(n: Node3D, color: Color, lvl: int) -> void:
         _box(n, Vector3(0.34, 0.55, 0.05), Vector3(0.0, 0.38, -0.62), Color(0.3, 0.18, 0.08))
         _box(n, Vector3(0.2, 0.45, 0.2), Vector3(0.45, top + 0.35, 0.25), Color(0.4, 0.4, 0.42))
     else:
-        var floors := lvl + 1
-        var fh := 0.7
-        var body := Color(0.27, 0.34, 0.5).lerp(color, 0.15)
+        var floors := 2 * lvl - 1
+        var fh := 0.62
         var total := fh * float(floors)
+        var body := Color(0.24, 0.3, 0.46).lerp(color, 0.12)
         _box(n, Vector3(1.3, total, 1.1), Vector3(0.0, 0.1 + total * 0.5, 0.0), body)
         for f2 in range(floors):
-            var y2 := 0.1 + fh * (float(f2) + 0.55)
-            for sx2 in [-0.38, 0.0, 0.38]:
-                var wm2 := _box(n, Vector3(0.22, 0.28, 0.05), Vector3(sx2, y2, -0.57), Color.WHITE)
-                wm2.material_override = glow
+            var y2 := 0.1 + fh * (float(f2) + 0.5)
+            var wf := _box(n, Vector3(1.05, 0.2, 0.04), Vector3(0.0, y2, -0.56), Color.WHITE)
+            wf.material_override = glow
+            var wb := _box(n, Vector3(1.05, 0.2, 0.04), Vector3(0.0, y2, 0.56), Color.WHITE)
+            wb.material_override = glow
+            var wl := _box(n, Vector3(0.04, 0.2, 0.85), Vector3(-0.66, y2, 0.0), Color.WHITE)
+            wl.material_override = glow
+            var wr := _box(n, Vector3(0.04, 0.2, 0.85), Vector3(0.66, y2, 0.0), Color.WHITE)
+            wr.material_override = glow
+        var neon := Color(1.0, 0.3, 0.85) if lvl >= 4 else Color(0.3, 0.8, 1.0)
         var cap := _box(n, Vector3(1.4, 0.16, 1.2), Vector3(0.0, 0.1 + total + 0.08, 0.0), Color.WHITE)
-        cap.material_override = _glow_mat(Color(1.0, 0.3, 0.85) if lvl >= 4 else Color(0.3, 0.8, 1.0))
-        _cyl(n, 0.03, 0.03, 0.6, Vector3(0.0, total + 0.5, 0.0), Color(0.6, 0.6, 0.65))
+        cap.material_override = _glow_mat(neon)
+        if lvl >= 4:
+            for cx in [-0.66, 0.66]:
+                for cz in [-0.56, 0.56]:
+                    var ed := _box(n, Vector3(0.07, total, 0.07), Vector3(cx, 0.1 + total * 0.5, cz), Color.WHITE)
+                    ed.material_override = _glow_mat(neon)
+        _cyl(n, 0.03, 0.03, 0.8, Vector3(0.0, total + 0.6, 0.0), Color(0.6, 0.6, 0.65))
 
 
 func _defense_model(n: Node3D, t: int, team: Color) -> void:
@@ -3081,12 +3095,14 @@ func _sync_missiles(i: int) -> void:
             used[cursor] = true
             var mp := _missile_pos(cursor)
             var m := _make_missile_model(i == 0, t, false)
+            var msc: float = [2.2, 2.8, 2.6, 3.0, 2.2][t]
             if t < 4:
                 m.rotation.x = PI / 2.0
-                m.position = Vector3(mp.x, 2.7, mp.y)
+                m.position = Vector3(mp.x, 0.7 + 0.85 * msc * 1.5, mp.y)
+                m.scale = Vector3.ONE * 1.5
             else:
-                m.position = Vector3(mp.x, 1.4, mp.y)
-            m.scale = Vector3.ONE * 0.9
+                m.position = Vector3(mp.x, 1.6, mp.y)
+                m.scale = Vector3.ONE * 1.0
             _isl(i).add_child(m)
             nodes.append({"t": t, "slot": cursor, "node": m})
             have += 1
@@ -3670,3 +3686,40 @@ class MiniIcon extends Control:
         draw_rect(Rect2(cx - w * 0.17, h * 0.2, w * 0.34, h * 0.12), Color(1.0, 0.5, 0.1) if kind == 2 else Color(0.2, 0.2, 0.25))
         draw_line(Vector2(cx + w * 0.26, h * 0.82), Vector2(cx + w * 0.38, h * 0.48), Color(0.55, 0.42, 0.3), 4.0)
         draw_rect(Rect2(cx + w * 0.3, h * 0.42, w * 0.16, h * 0.09), Color(0.6, 0.6, 0.65))
+
+
+func _island_props(root: Node3D) -> void:
+    var white := Color(0.92, 0.92, 0.95)
+    # road between the military apron and the houses
+    _box(root, Vector3(92.0, 0.07, 6.0), Vector3(0.0, 0.66, 6.0), Color(0.15, 0.16, 0.19))
+    _box(root, Vector3(92.0, 0.09, 0.25), Vector3(0.0, 0.68, 3.0), white)
+    _box(root, Vector3(92.0, 0.09, 0.25), Vector3(0.0, 0.68, 9.0), white)
+    for k in range(12):
+        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-41.0 + float(k) * 7.5, 0.68, 6.0), Color(0.95, 0.82, 0.2))
+    # street lamps
+    for k2 in range(8):
+        var lx := -42.0 + float(k2) * 12.0
+        _cyl(root, 0.12, 0.16, 4.2, Vector3(lx, 2.7, 9.7), Color(0.3, 0.3, 0.34))
+        var bulb := _sphere(root, 0.4, Vector3(lx, 4.9, 9.7), Color.WHITE)
+        bulb.material_override = _glow_mat(Color(1.0, 0.93, 0.65))
+    # trees on the free right side and along the back edge
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 12345
+    for k3 in range(16):
+        var tx := rng.randf_range(34.0, 47.0)
+        var tz := rng.randf_range(12.0, 45.0)
+        if k3 >= 8:
+            tx = -42.0 + float(k3 - 8) * 11.0
+            tz = 47.0
+        var th := rng.randf_range(0.9, 1.3)
+        _cyl(root, 0.22 * th, 0.32 * th, 1.8 * th, Vector3(tx, 1.5, tz), Color(0.4, 0.26, 0.14))
+        _sphere(root, 1.5 * th, Vector3(tx, 3.4 * th, tz), Color(0.1, 0.42, 0.17))
+        _sphere(root, 1.0 * th, Vector3(tx + 0.5, 4.5 * th, tz - 0.3), Color(0.14, 0.5, 0.2))
+    # fuel tanks and red pipes behind the missile field
+    for k4 in range(4):
+        var tx2 := -36.0 + float(k4) * 24.0
+        _cyl(root, 2.8, 2.8, 5.0, Vector3(tx2, 3.2, -46.5), Color(0.85, 0.87, 0.9))
+        _cyl(root, 2.9, 2.9, 0.5, Vector3(tx2, 5.9, -46.5), Color(0.5, 0.52, 0.56))
+    _box(root, Vector3(88.0, 0.5, 0.5), Vector3(0.0, 2.0, -43.6), Color(0.6, 0.14, 0.14))
+    for k5 in range(9):
+        _box(root, Vector3(0.4, 1.8, 0.4), Vector3(-40.0 + float(k5) * 10.0, 1.3, -43.6), Color(0.45, 0.45, 0.5))
