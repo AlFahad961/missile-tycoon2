@@ -243,6 +243,8 @@ func _ready() -> void:
     _update_sens_text()
     _show_overlay("MISSILE TYCOON", "Hire builders (WORKER), buy missiles and air defense (MILITARY), then attack from the satellite (ATTACK). Rivals start from the same place as you!")
     _refresh_ui()
+    if OS.get_cmdline_user_args().has("--selftest"):
+        call_deferred("_selftest")
 
 
 func _build_sounds_extra() -> void:
@@ -3519,3 +3521,152 @@ func _refresh_hotbar() -> void:
             ic.visible = false
             lbl.text = ""
             b.visible = idx < 8
+
+
+func _selftest() -> void:
+    print("SELFTEST start")
+    await get_tree().process_frame
+    _start_new(3)
+    var me: Dictionary = emp[0]
+    me["money"] = 50000000
+    print("SELFTEST hire ", _do_hire(0, "builder"), _do_hire(0, "builder"), _do_hire(0, "brep"), _do_hire(0, "arep"))
+    for t in range(5):
+        print("SELFTEST buy ", t, " ", _do_buy_missile(0, t, 5), " ", _do_buy_defense(0, t))
+    print("SELFTEST up ", _do_upgrade_builder(0), _do_upgrade_builder(0))
+    _toggle_mil()
+    _mil_tab(1)
+    _close_windows()
+    _toggle_work()
+    _work_tab(1)
+    _close_windows()
+    _refresh_ui()
+    for k in range(120):
+        _process(0.25)
+    _refresh_ui()
+    _open_sat()
+    _sat_set_type(1)
+    _sat_set_mult(5)
+    for k2 in range(3):
+        await get_tree().process_frame
+    _sat_tap(Vector2(640.0, 360.0))
+    _sat_set_type(4)
+    sat_cool = 0.0
+    _sat_tap(Vector2(500.0, 300.0))
+    _sat_pick_island(2)
+    _close_sat()
+    for t2 in range(1, 3):
+        var ee: Dictionary = emp[t2]
+        ee["money"] = 5000000
+    elapsed = PEACE_TIME + 5.0
+    for k3 in range(1200):
+        _process(0.25)
+    _refresh_ui()
+    _save_game()
+    print("SELFTEST load ", _load_game())
+    _build_world()
+    _refresh_ui()
+    print("SELFTEST done")
+    get_tree().quit()
+
+
+# =====================================================================
+# Small procedural icons used by the shop cards, hotbar and satellite list
+# kind: 0 missile, 1 air defense, 2/3/4 workers, 5 house, 6 backpack
+# =====================================================================
+class MiniIcon extends Control:
+    var kind := 0
+    var sub := 0
+
+    func _init() -> void:
+        mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    func _draw() -> void:
+        var w := size.x
+        var h := size.y
+        draw_rect(Rect2(0.0, 0.0, w, h), Color(0.06, 0.07, 0.09))
+        if kind == 0:
+            _draw_missile(w, h)
+        elif kind == 1:
+            _draw_defense(w, h)
+        elif kind == 5:
+            _draw_house(w, h)
+        elif kind == 6:
+            _draw_bag(w, h)
+        else:
+            _draw_worker(w, h)
+
+    func _draw_missile(w: float, h: float) -> void:
+        var cx := w * 0.5
+        var white := Color(0.92, 0.93, 0.97)
+        var red := Color(0.95, 0.35, 0.15)
+        if sub == 4:
+            draw_colored_polygon(PackedVector2Array([Vector2(cx, h * 0.12), Vector2(w * 0.9, h * 0.8), Vector2(cx, h * 0.66), Vector2(w * 0.1, h * 0.8)]), Color(0.75, 0.77, 0.8))
+            draw_rect(Rect2(cx - w * 0.04, h * 0.2, w * 0.08, h * 0.5), red)
+            return
+        var bw := w * 0.1
+        var col := white
+        var tip := red
+        if sub == 1:
+            bw = w * 0.14
+            col = Color(0.62, 0.66, 0.7)
+        elif sub == 2:
+            bw = w * 0.09
+            col = Color(0.25, 0.28, 0.33)
+            tip = Color(0.2, 0.9, 1.0)
+        elif sub == 3:
+            bw = w * 0.17
+            col = Color(0.4, 0.43, 0.48)
+            tip = Color(1.0, 0.85, 0.2)
+        var top := h * 0.1
+        var nose := h * 0.26
+        var bot := h * 0.8
+        draw_rect(Rect2(cx - bw, nose, bw * 2.0, bot - nose), col)
+        draw_colored_polygon(PackedVector2Array([Vector2(cx, top), Vector2(cx + bw, nose), Vector2(cx - bw, nose)]), tip)
+        draw_colored_polygon(PackedVector2Array([Vector2(cx - bw, bot - h * 0.22), Vector2(cx - bw - w * 0.16, bot), Vector2(cx - bw, bot)]), tip)
+        draw_colored_polygon(PackedVector2Array([Vector2(cx + bw, bot - h * 0.22), Vector2(cx + bw + w * 0.16, bot), Vector2(cx + bw, bot)]), tip)
+        draw_colored_polygon(PackedVector2Array([Vector2(cx - bw * 0.6, bot), Vector2(cx + bw * 0.6, bot), Vector2(cx, bot + h * 0.12)]), Color(1.0, 0.7, 0.2))
+        if sub == 3:
+            for dx in [-0.55, 0.0, 0.55]:
+                draw_colored_polygon(PackedVector2Array([Vector2(cx + bw * dx, nose - h * 0.12), Vector2(cx + bw * dx + w * 0.04, nose), Vector2(cx + bw * dx - w * 0.04, nose)]), Color(1.0, 0.85, 0.2))
+
+    func _draw_defense(w: float, h: float) -> void:
+        var gray := Color(0.45, 0.5, 0.52)
+        var white := Color(0.9, 0.92, 0.95)
+        draw_rect(Rect2(w * 0.12, h * 0.72, w * 0.76, h * 0.14), gray)
+        if sub == 0:
+            draw_circle(Vector2(w * 0.45, h * 0.58), w * 0.18, white)
+            draw_rect(Rect2(w * 0.45, h * 0.52, w * 0.4, h * 0.07), Color(0.3, 0.3, 0.34))
+            return
+        var counts := [0, 3, 4, 6, 8]
+        var n: int = counts[sub]
+        for k in range(n):
+            var x0 := w * 0.22 + (w * 0.5) * float(k) / float(maxi(n - 1, 1))
+            draw_line(Vector2(x0, h * 0.72), Vector2(x0 + w * 0.14, h * 0.24), white, maxf(3.0, w * 0.06))
+        if sub >= 2:
+            draw_circle(Vector2(w * 0.82, h * 0.42), w * 0.08, Color(0.3, 0.85, 1.0))
+
+    func _draw_house(w: float, h: float) -> void:
+        draw_rect(Rect2(w * 0.2, h * 0.45, w * 0.6, h * 0.4), Color(0.7, 0.32, 0.28))
+        draw_colored_polygon(PackedVector2Array([Vector2(w * 0.12, h * 0.46), Vector2(w * 0.5, h * 0.16), Vector2(w * 0.88, h * 0.46)]), Color(0.35, 0.37, 0.42))
+        draw_rect(Rect2(w * 0.3, h * 0.56, w * 0.14, h * 0.14), Color(0.3, 0.95, 1.0))
+        draw_rect(Rect2(w * 0.56, h * 0.56, w * 0.14, h * 0.14), Color(0.3, 0.95, 1.0))
+
+    func _draw_bag(w: float, h: float) -> void:
+        draw_rect(Rect2(w * 0.24, h * 0.34, w * 0.52, h * 0.5), Color(0.35, 0.4, 0.5))
+        draw_rect(Rect2(w * 0.32, h * 0.58, w * 0.36, h * 0.18), Color(0.25, 0.3, 0.4))
+        draw_arc(Vector2(w * 0.5, h * 0.32), w * 0.12, PI, TAU, 12, Color(0.9, 0.92, 0.95), 3.0)
+
+    func _draw_worker(w: float, h: float) -> void:
+        var cx := w * 0.5
+        var shirt := Color(1.0, 0.6, 0.1)
+        if kind == 3:
+            shirt = Color(0.85, 0.5, 0.15)
+        elif kind == 4:
+            shirt = Color(0.2, 0.45, 0.95)
+        draw_rect(Rect2(cx - w * 0.2, h * 0.5, w * 0.4, h * 0.34), shirt)
+        draw_rect(Rect2(cx - w * 0.2, h * 0.84, w * 0.17, h * 0.12), Color(0.2, 0.3, 0.5))
+        draw_rect(Rect2(cx + w * 0.03, h * 0.84, w * 0.17, h * 0.12), Color(0.2, 0.3, 0.5))
+        draw_circle(Vector2(cx, h * 0.38), w * 0.14, Color(1.0, 0.82, 0.3))
+        draw_rect(Rect2(cx - w * 0.17, h * 0.2, w * 0.34, h * 0.12), Color(1.0, 0.5, 0.1) if kind == 2 else Color(0.2, 0.2, 0.25))
+        draw_line(Vector2(cx + w * 0.26, h * 0.82), Vector2(cx + w * 0.38, h * 0.48), Color(0.55, 0.42, 0.3), 4.0)
+        draw_rect(Rect2(cx + w * 0.3, h * 0.42, w * 0.16, h * 0.09), Color(0.6, 0.6, 0.65))
