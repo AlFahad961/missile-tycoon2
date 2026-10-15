@@ -1,40 +1,41 @@
 extends Node3D
-## Missile Tycoon Islands 5.0
-## Roblox-style island war. No HP bars: your structures (houses, launchers, air defense)
-## get destroyed and must be repaired by workers. Fire from a satellite view with a missile list.
+## Missile Tycoon Islands 6.0
+## WW3-Commander style island war. Builders auto-build and upgrade houses, repairmen fix wrecks,
+## buy missiles and air defense in MILITARY, fire from the satellite view with 1x / 5x taps.
 ## Procedural sound, layered air defense, drones. (Godot 4.x, Compatibility renderer)
 ## Left half of the screen = floating joystick, right half = drag to look around.
 
-const SAVE_PATH := "user://missile_tycoon_v5.json"
+const SAVE_PATH := "user://missile_tycoon_v6.json"
 const SETTINGS_PATH := "user://settings_v1.json"
 const PLOT_HALF := 50.0
 const PLAYER_HALF := 47.0
 const RING := [0.0, 0.0, 100.0, 115.0, 135.0]
 const WALK_SPEED := 12.0
-const MAX_HOUSES := 20
-const MAX_DEFENSES := 12
-const MAX_LAUNCHERS := 10
-const MAX_WORKERS := 6
-const START_MONEY := 250
+const MAX_HOUSES := 50
+const MAX_DEFENSES := 30
+const MAX_MISSILES := 100
+const MAX_BUILDERS := 5
+const MAX_BREP := 5
+const MAX_AREP := 3
+const MAX_LEVEL := 5
+const START_MONEY := 600
 const PEACE_TIME := 300.0
 const SPACING := 7.0
 const SAT_HEIGHT := 150.0
-const BUILDER_PRICE := 100
-const REPAIRER_PRICE := 150
+const BUILDER_PRICES := [500, 900, 1500, 2400, 3600]
+const BREP_PRICES := [700, 1200, 1900, 2800, 4000]
+const AREP_PRICES := [3000, 6000, 10000]
+const BUILDER_UPGRADE := [2500, 8000, 25000, 80000]
 const LOOK_SENS := [0.006, 0.010, 0.016]
 const SENS_NAMES := ["LOW", "MEDIUM", "HIGH"]
 const RATE := 16000
 
-const TIME_HOUSE := 8.0
-const TIME_LAUNCHER := 12.0
-const TIME_DEFENSE := 14.0
-const TIME_UPGRADE := 6.0
-const TIME_REPAIR := 10.0
+const TIME_HOUSE := 12.0
+const TIME_UPGRADE := 9.0
+const TIME_REPAIR := 12.0
 
-const HOUSE_INCOME := [3, 6, 10]
-const HOUSE_HP := [150.0, 200.0, 260.0]
-const HOUSE_UPGRADE := [300, 700]
-const LAUNCHER_HP := 260.0
+const HOUSE_INCOME := [2, 6, 14, 30, 60]
+const HOUSE_HP := [150.0, 250.0, 400.0, 600.0, 900.0]
 const DEFENSE_HP := 220.0
 
 const TEAM_COLORS := [
@@ -45,33 +46,35 @@ const TEAM_COLORS := [
 ]
 
 # Weapon index: 0 cruise, 1 ballistic, 2 hypersonic, 3 MIRV, 4 drone
+# Weapon index: 0 cruise, 1 ballistic, 2 hypersonic, 3 MIRV, 4 drone
 const MISSILES := [
-    {"name": "Cruise Missile", "cls": "Tomahawk / Babur class", "short": "Cruise", "price": 100, "pad": 350,
-        "dmg": 55.0, "radius": 5.0, "speed": 45.0, "arc": 0.05, "cep": 3.0, "count": 1, "cap": 8},
-    {"name": "Ballistic Missile", "cls": "Iskander / Fateh class", "short": "Ballistic", "price": 260, "pad": 700,
-        "dmg": 110.0, "radius": 8.0, "speed": 75.0, "arc": 0.45, "cep": 5.0, "count": 1, "cap": 6},
-    {"name": "Hypersonic Missile", "cls": "Kinzhal / Fattah class", "short": "Hypersonic", "price": 600, "pad": 1500,
-        "dmg": 190.0, "radius": 6.0, "speed": 150.0, "arc": 0.12, "cep": 3.0, "count": 1, "cap": 4},
-    {"name": "MIRV Strategic", "cls": "Sarmat class, 3 warheads", "short": "MIRV", "price": 1400, "pad": 3000,
-        "dmg": 80.0, "radius": 7.0, "speed": 110.0, "arc": 0.5, "cep": 14.0, "count": 3, "cap": 3},
-    {"name": "Kamikaze Drone", "cls": "Shahed class", "short": "Drone", "price": 45, "pad": 250,
-        "dmg": 40.0, "radius": 3.5, "speed": 24.0, "arc": 0.03, "cep": 6.0, "count": 1, "cap": 20},
+    {"name": "Cruise Missile", "cls": "Tomahawk / Babur class", "short": "Cruise", "price": 300,
+        "dmg": 55.0, "radius": 5.0, "speed": 45.0, "arc": 0.05, "cep": 3.0, "count": 1},
+    {"name": "Ballistic Missile", "cls": "Iskander / Fateh class", "short": "Ballistic", "price": 900,
+        "dmg": 110.0, "radius": 8.0, "speed": 75.0, "arc": 0.45, "cep": 5.0, "count": 1},
+    {"name": "Hypersonic Missile", "cls": "Kinzhal / Fattah class", "short": "Hypersonic", "price": 2200,
+        "dmg": 190.0, "radius": 6.0, "speed": 150.0, "arc": 0.12, "cep": 3.0, "count": 1},
+    {"name": "MIRV Strategic", "cls": "Sarmat class, 3 warheads", "short": "MIRV", "price": 5000,
+        "dmg": 80.0, "radius": 7.0, "speed": 110.0, "arc": 0.5, "cep": 14.0, "count": 3},
+    {"name": "Kamikaze Drone", "cls": "Shahed class", "short": "Drone", "price": 120,
+        "dmg": 40.0, "radius": 3.5, "speed": 24.0, "arc": 0.03, "cep": 6.0, "count": 1},
 ]
 
+
 const DEFENSES := [
-    {"name": "CIWS Gun", "cls": "Phalanx / Pantsir-gun class", "price": 300, "range": 22.0,
+    {"name": "CIWS Gun", "cls": "Phalanx / Pantsir-gun class", "short": "CIWS", "price": 800, "range": 22.0,
         "cd": 1.2, "mag": 40, "ref": 2},
-    {"name": "Iron Dome Battery", "cls": "Iron Dome / Tor class, short range", "price": 700, "range": 45.0,
+    {"name": "Iron Dome", "cls": "Iron Dome / Tor class, short range", "short": "Iron Dome", "price": 2500, "range": 45.0,
         "cd": 2.0, "mag": 20, "ref": 20},
-    {"name": "HQ-9 / Patriot Battery", "cls": "HQ-9 / Patriot class, medium range", "price": 1400, "range": 75.0,
+    {"name": "HQ-9 / Patriot", "cls": "HQ-9 / Patriot class, medium range", "short": "HQ-9", "price": 6000, "range": 75.0,
         "cd": 3.0, "mag": 12, "ref": 60},
-    {"name": "S-400 Battery", "cls": "S-400 class, long range", "price": 2600, "range": 110.0,
+    {"name": "S-400", "cls": "S-400 class, long range", "short": "S-400", "price": 12000, "range": 110.0,
         "cd": 3.5, "mag": 10, "ref": 110},
-    {"name": "THAAD / S-500 Battery", "cls": "THAAD / S-500 class, anti-ballistic", "price": 4200, "range": 130.0,
+    {"name": "THAAD / S-500", "cls": "THAAD / S-500 class, anti-ballistic", "short": "THAAD", "price": 22000, "range": 130.0,
         "cd": 4.5, "mag": 8, "ref": 200},
 ]
 
-# Chance a defense stops each weapon: [cruise, ballistic, hypersonic, MIRV, drone]
+
 const DEF_TABLE := [
     [0.55, 0.05, 0.0, 0.0, 0.85],
     [0.75, 0.25, 0.05, 0.1, 0.9],
@@ -134,8 +137,6 @@ var elapsed := 0.0
 var income_timer := 0.0
 var uid_counter := 0
 var look_sens_idx := 1
-var placing_kind := ""
-var placing_sub := 0
 var launch_queue: Array = []
 var ui_timer := 0.0
 
@@ -144,7 +145,6 @@ var sat_open := false
 var sat_island := 1
 var sat_has_point := false
 var sat_local := Vector2.ZERO
-var sat_counts: Array = [0, 0, 0, 0, 0]
 var sat_marker: MeshInstance3D
 var sat_drag_id := -1
 
@@ -155,7 +155,6 @@ var island_nodes: Array = []
 var island_pos: Array = []
 var clouds: Array = []
 var projectiles: Array = []
-var place_ring: MeshInstance3D
 var player: Node3D
 var player_off := Vector3(0.0, 0.0, 5.0)
 var walk_amount := 0.0
@@ -179,38 +178,55 @@ var look_id := -1
 
 # ---- ui ----
 var ui_root: Control
-var hud_panel: PanelContainer
-var top_right: VBoxContainer
-var bottom_right: VBoxContainer
-var build_panel: PanelContainer
-var place_bar: HBoxContainer
 var overlay: Panel
 var money_label: Label
 var stats_label: Label
 var status_label: Label
-var fire_button: Button
-var build_toggle: Button
 var joy_base: Panel
 var joy_knob: Panel
 var ov_title: Label
 var ov_sub: Label
 var btn_resume: Button
 var btn_continue: Button
-var btn_place: Button
 var btn_sens: Button
-var eco_buttons: Dictionary = {}
-var btn_pads: Array = []
-var btn_buys: Array = []
-var btn_defs: Array = []
-var btn_restock: Button
 var sat_root: Control
 var sat_panels: Array = []
-var sat_info: Label
-var sat_launch_btn: Button
-var sat_rows: Array = []
 var sat_island_box: HBoxContainer
 var sat_island_btns: Array = []
 var sat_back_btn: Button
+var sat_type := 0
+var sat_mult := 1
+var sat_cool := 0.0
+var sat_money: Label
+var sat_title: Label
+var sat_hint: Label
+var sat_type_btns: Array = []
+var sat_mult_btns: Array = []
+var stats_panel: PanelContainer
+var tabs_box: HBoxContainer
+var hot_box: HBoxContainer
+var hot_slots: Array = []
+var hot_items: Array = []
+var menu_btn: Button
+var status_box: MarginContainer
+var mil_panel: PanelContainer
+var work_panel: PanelContainer
+var mil_tab := 0
+var work_tab := 0
+var mil_tab_btns: Array = []
+var work_tab_btns: Array = []
+var mil_body_missile: Control
+var mil_body_aa: Control
+var work_body_hire: Control
+var work_body_up: Control
+var cards_missile: Array = []
+var cards_aa: Array = []
+var cards_worker: Array = []
+var up_card: Dictionary = {}
+var stat_missile: Label
+var stat_aa: Label
+var stat_house: Label
+var income_label: Label
 
 
 
@@ -225,7 +241,7 @@ func _ready() -> void:
     _build_world()
     get_viewport().size_changed.connect(_reset_joystick)
     _update_sens_text()
-    _show_overlay("MISSILE TYCOON", "Hire builders, build houses and launchers, buy missiles and drones, and protect everything with air defense. Rivals start from the same place as you!")
+    _show_overlay("MISSILE TYCOON", "Hire builders (WORKER), buy missiles and air defense (MILITARY), then attack from the satellite (ATTACK). Rivals start from the same place as you!")
     _refresh_ui()
 
 
@@ -585,10 +601,11 @@ func _build_environment() -> void:
 # =====================================================================
 func _new_empire(aggr: float) -> Dictionary:
     return {
-        "money": START_MONEY, "builders": 0, "repairers": 0, "structs": [], "jobs": [],
+        "money": START_MONEY, "builders": 0, "brep": 0, "arep": 0, "blevel": 1,
+        "structs": [], "jobs": [],
         "ammo": [0, 0, 0, 0, 0], "aggr": aggr, "grudge": -1, "phase": "build",
         "salvo": randi_range(5, 7), "rest": 0.0, "think": randf_range(2.0, 4.0),
-        "cool": 0.0, "dead": false, "wnodes": [],
+        "cool": 0.0, "dead": false, "wnodes": [], "mnodes": [], "auto": randf_range(0.2, 1.0),
     }
 
 
@@ -605,18 +622,19 @@ func _reset_state(count: int) -> void:
     sat_island = 1
     elapsed = 0.0
     income_timer = 0.0
-    placing_kind = ""
     launch_queue = []
     sat_open = false
     sat_has_point = false
-    sat_counts = [0, 0, 0, 0, 0]
+    sat_type = 0
+    sat_mult = 1
+    sat_cool = 0.0
     player_off = Vector3(0.0, 0.0, 5.0)
 
 
 func _house_pos(slot: int) -> Vector2:
     var col := slot % 10
     var row := int(slot / 10)
-    return Vector2(-45.0 + float(col) * 5.0, 14.0 + float(row) * 6.0)
+    return Vector2(-45.0 + float(col) * 5.0, 12.0 + float(row) * 6.0)
 
 
 func _struct_world(i: int, s: Dictionary) -> Vector3:
@@ -635,9 +653,7 @@ func _build_world() -> void:
     island_pos.clear()
     projectiles.clear()
     launch_queue.clear()
-    place_ring = null
     sat_marker = null
-    placing_kind = ""
 
     var radius: float = RING[island_count]
     for i in range(island_count):
@@ -654,6 +670,7 @@ func _build_world() -> void:
     for i in range(island_count):
         var e: Dictionary = emp[i]
         e["wnodes"] = []
+        e["mnodes"] = []
         var structs: Array = e["structs"]
         for sv in structs:
             var s: Dictionary = sv
@@ -668,6 +685,7 @@ func _build_world() -> void:
                 _spawn_struct_node(i, s, 0.0)
             _refresh_struct_label(i, s)
         _refresh_workers(i)
+        _sync_missiles(i)
         if bool(e["dead"]):
             var dead: Node3D = island_nodes[i]
             dead.position.y = -8.0
@@ -693,6 +711,8 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     top.position = Vector3(0.0, 0.45, 0.0)
     top.material_override = _checker_mat(i)
     root.add_child(top)
+    # grey military apron behind the houses (missiles and air defense stand here)
+    _box(root, Vector3(side - 4.0, 0.06, 50.0), Vector3(0.0, 0.63, -23.0), Color(0.34, 0.36, 0.41))
     var lab := Label3D.new()
     lab.text = "YOU" if i == 0 else "ENEMY %d" % i
     lab.font_size = 72
@@ -710,57 +730,46 @@ func _make_island(i: int, p: Vector3) -> Node3D:
 # =====================================================================
 # Structures: visuals
 # =====================================================================
-func _house_model(n: Node3D, color: Color) -> void:
-    _box(n, Vector3(1.5, 1.1, 1.3), Vector3(0.0, 0.55, 0.0), color)
-    var roof := MeshInstance3D.new()
-    var pr := PrismMesh.new()
-    pr.size = Vector3(1.8, 0.7, 1.55)
-    roof.mesh = pr
-    roof.position = Vector3(0.0, 1.45, 0.0)
-    roof.material_override = _mat(Color(0.45, 0.17, 0.12))
-    n.add_child(roof)
-    _box(n, Vector3(0.38, 0.65, 0.05), Vector3(0.0, 0.33, -0.66), Color(0.3, 0.18, 0.08))
-    var win := _glow_mat(Color(0.7, 0.9, 1.0))
-    for sx in [-0.5, 0.5]:
-        var wm := _box(n, Vector3(0.3, 0.3, 0.05), Vector3(sx, 0.7, -0.66), Color.WHITE)
-        wm.material_override = win
-    _box(n, Vector3(0.22, 0.5, 0.22), Vector3(0.45, 1.6, 0.25), Color(0.4, 0.4, 0.42))
-
-
-func _launcher_model(n: Node3D, t: int, team: Color) -> void:
-    var gray := Color(0.3, 0.32, 0.35)
-    var white := Color(0.85, 0.87, 0.9)
-    _cyl(n, 1.3, 1.5, 0.4, Vector3(0.0, 0.2, 0.0), Color(0.25, 0.27, 0.3))
-    if t == 0:
-        _box(n, Vector3(1.6, 0.6, 2.4), Vector3(0.0, 0.7, 0.0), team.darkened(0.3))
-        for k in range(4):
-            var x: float = (float(k % 2) - 0.5) * 0.7
-            var z: float = (float(int(k / 2)) - 0.5) * 0.9
-            var tb := _cyl(n, 0.2, 0.22, 1.8, Vector3(x, 1.5, z), white)
-            tb.rotation.x = deg_to_rad(-35.0)
-    elif t == 1:
-        _box(n, Vector3(1.4, 0.7, 3.4), Vector3(0.0, 0.8, 0.0), team.darkened(0.3))
-        _box(n, Vector3(1.2, 0.9, 1.0), Vector3(0.0, 1.2, 1.7), gray)
-        var tb2 := _cyl(n, 0.3, 0.38, 3.4, Vector3(0.0, 2.0, -0.2), white)
-        tb2.rotation.x = deg_to_rad(-60.0)
-    elif t == 2:
-        _cyl(n, 0.9, 1.1, 1.6, Vector3(0.0, 0.9, 0.0), team.darkened(0.3))
-        var tb3 := _cyl(n, 0.25, 0.3, 2.8, Vector3(0.0, 2.2, 0.0), Color(0.15, 0.17, 0.2))
-        tb3.rotation.x = deg_to_rad(-12.0)
-        _cyl(n, 0.0, 0.3, 0.8, Vector3(0.0, 3.7, -0.3), Color(0.2, 0.9, 1.0))
-    elif t == 3:
-        _cyl(n, 1.2, 1.4, 2.0, Vector3(0.0, 1.0, 0.0), team.darkened(0.2))
-        _cyl(n, 0.7, 0.7, 0.3, Vector3(0.0, 2.15, 0.0), Color(0.15, 0.15, 0.18))
-        var dish := _sphere(n, 0.7, Vector3(1.7, 1.0, 0.0), white)
-        dish.scale = Vector3(1.0, 0.3, 1.0)
-        _cyl(n, 0.08, 0.08, 1.0, Vector3(1.7, 0.5, 0.0), gray)
+func _house_model(n: Node3D, color: Color, lvl: int) -> void:
+    var glow := _glow_mat(Color(0.35, 0.95, 1.0))
+    var hedge := Color(0.2, 0.5, 0.22)
+    _box(n, Vector3(2.0, 0.1, 2.0), Vector3(0.0, 0.05, 0.0), Color(0.8, 0.82, 0.86))
+    _box(n, Vector3(1.7, 0.24, 0.2), Vector3(0.0, 0.22, -0.9), hedge)
+    _box(n, Vector3(1.7, 0.24, 0.2), Vector3(0.0, 0.22, 0.9), hedge)
+    if lvl <= 2:
+        var h := 0.85
+        for f in range(lvl):
+            var y := 0.1 + h * 0.5 + float(f) * h
+            _box(n, Vector3(1.4, h, 1.2), Vector3(0.0, y, 0.0), color)
+            for sx in [-0.45, 0.0, 0.45]:
+                if f == 0 and sx == 0.0:
+                    continue
+                var wm := _box(n, Vector3(0.28, 0.32, 0.05), Vector3(sx, y + 0.05, -0.62), Color.WHITE)
+                wm.material_override = glow
+        var top := 0.1 + h * float(lvl)
+        var roof := MeshInstance3D.new()
+        var pr := PrismMesh.new()
+        pr.size = Vector3(1.7, 0.6, 1.45)
+        roof.mesh = pr
+        roof.position = Vector3(0.0, top + 0.3, 0.0)
+        roof.material_override = _mat(Color(0.34, 0.36, 0.42))
+        n.add_child(roof)
+        _box(n, Vector3(0.34, 0.55, 0.05), Vector3(0.0, 0.38, -0.62), Color(0.3, 0.18, 0.08))
+        _box(n, Vector3(0.2, 0.45, 0.2), Vector3(0.45, top + 0.35, 0.25), Color(0.4, 0.4, 0.42))
     else:
-        var ramp := _box(n, Vector3(1.4, 0.15, 4.0), Vector3(0.0, 0.9, 0.0), gray)
-        ramp.rotation.x = deg_to_rad(12.0)
-        for k in range(3):
-            var px: float = (float(k) - 1.0) * 0.9
-            _box(n, Vector3(0.8, 0.07, 0.6), Vector3(px, 1.45, 0.3), white)
-            _box(n, Vector3(0.12, 0.12, 1.0), Vector3(px, 1.5, 0.3), team)
+        var floors := lvl + 1
+        var fh := 0.7
+        var body := Color(0.27, 0.34, 0.5).lerp(color, 0.15)
+        var total := fh * float(floors)
+        _box(n, Vector3(1.3, total, 1.1), Vector3(0.0, 0.1 + total * 0.5, 0.0), body)
+        for f2 in range(floors):
+            var y2 := 0.1 + fh * (float(f2) + 0.55)
+            for sx2 in [-0.38, 0.0, 0.38]:
+                var wm2 := _box(n, Vector3(0.22, 0.28, 0.05), Vector3(sx2, y2, -0.57), Color.WHITE)
+                wm2.material_override = glow
+        var cap := _box(n, Vector3(1.4, 0.16, 1.2), Vector3(0.0, 0.1 + total + 0.08, 0.0), Color.WHITE)
+        cap.material_override = _glow_mat(Color(1.0, 0.3, 0.85) if lvl >= 4 else Color(0.3, 0.8, 1.0))
+        _cyl(n, 0.03, 0.03, 0.6, Vector3(0.0, total + 0.5, 0.0), Color(0.6, 0.6, 0.65))
 
 
 func _defense_model(n: Node3D, t: int, team: Color) -> void:
@@ -820,10 +829,6 @@ func _make_rubble() -> Node3D:
 
 func _struct_scale(s: Dictionary) -> Vector3:
     var bs: float = s["bs"]
-    var kind: String = s["kind"]
-    if kind == "house":
-        var lvl: int = s["lvl"]
-        return Vector3(bs, bs * (1.0 + 0.25 * float(lvl - 1)), bs)
     return Vector3(bs, bs, bs)
 
 
@@ -836,16 +841,13 @@ func _spawn_struct_node(i: int, s: Dictionary, anim_time: float) -> void:
     node.position = Vector3(float(s["lx"]), 0.6, float(s["lz"]))
     isl.add_child(node)
     if kind == "house":
-        var palette := [Color(0.95, 0.68, 0.24), Color(0.9, 0.45, 0.25), Color(0.35, 0.65, 0.9), Color(0.85, 0.85, 0.5)]
+        var palette := [Color(0.66, 0.32, 0.28), Color(0.72, 0.46, 0.3), Color(0.56, 0.3, 0.34), Color(0.74, 0.62, 0.42)]
         var slot: int = s["slot"]
         var color: Color = palette[slot % 4]
         if i > 0:
-            color = team.lightened(0.15 * float(slot % 3))
-        _house_model(node, color)
+            color = team.lightened(0.1 * float(slot % 3))
+        _house_model(node, color, int(s["lvl"]))
         s["bs"] = 2.2
-    elif kind == "launcher":
-        _launcher_model(node, sub, team)
-        s["bs"] = 2.4
     else:
         _defense_model(node, sub, team)
         var dscale := [1.4, 1.7, 2.0, 2.4, 2.8]
@@ -863,7 +865,7 @@ func _spawn_struct_node(i: int, s: Dictionary, anim_time: float) -> void:
         var ring := _make_ring(rng, Color(0.3, 0.9, 1.0, 0.45) if i == 0 else Color(1.0, 0.35, 0.3, 0.3))
         ring.position = Vector3(float(s["lx"]), 0.7, float(s["lz"]))
         isl.add_child(ring)
-        ring.visible = (i == 0) or (sat_open and sat_island == i)
+        ring.visible = sat_open and sat_island == i
         s["ring"] = ring
 
 
@@ -924,7 +926,7 @@ func _refresh_struct_label(i: int, s: Dictionary) -> void:
         nl.no_depth_test = true
         nl.render_priority = 2
         nl.outline_size = 12
-        nl.position = Vector3(float(s["lx"]), 9.0, float(s["lz"]))
+        nl.position = Vector3(float(s["lx"]), 13.0, float(s["lz"]))
         _isl(i).add_child(nl)
         s["lbl"] = nl
         lbl = nl
@@ -941,17 +943,16 @@ func _refresh_workers(i: int) -> void:
         if is_instance_valid(n):
             n.queue_free()
     var arr: Array = []
-    var b: int = e["builders"]
-    var r: int = e["repairers"]
-    for k in range(b + r):
-        var isb := k < b
-        var ch := _make_character(Color(1.0, 0.55, 0.1) if isb else Color(0.2, 0.8, 0.35))
-        var idx := k if isb else k - b
-        ch.position = Vector3(8.0 + float(idx) * 3.0, 0.6, -6.0 if isb else -11.0)
-        ch.rotation.y = randf_range(-1.0, 1.0)
-        ch.scale = Vector3.ONE * 1.5
-        _isl(i).add_child(ch)
-        arr.append(ch)
+    var counts := [int(e["builders"]), int(e["brep"]), int(e["arep"])]
+    var shirts := [Color(1.0, 0.55, 0.1), Color(0.75, 0.75, 0.8), Color(0.25, 0.5, 1.0)]
+    for kind in range(3):
+        for k in range(int(counts[kind])):
+            var ch := _make_character(shirts[kind])
+            ch.position = Vector3(12.0 + float(k) * 4.0, 0.6, 14.0 + float(kind) * 7.0)
+            ch.rotation.y = randf_range(-0.6, 0.6)
+            ch.scale = Vector3.ONE * 1.5
+            _isl(i).add_child(ch)
+            arr.append(ch)
     e["wnodes"] = arr
 
 
@@ -961,8 +962,8 @@ func _checker_mat(i: int) -> ShaderMaterial:
     var m := ShaderMaterial.new()
     m.shader = shader
     var team := _team(i)
-    var g1 := Color(0.3, 0.62, 0.25).lerp(team, 0.06)
-    var g2 := Color(0.25, 0.55, 0.22).lerp(team, 0.06)
+    var g1 := Color(0.13, 0.34, 0.15).lerp(team, 0.05)
+    var g2 := Color(0.1, 0.29, 0.12).lerp(team, 0.05)
     m.set_shader_parameter("c1", g1)
     m.set_shader_parameter("c2", g2)
     m.set_shader_parameter("tile", 10.0)
@@ -1051,7 +1052,7 @@ func _count_destroyed(i: int) -> int:
 
 func _free_workers(i: int, kind: String) -> int:
     var e: Dictionary = emp[i]
-    var total: int = e["builders"] if kind == "builder" else e["repairers"]
+    var total := _worker_total(e, kind)
     var busy := 0
     var jobs: Array = e["jobs"]
     for jv in jobs:
@@ -1063,36 +1064,12 @@ func _free_workers(i: int, kind: String) -> int:
 
 func _worker_price(i: int, kind: String) -> int:
     var e: Dictionary = emp[i]
+    var n := mini(_worker_total(e, kind), _worker_max(kind) - 1)
     if kind == "builder":
-        return BUILDER_PRICE + int(e["builders"]) * 40
-    return REPAIRER_PRICE + int(e["repairers"]) * 60
-
-
-func _house_price(i: int) -> int:
-    return 150 + _count_structs(i, "house", -1, false) * 70
-
-
-func _struct_price(kind: String, sub: int) -> int:
-    if kind == "launcher":
-        return int(MISSILES[sub]["pad"])
-    if kind == "defense":
-        return int(DEFENSES[sub]["price"])
-    return 0
-
-
-func _repair_cost(s: Dictionary) -> int:
-    var kind: String = s["kind"]
-    var sub: int = s["sub"]
-    var hp: float = s["hp"]
-    var mx: float = s["maxhp"]
-    var full := 0
-    if kind == "house":
-        full = 80 + 40 * int(s["lvl"])
-    else:
-        full = int(float(_struct_price(kind, sub)) * 0.45)
-    if str(s["state"]) == "destroyed":
-        return full
-    return maxi(15, int(float(full) * 0.5 * (1.0 - hp / mx)))
+        return int(BUILDER_PRICES[n])
+    if kind == "brep":
+        return int(BREP_PRICES[n])
+    return int(AREP_PRICES[n])
 
 
 func _struct_name(s: Dictionary) -> String:
@@ -1100,8 +1077,6 @@ func _struct_name(s: Dictionary) -> String:
     var sub: int = s["sub"]
     if kind == "house":
         return "House Lv%d" % int(s["lvl"])
-    if kind == "launcher":
-        return "%s launcher" % MISSILES[sub]["short"]
     return str(DEFENSES[sub]["name"])
 
 
@@ -1117,18 +1092,12 @@ func _income(i: int) -> int:
     return total
 
 
-func _missile_cap(i: int, t: int) -> int:
-    return int(MISSILES[t]["cap"]) * _count_structs(i, "launcher", t, true)
-
-
 func _add_struct(i: int, kind: String, sub: int, lx: float, lz: float, state: String, slot: int) -> Dictionary:
     uid_counter += 1
     var mx := DEFENSE_HP
     var mag := 0
     if kind == "house":
         mx = HOUSE_HP[0]
-    elif kind == "launcher":
-        mx = LAUNCHER_HP
     else:
         mag = int(DEFENSES[sub]["mag"])
     var s := {
@@ -1142,43 +1111,16 @@ func _add_struct(i: int, kind: String, sub: int, lx: float, lz: float, state: St
     return s
 
 
-func _spot_ok(i: int, lx: float, lz: float) -> bool:
-    if absf(lx) > 46.0 or absf(lz) > 46.0:
-        return false
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    for sv in structs:
-        var s: Dictionary = sv
-        if Vector2(lx - float(s["lx"]), lz - float(s["lz"])).length() < SPACING:
-            return false
-    return true
-
-
-func _random_spot(i: int) -> Vector2:
-    for attempt in range(40):
-        var lx := randf_range(-44.0, 44.0)
-        var lz := randf_range(-44.0, 6.0)
-        if _spot_ok(i, lx, lz):
-            return Vector2(lx, lz)
-    return Vector2(9999.0, 9999.0)
-
-
 func _free_slot(i: int) -> int:
     var e: Dictionary = emp[i]
     var structs: Array = e["structs"]
+    var used := {}
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) == "house":
+            used[int(s["slot"])] = true
     for slot in range(MAX_HOUSES):
-        var used := false
-        var hp := _house_pos(slot)
-        for sv in structs:
-            var s: Dictionary = sv
-            if str(s["kind"]) == "house":
-                if int(s["slot"]) == slot:
-                    used = true
-                    break
-            elif Vector2(hp.x - float(s["lx"]), hp.y - float(s["lz"])).length() < 4.5:
-                used = true
-                break
-        if not used:
+        if not used.has(slot):
             return slot
     return -1
 
@@ -1186,8 +1128,13 @@ func _free_slot(i: int) -> int:
 func _start_job(i: int, s: Dictionary, jtype: String, secs: float) -> void:
     var e: Dictionary = emp[i]
     var jobs: Array = e["jobs"]
-    var worker := "repairer" if jtype == "repair" else "builder"
+    var worker := "builder"
+    if jtype == "repair":
+        worker = "brep" if str(s["kind"]) == "house" else "arep"
     jobs.append({"s": s, "type": jtype, "worker": worker, "left": secs, "total": secs})
+
+
+# ---------- actions (used by the player and by the rival AI) ----------
 
 
 func _cancel_jobs_for(i: int, s: Dictionary) -> void:
@@ -1205,9 +1152,13 @@ func _cancel_jobs_for(i: int, s: Dictionary) -> void:
 # ---------- actions (used by the player and by the rival AI) ----------
 func _do_hire(i: int, kind: String) -> int:
     var e: Dictionary = emp[i]
-    var key := "builders" if kind == "builder" else "repairers"
+    var key := "builders"
+    if kind == "brep":
+        key = "brep"
+    elif kind == "arep":
+        key = "arep"
     var cur: int = e[key]
-    if cur >= MAX_WORKERS:
+    if cur >= _worker_max(kind):
         return 2
     var price := _worker_price(i, kind)
     if int(e["money"]) < price:
@@ -1215,178 +1166,27 @@ func _do_hire(i: int, kind: String) -> int:
     e["money"] = int(e["money"]) - price
     e[key] = cur + 1
     _refresh_workers(i)
-    return 0
-
-
-func _do_build_house(i: int) -> int:
-    var e: Dictionary = emp[i]
-    if _count_structs(i, "house", -1, false) >= MAX_HOUSES:
-        return 2
-    if _free_workers(i, "builder") < 1:
-        return 3
-    var price := _house_price(i)
-    if int(e["money"]) < price:
-        return 1
-    var slot := _free_slot(i)
-    if slot < 0:
-        return 2
-    e["money"] = int(e["money"]) - price
-    var hp := _house_pos(slot)
-    var s := _add_struct(i, "house", 0, hp.x, hp.y, "building", slot)
-    _spawn_struct_node(i, s, TIME_HOUSE)
-    _refresh_struct_label(i, s)
-    _start_job(i, s, "build", TIME_HOUSE)
     if i == 0:
-        _play_ui("hammer", -2.0)
+        _play_ui("build", -3.0)
     return 0
 
 
-func _do_build_struct(i: int, kind: String, sub: int, lx: float, lz: float) -> int:
+func _do_buy_missile(i: int, t: int, n: int = 1) -> int:
     var e: Dictionary = emp[i]
-    var limit := MAX_LAUNCHERS if kind == "launcher" else MAX_DEFENSES
-    if _count_structs(i, kind, -1, false) >= limit:
+    var room := MAX_MISSILES - _ammo_total(i)
+    if room < 1:
         return 2
-    if _free_workers(i, "builder") < 1:
-        return 3
-    var price := _struct_price(kind, sub)
-    if int(e["money"]) < price:
-        return 1
-    if not _spot_ok(i, lx, lz):
-        return 4
-    e["money"] = int(e["money"]) - price
-    var secs := TIME_LAUNCHER if kind == "launcher" else TIME_DEFENSE
-    var s := _add_struct(i, kind, sub, lx, lz, "building", -1)
-    _spawn_struct_node(i, s, secs)
-    _refresh_struct_label(i, s)
-    _start_job(i, s, "build", secs)
-    if i == 0:
-        _play_ui("hammer", -2.0)
-    return 0
-
-
-func _lowest_house(i: int) -> Dictionary:
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    var best: Dictionary = {}
-    var best_lvl := 99
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) != "house" or str(s["state"]) != "ok" or bool(s["upg"]):
-            continue
-        var lvl: int = s["lvl"]
-        if lvl < 3 and lvl < best_lvl:
-            best = s
-            best_lvl = lvl
-    return best
-
-
-func _do_upgrade_house(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var s := _lowest_house(i)
-    if s.is_empty():
-        return 2
-    if _free_workers(i, "builder") < 1:
-        return 3
-    var lvl: int = s["lvl"]
-    var price: int = HOUSE_UPGRADE[lvl - 1]
+    var cnt := mini(n, room)
+    var price: int = int(MISSILES[t]["price"]) * cnt
     if int(e["money"]) < price:
         return 1
     e["money"] = int(e["money"]) - price
-    s["upg"] = true
-    _start_job(i, s, "upgrade", TIME_UPGRADE)
-    if i == 0:
-        _play_ui("hammer", -2.0)
-    return 0
-
-
-func _do_repair_all(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    var started := 0
-    var no_worker := false
-    var broke := false
-    var needed := 0
-    for sv in structs:
-        var s: Dictionary = sv
-        var st: String = s["state"]
-        if bool(s["fixing"]) or st == "building":
-            continue
-        var hp: float = s["hp"]
-        var mx: float = s["maxhp"]
-        if st == "ok" and hp >= mx - 0.5:
-            continue
-        needed += 1
-        if _free_workers(i, "repairer") < 1:
-            no_worker = true
-            break
-        var cost := _repair_cost(s)
-        if int(e["money"]) < cost:
-            broke = true
-            continue
-        e["money"] = int(e["money"]) - cost
-        s["fixing"] = true
-        var secs := TIME_REPAIR if st == "destroyed" else 5.0
-        _start_job(i, s, "repair", secs)
-        started += 1
-    if started > 0:
-        if i == 0:
-            _play_ui("hammer", -2.0)
-        return 0
-    if needed == 0:
-        return 5
-    if no_worker:
-        return 3
-    if broke:
-        return 1
-    return 5
-
-
-func _do_buy_missile(i: int, t: int) -> int:
-    var e: Dictionary = emp[i]
-    if _count_structs(i, "launcher", t, true) < 1:
-        return 2
     var ammo: Array = e["ammo"]
-    if int(ammo[t]) >= _missile_cap(i, t):
-        return 5
-    var price: int = MISSILES[t]["price"]
-    if int(e["money"]) < price:
-        return 1
-    e["money"] = int(e["money"]) - price
-    ammo[t] = int(ammo[t]) + 1
+    ammo[t] = int(ammo[t]) + cnt
+    _sync_missiles(i)
     return 0
 
 
-func _restock_cost(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    var cost := 0
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) == "defense" and str(s["state"]) == "ok":
-            var sub: int = s["sub"]
-            var missing: int = int(DEFENSES[sub]["mag"]) - int(s["mag"])
-            cost += missing * int(DEFENSES[sub]["ref"])
-    return cost
-
-
-func _do_restock(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var cost := _restock_cost(i)
-    if cost <= 0:
-        return 5
-    if int(e["money"]) < cost:
-        return 1
-    e["money"] = int(e["money"]) - cost
-    var structs: Array = e["structs"]
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) == "defense" and str(s["state"]) == "ok":
-            var sub: int = s["sub"]
-            s["mag"] = int(DEFENSES[sub]["mag"])
-    return 0
-
-
-# ---------- jobs ----------
 func _process_jobs(delta: float) -> void:
     for i in range(island_count):
         var e: Dictionary = emp[i]
@@ -1410,24 +1210,20 @@ func _finish_job(i: int, j: Dictionary) -> void:
             s["state"] = "ok"
             _refresh_struct_label(i, s)
             if i == 0:
-                _say("%s is ready!" % _struct_name(s))
-                _play_ui("build")
+                _play_ui("build", -6.0)
     elif jt == "upgrade":
         s["upg"] = false
         if state == "ok":
             var lvl: int = s["lvl"]
-            s["lvl"] = lvl + 1
-            var mx: float = HOUSE_HP[lvl]
-            s["maxhp"] = mx
-            s["hp"] = mx
-            var nd = s["node"]
-            if nd != null and is_instance_valid(nd):
-                var n3: Node3D = nd
-                n3.scale = _struct_scale(s)
-            _refresh_struct_label(i, s)
-            if i == 0:
-                _say("House upgraded to Lv%d! Income is now +$%d/s." % [lvl + 1, _income(0)])
-                _play_ui("build")
+            if lvl < MAX_LEVEL:
+                s["lvl"] = lvl + 1
+                var mx: float = HOUSE_HP[lvl]
+                s["maxhp"] = mx
+                s["hp"] = mx
+                _rebuild_node(i, s, 0.8)
+                _refresh_struct_label(i, s)
+                if i == 0:
+                    _play_ui("build", -6.0)
     else:
         s["fixing"] = false
         if state == "destroyed":
@@ -1440,34 +1236,24 @@ func _finish_job(i: int, j: Dictionary) -> void:
             _spawn_struct_node(i, s, 1.2)
             _refresh_struct_label(i, s)
             if i == 0:
-                _say("%s rebuilt." % _struct_name(s))
-                _play_ui("build")
+                _say("%s repaired and working again." % _struct_name(s))
+                _play_ui("build", -4.0)
         elif state == "ok":
             s["hp"] = s["maxhp"]
             _refresh_struct_label(i, s)
-            if i == 0:
-                _say("%s repaired." % _struct_name(s))
 
 
 func _err_text(code: int, what: String) -> String:
     if code == 1:
         return "Not enough money for %s." % what
     if code == 2:
-        return "%s: limit reached or not available." % what
+        return "%s: limit reached." % what
     if code == 3:
-        return "No free worker! Hire one in BUILD > ECONOMY, or wait for a job to finish."
-    if code == 4:
-        return "Too close to another structure or the edge. Move a few steps and try again."
+        return "Hire a builder first (WORKER > HIRE)."
     return "Nothing to do for %s." % what
 
 
-
-# =====================================================================
-# Rival AI: starts exactly like the player ($250, one house, no workers).
-# It hires workers, builds an economy, defends, repairs and stockpiles weapons,
-# then attacks in salvos and rests while it earns again.
-# =====================================================================
-const AI_PAD_UNLOCK := [0.0, 100.0, 300.0, 600.0, 900.0]
+const AI_PAD_UNLOCK := [0.0, 120.0, 330.0, 650.0, 30.0]
 const AI_PAD_ORDER := [0, 4, 1, 2, 3]
 
 
@@ -1484,93 +1270,62 @@ func _ai_tick(i: int, delta: float) -> void:
         _ai_salvo(i)
 
 
-func _ammo_total(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var ammo: Array = e["ammo"]
-    var n := 0
-    for v in ammo:
-        n += int(v)
-    return n
-
-
-func _ai_next_pad(i: int) -> int:
-    for t in AI_PAD_ORDER:
-        if elapsed < float(AI_PAD_UNLOCK[t]):
-            continue
-        if _count_structs(i, "launcher", t, false) < 1:
-            return t
-    return -1
-
-
 func _ai_think(i: int) -> void:
     var e: Dictionary = emp[i]
     var money_i: int = e["money"]
     var aggr: float = e["aggr"]
-    var houses_all := _count_structs(i, "house", -1, false)
+    var nb: int = e["builders"]
+    var lvl: int = e["blevel"]
     var defs_all := _count_structs(i, "defense", -1, false)
-    var launchers_all := _count_structs(i, "launcher", -1, false)
 
-    # 1. one builder first
-    if int(e["builders"]) < 1:
+    # 1. builders first: they raise houses for income by themselves
+    if nb < 1:
         _do_hire(i, "builder")
         return
-    # 2. a few houses for income
-    if houses_all < 3:
-        _do_build_house(i)
-        return
-    # 3. repair anything that is damaged or destroyed
-    if _count_destroyed(i) > 0 or _damaged_count(i) > 0:
-        if int(e["repairers"]) < 1:
-            if _do_hire(i, "repairer") == 0:
-                return
-        elif _do_repair_all(i) == 0:
+    if nb < 2 and elapsed > 45.0:
+        if _do_hire(i, "builder") == 0:
             return
-    # 4. first launcher
-    if launchers_all == 0:
-        _do_build_struct_random(i, "launcher", 0)
-        return
-    if int(e["repairers"]) < 1:
-        _do_hire(i, "repairer")
-        return
-    # 5. air defense grows with time (cautious rivals build earlier)
-    var want_def := mini(MAX_DEFENSES, int((elapsed - 40.0) / 100.0) + (1 if aggr < 0.5 else 0))
+    # 2. a repair crew once something is broken (or after a while)
+    var hurt := _count_destroyed(i) > 0 or _damaged_count(i) > 0
+    if int(e["brep"]) < 1 and (hurt or elapsed > 160.0):
+        if _do_hire(i, "brep") == 0:
+            return
+    # 3. build a stockpile before the war starts
+    if elapsed > 150.0 and _ammo_total(i) < int(e["salvo"]):
+        var mt0 := _ai_pick_weapon(i)
+        if mt0 >= 0 and _do_buy_missile(i, mt0) == 0:
+            return
+    # 4. air defense grows with time (cautious rivals build earlier)
+    var want_def := mini(MAX_DEFENSES, int((elapsed - 60.0) / 70.0) + (1 if aggr < 0.5 else 0))
     if defs_all < want_def:
-        var tier := mini(4, int(elapsed / 240.0))
+        var tier := mini(4, int(elapsed / 220.0))
         var dt := -1
         for t2 in range(tier, -1, -1):
             if money_i >= int(DEFENSES[t2]["price"]):
                 dt = t2
                 break
         if dt >= 0:
-            if _do_build_struct_random(i, "defense", dt) == 0:
+            if _do_buy_defense(i, dt) == 0:
                 return
-    # 6. refill interceptors
-    var rc := _restock_cost(i)
-    if rc > 0 and money_i >= rc * 2:
-        _do_restock(i)
-        return
-    # 7. more houses
-    var house_goal := mini(MAX_HOUSES, 3 + int(elapsed / 55.0) + int(aggr * 3.0))
-    if houses_all < house_goal and money_i >= _house_price(i):
-        _do_build_house(i)
-        return
-    # 8. house upgrades
-    var up := _lowest_house(i)
-    if not up.is_empty() and elapsed > 150.0:
-        var ul: int = up["lvl"]
-        if money_i >= int(HOUSE_UPGRADE[ul - 1]) * 2:
-            _do_upgrade_house(i)
+    if int(e["arep"]) < 1 and defs_all >= 2:
+        if _do_hire(i, "arep") == 0:
             return
-    # 9. second builder
-    if int(e["builders"]) < 2 and elapsed > 140.0:
+    # 5. better builders = better houses = more money
+    if lvl < MAX_LEVEL and elapsed > 80.0 * float(lvl):
+        var need := int(float(BUILDER_UPGRADE[lvl - 1]) * 1.2)
+        if money_i >= need:
+            if _do_upgrade_builder(i) == 0:
+                return
+    # 6. more crews as the game goes on
+    var goal_b := mini(MAX_BUILDERS, 2 + int(elapsed / 150.0))
+    if nb < goal_b and money_i >= int(float(_worker_price(i, "builder")) * 1.2):
         if _do_hire(i, "builder") == 0:
             return
-    # 10. new launcher types unlock over time
-    var pad := _ai_next_pad(i)
-    if pad >= 0 and money_i >= _struct_price("launcher", pad):
-        if _do_build_struct_random(i, "launcher", pad) == 0:
+    var goal_r := mini(MAX_BREP, 1 + int(elapsed / 300.0))
+    if int(e["brep"]) < goal_r and money_i >= int(float(_worker_price(i, "brep")) * 1.5):
+        if _do_hire(i, "brep") == 0:
             return
-    # 11. stockpile weapons for the next salvo
+    # 7. keep stockpiling weapons for the next salvo
     if _ammo_total(i) < int(e["salvo"]) + 3:
         var mt := _ai_pick_weapon(i)
         if mt >= 0:
@@ -1588,21 +1343,13 @@ func _damaged_count(i: int) -> int:
     return n
 
 
-func _do_build_struct_random(i: int, kind: String, sub: int) -> int:
-    var spot := _random_spot(i)
-    if spot.x > 9000.0:
-        return 4
-    return _do_build_struct(i, kind, sub, spot.x, spot.y)
-
-
 func _ai_pick_weapon(i: int) -> int:
     var e: Dictionary = emp[i]
-    var ammo: Array = e["ammo"]
+    if _ammo_total(i) >= MAX_MISSILES:
+        return -1
     var options: Array = []
-    for t in range(5):
-        if _count_structs(i, "launcher", t, true) < 1:
-            continue
-        if int(ammo[t]) >= _missile_cap(i, t):
+    for t in AI_PAD_ORDER:
+        if elapsed < float(AI_PAD_UNLOCK[t]):
             continue
         if int(e["money"]) < int(MISSILES[t]["price"]):
             continue
@@ -1643,9 +1390,7 @@ func _weighted_struct(target: int) -> Dictionary:
             continue
         var w := 3.0
         var kind: String = s["kind"]
-        if kind == "launcher":
-            w = 2.0
-        elif kind == "defense":
+        if kind == "defense":
             w = 1.2
         pool.append(s)
         weights.append(w)
@@ -1714,20 +1459,7 @@ func _process_launch_queue(delta: float) -> void:
         _spawn_missile(int(q["a"]), int(q["tg"]), int(q["t"]), q["aim"])
 
 
-func _pick_launcher(i: int, t: int) -> Dictionary:
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    var options: Array = []
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) == "launcher" and int(s["sub"]) == t and str(s["state"]) == "ok":
-            options.append(s)
-    if options.is_empty():
-        return {}
-    return options[randi() % options.size()]
-
-
-func _make_missile_model(friendly: bool, mtype: int) -> Node3D:
+func _make_missile_model(friendly: bool, mtype: int, with_trail: bool = true) -> Node3D:
     var root := Node3D.new()
     var model := Node3D.new()
     var sc: float = [2.2, 2.8, 2.6, 3.0, 2.2][mtype]
@@ -1770,16 +1502,14 @@ func _make_missile_model(friendly: bool, mtype: int) -> Node3D:
     flame.scale = Vector3(1.0, 1.0, 1.8)
     flame.material_override = _glow_mat(flame_col)
     model.add_child(flame)
-    _add_trail(model, 0.9 if mtype == 2 else 0.6)
+    if with_trail:
+        _add_trail(model, 0.9 if mtype == 2 else 0.6)
     return root
 
 
 func _spawn_missile(attacker: int, target: int, t: int, aim_local: Vector2) -> void:
     var info: Dictionary = MISSILES[t]
-    var src := _pick_launcher(attacker, t)
-    if src.is_empty():
-        return
-    var from_pos := _struct_world(attacker, src) + Vector3(0.0, 5.0, 0.0)
+    var from_pos := _take_missile_pos(attacker, t) + Vector3(0.0, 4.0, 0.0)
     var warheads: int = info["count"]
     var cep: float = info["cep"]
     var isl_t := _isl(target)
@@ -1976,9 +1706,9 @@ func _island_collapsed(i: int, by: int) -> void:
         _game_over(false)
         return
     var be: Dictionary = emp[by]
-    be["money"] = int(be["money"]) + 1500
+    be["money"] = int(be["money"]) + 5000
     if by == 0:
-        _say("Enemy %d economy collapsed! You loot $1500." % i)
+        _say("Enemy %d economy collapsed! You loot $5000." % i)
     else:
         _say("Enemy %d was wiped out by Enemy %d!" % [i, by])
     var isl: Node3D = island_nodes[i]
@@ -2003,8 +1733,7 @@ func _game_over(won: bool) -> void:
     if FileAccess.file_exists(SAVE_PATH):
         DirAccess.remove_absolute(SAVE_PATH)
     _vibrate(300)
-    _cancel_place()
-    build_panel.hide()
+    _close_windows()
     await get_tree().create_timer(2.5).timeout
     if sat_open:
         _close_sat()
@@ -2182,6 +1911,8 @@ func _process(delta: float) -> void:
             income_timer -= 1.0
             _pay_income()
         _process_jobs(delta)
+        for ii in range(island_count):
+            _island_tick(ii, delta)
         _process_launch_queue(delta)
         _update_defense_cd(delta)
         if not sat_open:
@@ -2189,7 +1920,7 @@ func _process(delta: float) -> void:
         for i in range(1, island_count):
             _ai_tick(i, delta)
         _update_projectiles(delta)
-        _update_place_ring()
+        sat_cool = maxf(0.0, sat_cool - delta)
         ui_timer += delta
         if ui_timer >= 0.5:
             ui_timer = 0.0
@@ -2320,14 +2051,13 @@ func _open_sat() -> void:
         return
     if _alive_enemy_count() < 1:
         return
-    _cancel_place()
-    build_panel.hide()
+    _close_windows()
     _ensure_target()
     sat_open = true
     sat_island = selected_enemy
     sat_has_point = false
-    sat_counts = [0, 0, 0, 0, 0]
     sat_drag_id = -1
+    sat_cool = 0.0
     camera.fov = 50.0
     joy_id = -1
     look_id = -1
@@ -2336,6 +2066,7 @@ func _open_sat() -> void:
     _update_rings()
     _sat_ui_show(true)
     _play_ui("sat")
+    _say("Pick a weapon on the left, choose X1 or X5, then tap the enemy island to fire.")
     _refresh_sat()
 
 
@@ -2352,6 +2083,7 @@ func _close_sat() -> void:
     _ensure_target()
     _look_at_target(false)
     camera.position = _player_world() + Vector3(0.0, 6.0, 12.0)
+    _save_game()
 
 
 func _sat_pick_island(i: int) -> void:
@@ -2393,11 +2125,8 @@ func _sat_set_point(pos: Vector2) -> void:
 
 
 func _sat_blast_radius() -> float:
-    var r := 5.0
-    for t in range(5):
-        if int(sat_counts[t]) > 0:
-            r = maxf(r, float(MISSILES[t]["radius"]) + float(MISSILES[t]["cep"]) * 0.5)
-    return r
+    var info: Dictionary = MISSILES[sat_type]
+    return maxf(4.0, float(info["radius"]) + float(info["cep"]) * 0.5)
 
 
 func _update_sat_marker() -> void:
@@ -2412,75 +2141,6 @@ func _update_sat_marker() -> void:
     sat_marker.scale = Vector3.ONE * (_sat_blast_radius() / 6.0)
 
 
-func _sat_add(t: int, amount: int) -> void:
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    var maxn := int(ammo[t])
-    if _count_structs(0, "launcher", t, true) < 1:
-        maxn = 0
-    sat_counts[t] = clampi(int(sat_counts[t]) + amount, 0, maxn)
-    _update_sat_marker()
-    _refresh_sat()
-
-
-func _sat_all(t: int) -> void:
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    if _count_structs(0, "launcher", t, true) < 1:
-        sat_counts[t] = 0
-    else:
-        sat_counts[t] = int(ammo[t])
-    _update_sat_marker()
-    _refresh_sat()
-
-
-func _sat_selected_total() -> int:
-    var n := 0
-    for v in sat_counts:
-        n += int(v)
-    return n
-
-
-func _sat_launch() -> void:
-    if game_state != "playing" or not sat_open:
-        return
-    if not sat_has_point:
-        _play_ui("error")
-        _say("Tap the map first to choose the impact point.")
-        _refresh_sat()
-        return
-    if _sat_selected_total() < 1:
-        _play_ui("error")
-        _say("Select weapons first with the + buttons.")
-        _refresh_sat()
-        return
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    var fired := 0
-    var delay := 0.0
-    for t in range(5):
-        var n: int = mini(int(sat_counts[t]), int(ammo[t]))
-        if n <= 0 or _count_structs(0, "launcher", t, true) < 1:
-            sat_counts[t] = 0
-            continue
-        for k in range(n):
-            _queue_launch(0, sat_island, t, sat_local, delay)
-            delay += 0.18
-            fired += 1
-        ammo[t] = int(ammo[t]) - n
-        sat_counts[t] = 0
-    if fired > 0:
-        _say("Salvo away! %d missiles/drones launched at Enemy %d." % [fired, sat_island])
-        _vibrate(60)
-    _update_sat_marker()
-    _refresh_sat()
-    _refresh_ui()
-    _save_game()
-
-
-# =====================================================================
-# Defense rings and structure placement
-# =====================================================================
 func _update_rings() -> void:
     for i in range(island_count):
         var e: Dictionary = emp[i]
@@ -2491,71 +2151,9 @@ func _update_rings() -> void:
             if ring == null or not is_instance_valid(ring):
                 continue
             var r: Node3D = ring
-            r.visible = (i == 0) or (sat_open and sat_island == i)
+            r.visible = sat_open and sat_island == i
 
 
-func _begin_place(kind: String, sub: int) -> void:
-    if game_state != "playing":
-        return
-    _cancel_place()
-    var limit := MAX_LAUNCHERS if kind == "launcher" else MAX_DEFENSES
-    if _count_structs(0, kind, -1, false) >= limit:
-        _play_ui("error")
-        _say("You reached the limit for this structure type.")
-        return
-    placing_kind = kind
-    placing_sub = sub
-    build_panel.hide()
-    var rad := 4.0
-    var label := ""
-    if kind == "defense":
-        rad = DEFENSES[sub]["range"]
-        label = DEFENSES[sub]["name"]
-    else:
-        label = "%s launcher" % MISSILES[sub]["short"]
-    place_ring = _make_ring(rad, Color(1.0, 1.0, 1.0, 0.6))
-    _isl(0).add_child(place_ring)
-    place_bar.show()
-    btn_place.text = "PLACE %s HERE  ($%d)" % [label, _struct_price(kind, sub)]
-    _say("Walk to the spot you like (the ring follows you), then tap PLACE.")
-
-
-func _update_place_ring() -> void:
-    if placing_kind == "" or place_ring == null or not is_instance_valid(place_ring):
-        return
-    var local := _isl(0).to_local(_player_world())
-    place_ring.position = Vector3(local.x, 0.8, local.z)
-
-
-func _confirm_place() -> void:
-    if placing_kind == "":
-        return
-    var local := _isl(0).to_local(_player_world())
-    var kind := placing_kind
-    var sub := placing_sub
-    var code := _do_build_struct(0, kind, sub, local.x, local.z)
-    if code == 0:
-        _say("Construction started. A builder is working on it.")
-        _cancel_place()
-        _after_buy()
-    else:
-        _play_ui("error")
-        _say(_err_text(code, "this structure"))
-
-
-func _cancel_place() -> void:
-    placing_kind = ""
-    if place_ring != null and is_instance_valid(place_ring):
-        place_ring.queue_free()
-    place_ring = null
-    if place_bar != null:
-        place_bar.hide()
-
-
-
-# =====================================================================
-# Save / load
-# =====================================================================
 func _has_save() -> bool:
     return FileAccess.file_exists(SAVE_PATH)
 
@@ -2566,7 +2164,7 @@ func _after_buy() -> void:
 
 
 func _save_game() -> void:
-    if game_state != "playing":
+    if game_state != "playing" or emp.is_empty():
         return
     var arr: Array = []
     for i in range(island_count):
@@ -2580,12 +2178,12 @@ func _save_game() -> void:
                 "lvl": s["lvl"], "state": s["state"], "slot": s["slot"], "mag": s["mag"],
             })
         arr.append({
-            "money": e["money"], "builders": e["builders"], "repairers": e["repairers"],
-            "ammo": e["ammo"], "aggr": e["aggr"], "grudge": e["grudge"], "salvo": e["salvo"],
-            "rest": e["rest"], "dead": e["dead"], "structs": sl,
+            "money": e["money"], "builders": e["builders"], "brep": e["brep"], "arep": e["arep"],
+            "blevel": e["blevel"], "ammo": e["ammo"], "aggr": e["aggr"], "grudge": e["grudge"],
+            "salvo": e["salvo"], "rest": e["rest"], "dead": e["dead"], "structs": sl,
         })
     var data := {
-        "v": 5, "island_count": island_count, "emp": arr,
+        "v": 6, "island_count": island_count, "emp": arr,
         "selected": selected_enemy, "elapsed": elapsed,
     }
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -2602,7 +2200,7 @@ func _load_game() -> bool:
     var parsed = JSON.parse_string(f.get_as_text())
     if typeof(parsed) != TYPE_DICTIONARY:
         return false
-    if int(parsed.get("v", 0)) != 5:
+    if int(parsed.get("v", 0)) != 6:
         return false
     var count := clampi(int(parsed.get("island_count", 2)), 2, 4)
     var emp_raw = parsed.get("emp", [])
@@ -2614,8 +2212,10 @@ func _load_game() -> bool:
         var e: Dictionary = emp[i]
         e["structs"] = []
         e["money"] = int(src.get("money", START_MONEY))
-        e["builders"] = clampi(int(src.get("builders", 0)), 0, MAX_WORKERS)
-        e["repairers"] = clampi(int(src.get("repairers", 0)), 0, MAX_WORKERS)
+        e["builders"] = clampi(int(src.get("builders", 0)), 0, MAX_BUILDERS)
+        e["brep"] = clampi(int(src.get("brep", 0)), 0, MAX_BREP)
+        e["arep"] = clampi(int(src.get("arep", 0)), 0, MAX_AREP)
+        e["blevel"] = clampi(int(src.get("blevel", 1)), 1, MAX_LEVEL)
         e["aggr"] = float(src.get("aggr", 0.5))
         e["grudge"] = int(src.get("grudge", -1))
         e["salvo"] = int(src.get("salvo", 6))
@@ -2629,12 +2229,14 @@ func _load_game() -> bool:
         for rv in raw_structs:
             var r: Dictionary = rv
             var kind := str(r.get("kind", "house"))
+            if kind != "house" and kind != "defense":
+                continue
             var sub := clampi(int(r.get("sub", 0)), 0, 4)
             var state := str(r.get("state", "ok"))
             if state == "building":
                 state = "ok"
-            var s := _add_struct(i, kind, sub, float(r.get("lx", 0.0)), float(r.get("lz", 0.0)), state, int(r.get("slot", -1)))
-            var lvl := clampi(int(r.get("lvl", 1)), 1, 3)
+            var s := _add_struct(i, kind, sub, float(r.get("lx", 0.0)), float(r.get("lz", 0.0)), state, int(r.get("slot", 0)))
+            var lvl := clampi(int(r.get("lvl", 1)), 1, MAX_LEVEL)
             s["lvl"] = lvl
             if kind == "house":
                 s["maxhp"] = HOUSE_HP[lvl - 1]
@@ -2732,14 +2334,6 @@ func _round_style(alpha: float) -> StyleBoxFlat:
 # =====================================================================
 # UI construction
 # =====================================================================
-func _add_row_button(parent: Control, col: Color, cb: Callable, w: float, h: float) -> Button:
-    var b := _make_button("", col, cb)
-    b.custom_minimum_size = Vector2(w, h)
-    b.add_theme_font_size_override("font_size", 21)
-    parent.add_child(b)
-    return b
-
-
 func _build_ui() -> void:
     var layer := CanvasLayer.new()
     layer.layer = 10
@@ -2753,11 +2347,12 @@ func _build_ui() -> void:
     ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
     _build_hud()
-    _build_build_menu()
+    _build_tabs()
+    _build_hotbar()
+    _build_military_window()
+    _build_worker_window()
     _build_sat_ui()
-    _build_overlay()
 
-    # --- joystick ---
     joy_base = Panel.new()
     joy_base.size = Vector2(180.0, 180.0)
     joy_base.add_theme_stylebox_override("panel", _round_style(0.18))
@@ -2770,126 +2365,59 @@ func _build_ui() -> void:
     ui_root.add_child(joy_knob)
     _reset_joystick()
 
+    _build_overlay()
+    _tab_style(mil_tab_btns, 0)
+    _tab_style(work_tab_btns, 0)
+
 
 func _build_hud() -> void:
-    # --- HUD (top left) ---
-    hud_panel = PanelContainer.new()
-    _style_panel(hud_panel)
-    hud_panel.position = Vector2(24.0, 16.0)
-    ui_root.add_child(hud_panel)
-    var hv := VBoxContainer.new()
-    hud_panel.add_child(hv)
+    stats_panel = PanelContainer.new()
+    _style_panel(stats_panel, Color(0.03, 0.06, 0.1, 0.5))
+    stats_panel.position = Vector2(12.0, 150.0)
+    stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(stats_panel)
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", 2)
+    stats_panel.add_child(v)
+    stat_missile = Label.new()
+    _style_text(stat_missile, 22, Color(1.0, 1.0, 1.0))
+    v.add_child(stat_missile)
+    stat_aa = Label.new()
+    _style_text(stat_aa, 22, Color(1.0, 1.0, 1.0))
+    v.add_child(stat_aa)
+    stat_house = Label.new()
+    _style_text(stat_house, 22, Color(1.0, 1.0, 1.0))
+    v.add_child(stat_house)
     money_label = Label.new()
-    money_label.add_theme_font_size_override("font_size", 32)
-    hv.add_child(money_label)
+    _style_text(money_label, 40, Color(0.25, 1.0, 0.3))
+    v.add_child(money_label)
+    income_label = Label.new()
+    _style_text(income_label, 26, Color(0.25, 0.9, 0.35))
+    v.add_child(income_label)
     stats_label = Label.new()
-    stats_label.add_theme_font_size_override("font_size", 21)
-    hv.add_child(stats_label)
+    _style_text(stats_label, 19, Color(1.0, 0.85, 0.5))
+    v.add_child(stats_label)
+
+    var mc := MarginContainer.new()
+    status_box = mc
+    mc.add_theme_constant_override("margin_top", 84)
+    mc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(mc)
     status_label = Label.new()
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    status_label.custom_minimum_size = Vector2(580.0, 0.0)
-    status_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
-    hv.add_child(status_label)
+    status_label.custom_minimum_size = Vector2(760.0, 0.0)
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(status_label, 24, Color(1.0, 0.93, 0.6))
+    mc.add_child(status_label)
+    mc.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE)
+    mc.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
-    # --- menu (top right) ---
-    top_right = VBoxContainer.new()
-    ui_root.add_child(top_right)
-    var menu_btn := _make_button("MENU", Color(0.25, 0.3, 0.42), _on_menu_pressed)
-    menu_btn.custom_minimum_size = Vector2(200.0, 64.0)
-    top_right.add_child(menu_btn)
-    top_right.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
-    top_right.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-
-    # --- build + satellite (bottom right) ---
-    bottom_right = VBoxContainer.new()
-    bottom_right.add_theme_constant_override("separation", 10)
-    ui_root.add_child(bottom_right)
-    build_toggle = _make_button("BUILD / SHOP", Color(0.2, 0.5, 0.85), _on_build_toggle)
-    build_toggle.custom_minimum_size = Vector2(380.0, 76.0)
-    bottom_right.add_child(build_toggle)
-    fire_button = _make_button("SATELLITE: FIRE", Color(0.85, 0.25, 0.15), _open_sat)
-    fire_button.custom_minimum_size = Vector2(380.0, 100.0)
-    fire_button.add_theme_font_size_override("font_size", 32)
-    bottom_right.add_child(fire_button)
-    bottom_right.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
-    bottom_right.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-    bottom_right.grow_vertical = Control.GROW_DIRECTION_BEGIN
-
-    # --- placement bar (bottom centre) ---
-    place_bar = HBoxContainer.new()
-    place_bar.add_theme_constant_override("separation", 14)
-    ui_root.add_child(place_bar)
-    btn_place = _make_button("PLACE HERE", Color(0.2, 0.65, 0.3), _confirm_place)
-    btn_place.custom_minimum_size = Vector2(560.0, 84.0)
-    place_bar.add_child(btn_place)
-    var cancel_btn := _make_button("CANCEL", Color(0.55, 0.2, 0.2), _cancel_place)
-    cancel_btn.custom_minimum_size = Vector2(200.0, 84.0)
-    place_bar.add_child(cancel_btn)
-    place_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 24)
-    place_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    place_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-    place_bar.visible = false
-
-
-func _build_build_menu() -> void:
-    build_panel = PanelContainer.new()
-    _style_panel(build_panel, Color(0.04, 0.08, 0.14, 0.95))
-    ui_root.add_child(build_panel)
-    var bp := VBoxContainer.new()
-    build_panel.add_child(bp)
-    var head := HBoxContainer.new()
-    bp.add_child(head)
-    var ttl := Label.new()
-    ttl.text = "BUILD / SHOP"
-    ttl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    ttl.add_theme_font_size_override("font_size", 30)
-    head.add_child(ttl)
-    var close_btn := _make_button("CLOSE", Color(0.55, 0.2, 0.2), _on_build_toggle)
-    close_btn.custom_minimum_size = Vector2(140.0, 54.0)
-    head.add_child(close_btn)
-    var tabs := TabContainer.new()
-    bp.add_child(tabs)
-
-    # ---- ECONOMY tab ----
-    var eco := VBoxContainer.new()
-    eco.name = "ECONOMY"
-    eco.add_theme_constant_override("separation", 6)
-    tabs.add_child(eco)
-    eco_buttons = {}
-    eco_buttons["builder"] = _add_row_button(eco, Color(0.75, 0.45, 0.1), _ui_hire.bind("builder"), 680.0, 72.0)
-    eco_buttons["repairer"] = _add_row_button(eco, Color(0.2, 0.55, 0.35), _ui_hire.bind("repairer"), 680.0, 72.0)
-    eco_buttons["house"] = _add_row_button(eco, Color(0.25, 0.45, 0.7), _ui_house, 680.0, 72.0)
-    eco_buttons["upgrade"] = _add_row_button(eco, Color(0.25, 0.45, 0.7), _ui_upgrade, 680.0, 72.0)
-    eco_buttons["repair"] = _add_row_button(eco, Color(0.2, 0.55, 0.35), _ui_repair, 680.0, 72.0)
-
-    # ---- MISSILES tab: launcher + weapon stock per type ----
-    var mis := VBoxContainer.new()
-    mis.name = "MISSILES"
-    mis.add_theme_constant_override("separation", 6)
-    tabs.add_child(mis)
-    btn_pads = []
-    btn_buys = []
-    for t in range(5):
-        var row := HBoxContainer.new()
-        row.add_theme_constant_override("separation", 8)
-        mis.add_child(row)
-        btn_pads.append(_add_row_button(row, Color(0.25, 0.45, 0.7), _begin_place.bind("launcher", t), 336.0, 72.0))
-        btn_buys.append(_add_row_button(row, Color(0.2, 0.55, 0.35), _ui_buy.bind(t), 336.0, 72.0))
-
-    # ---- AIR DEFENSE tab ----
-    var dfn := VBoxContainer.new()
-    dfn.name = "AIR DEFENSE"
-    dfn.add_theme_constant_override("separation", 6)
-    tabs.add_child(dfn)
-    btn_defs = []
-    for t in range(5):
-        btn_defs.append(_add_row_button(dfn, Color(0.2, 0.5, 0.55), _begin_place.bind("defense", t), 680.0, 68.0))
-    btn_restock = _add_row_button(dfn, Color(0.5, 0.4, 0.15), _ui_restock, 680.0, 62.0)
-
-    build_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
-    build_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    build_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-    build_panel.visible = false
+    menu_btn = _make_button("MENU", Color(0.2, 0.24, 0.32), _on_menu_pressed)
+    menu_btn.custom_minimum_size = Vector2(130.0, 52.0)
+    ui_root.add_child(menu_btn)
+    menu_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+    menu_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
 
 func _build_sat_ui() -> void:
@@ -2899,82 +2427,101 @@ func _build_sat_ui() -> void:
     sat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     sat_panels = []
 
-    # island chooser (top centre)
+    sat_money = Label.new()
+    _style_text(sat_money, 36, Color(0.25, 1.0, 0.3))
+    sat_money.position = Vector2(14.0, 8.0)
+    sat_root.add_child(sat_money)
+
+    var top := VBoxContainer.new()
+    top.add_theme_constant_override("separation", 8)
+    sat_root.add_child(top)
+    var tp := PanelContainer.new()
+    _style_panel(tp, Color(0.16, 0.19, 0.23, 0.92))
+    top.add_child(tp)
+    sat_title = Label.new()
+    sat_title.text = "SELECT TARGET"
+    sat_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sat_title.custom_minimum_size = Vector2(520.0, 0.0)
+    sat_title.add_theme_font_size_override("font_size", 36)
+    tp.add_child(sat_title)
     sat_island_box = HBoxContainer.new()
+    sat_island_box.alignment = BoxContainer.ALIGNMENT_CENTER
     sat_island_box.add_theme_constant_override("separation", 10)
-    sat_root.add_child(sat_island_box)
+    top.add_child(sat_island_box)
     sat_island_btns = []
     for k in range(1, 4):
         var b := _make_button("ENEMY %d" % k, Color(0.7, 0.2, 0.2), _sat_pick_island.bind(k))
-        b.custom_minimum_size = Vector2(190.0, 64.0)
+        b.custom_minimum_size = Vector2(170.0, 54.0)
         sat_island_box.add_child(b)
         sat_island_btns.append(b)
-    sat_island_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 16)
-    sat_island_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    sat_panels.append(sat_island_box)
+    top.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 6)
+    top.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    sat_panels.append(top)
 
-    # back button (top right)
-    sat_back_btn = _make_button("BACK", Color(0.25, 0.3, 0.42), _close_sat)
-    sat_back_btn.custom_minimum_size = Vector2(200.0, 64.0)
-    sat_root.add_child(sat_back_btn)
-    sat_back_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
-    sat_back_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-    sat_panels.append(sat_back_btn)
-
-    # weapon list (left)
-    var lp := PanelContainer.new()
-    _style_panel(lp, Color(0.03, 0.07, 0.12, 0.88))
-    lp.position = Vector2(24.0, 210.0)
+    var lp := VBoxContainer.new()
+    lp.add_theme_constant_override("separation", 6)
+    lp.position = Vector2(12.0, 70.0)
     sat_root.add_child(lp)
     sat_panels.append(lp)
-    var lv := VBoxContainer.new()
-    lv.add_theme_constant_override("separation", 6)
-    lp.add_child(lv)
-    var lt := Label.new()
-    lt.text = "WEAPONS  (all fire at once)"
-    lt.add_theme_font_size_override("font_size", 24)
-    lv.add_child(lt)
-    sat_rows = []
+    sat_type_btns = []
     for t in range(5):
-        var row := HBoxContainer.new()
-        row.add_theme_constant_override("separation", 6)
-        lv.add_child(row)
-        var nm := Label.new()
-        nm.custom_minimum_size = Vector2(230.0, 0.0)
-        nm.add_theme_font_size_override("font_size", 21)
-        row.add_child(nm)
-        var minus := _make_button("-", Color(0.5, 0.25, 0.2), _sat_add.bind(t, -1))
-        minus.custom_minimum_size = Vector2(58.0, 58.0)
-        row.add_child(minus)
-        var cnt := Label.new()
-        cnt.custom_minimum_size = Vector2(46.0, 0.0)
-        cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        cnt.add_theme_font_size_override("font_size", 28)
-        row.add_child(cnt)
-        var plus := _make_button("+", Color(0.2, 0.5, 0.3), _sat_add.bind(t, 1))
-        plus.custom_minimum_size = Vector2(58.0, 58.0)
-        row.add_child(plus)
-        var allb := _make_button("ALL", Color(0.25, 0.4, 0.6), _sat_all.bind(t))
-        allb.custom_minimum_size = Vector2(80.0, 58.0)
-        allb.add_theme_font_size_override("font_size", 20)
-        row.add_child(allb)
-        sat_rows.append({"name": nm, "count": cnt, "minus": minus, "plus": plus, "all": allb})
-    sat_info = Label.new()
-    sat_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    sat_info.custom_minimum_size = Vector2(500.0, 0.0)
-    sat_info.add_theme_font_size_override("font_size", 20)
-    sat_info.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
-    lv.add_child(sat_info)
+        var tb := Button.new()
+        tb.custom_minimum_size = Vector2(310.0, 78.0)
+        _style_button(tb, Color(0.07, 0.12, 0.2, 0.88))
+        for stn in ["normal", "hover", "pressed", "disabled", "focus"]:
+            var sbx: StyleBoxFlat = tb.get_theme_stylebox(stn)
+            sbx.content_margin_left = 84.0
+        tb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        tb.add_theme_font_size_override("font_size", 20)
+        tb.pressed.connect(_play_ui.bind("click", -8.0))
+        tb.pressed.connect(_sat_set_type.bind(t))
+        var ic := MiniIcon.new()
+        ic.kind = 0
+        ic.sub = t
+        ic.position = Vector2(8.0, 7.0)
+        ic.size = Vector2(64.0, 64.0)
+        tb.add_child(ic)
+        lp.add_child(tb)
+        sat_type_btns.append(tb)
 
-    # launch button (bottom right)
-    sat_launch_btn = _make_button("LAUNCH SALVO", Color(0.85, 0.2, 0.15), _sat_launch)
-    sat_launch_btn.custom_minimum_size = Vector2(420.0, 100.0)
-    sat_launch_btn.add_theme_font_size_override("font_size", 32)
-    sat_root.add_child(sat_launch_btn)
-    sat_launch_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
-    sat_launch_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-    sat_launch_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
-    sat_panels.append(sat_launch_btn)
+    var rb := VBoxContainer.new()
+    rb.add_theme_constant_override("separation", 14)
+    sat_root.add_child(rb)
+    sat_mult_btns = []
+    for m in [1, 5]:
+        var xb := _make_button("X%d" % m, Color(0.05, 0.05, 0.06), _sat_set_mult.bind(m))
+        xb.custom_minimum_size = Vector2(104.0, 104.0)
+        xb.add_theme_font_size_override("font_size", 36)
+        rb.add_child(xb)
+        sat_mult_btns.append(xb)
+    rb.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, 14)
+    rb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    rb.grow_vertical = Control.GROW_DIRECTION_BOTH
+    sat_panels.append(rb)
+
+    var bot := VBoxContainer.new()
+    bot.alignment = BoxContainer.ALIGNMENT_CENTER
+    bot.add_theme_constant_override("separation", 8)
+    bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    sat_root.add_child(bot)
+    sat_hint = Label.new()
+    sat_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    sat_hint.custom_minimum_size = Vector2(820.0, 0.0)
+    sat_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sat_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(sat_hint, 22, Color(1.0, 0.93, 0.6))
+    bot.add_child(sat_hint)
+    sat_back_btn = _make_button("Back", Color(0.05, 0.1, 0.2), _close_sat)
+    sat_back_btn.custom_minimum_size = Vector2(280.0, 64.0)
+    sat_back_btn.add_theme_font_size_override("font_size", 34)
+    sat_back_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+    sat_back_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.4))
+    sat_back_btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.85, 0.1))
+    bot.add_child(sat_back_btn)
+    bot.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
+    bot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    bot.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    sat_panels.append(sat_back_btn)
     sat_root.visible = false
 
 
@@ -3033,42 +2580,25 @@ func _ui_result(code: int, what: String, ok_msg: String) -> void:
 
 
 func _ui_hire(kind: String) -> void:
-    var nm := "a builder" if kind == "builder" else "a repair worker"
-    _ui_result(_do_hire(0, kind), nm, "Hired %s. They are waiting on your island." % nm)
+    var nm := "a builder"
+    if kind == "brep":
+        nm = "a build repairman"
+    elif kind == "arep":
+        nm = "an anti-air repairman"
+    _ui_result(_do_hire(0, kind), nm, "Hired %s." % nm)
 
 
-func _ui_house() -> void:
-    _ui_result(_do_build_house(0), "a house", "A builder started a new house. It earns money once finished.")
-
-
-func _ui_upgrade() -> void:
-    _ui_result(_do_upgrade_house(0), "a house upgrade", "A builder started upgrading your lowest-level house.")
-
-
-func _ui_repair() -> void:
-    _ui_result(_do_repair_all(0), "repairs", "Repair workers started fixing your damaged structures.")
-
-
-func _ui_buy(t: int) -> void:
-    _ui_result(_do_buy_missile(0, t), "this weapon (needs its launcher)", "%s added to your stock." % MISSILES[t]["name"])
-
-
-func _ui_restock() -> void:
-    _ui_result(_do_restock(0), "air defense interceptors", "All air defense batteries reloaded.")
-
-
-# =====================================================================
-# UI refresh
-# =====================================================================
 func _sat_ui_show(on: bool) -> void:
     sat_root.visible = on
-    top_right.visible = not on
-    bottom_right.visible = not on
+    tabs_box.visible = not on
+    hot_box.visible = not on
+    stats_panel.visible = not on
+    status_box.visible = not on
     joy_base.visible = not on
     joy_knob.visible = not on
     if on:
-        build_panel.hide()
-        place_bar.hide()
+        _close_windows()
+        _update_mult_style()
 
 
 func _refresh_sat() -> void:
@@ -3076,60 +2606,33 @@ func _refresh_sat() -> void:
         return
     var e: Dictionary = emp[0]
     var ammo: Array = e["ammo"]
+    sat_money.text = "$ %s" % _fmt_money(int(e["money"]))
+    sat_title.text = "SELECT TARGET  -  ENEMY %d" % sat_island
     for t in range(5):
-        var row: Dictionary = sat_rows[t]
-        var nm: Label = row["name"]
-        var cnt: Label = row["count"]
-        var minus: Button = row["minus"]
-        var plus: Button = row["plus"]
-        var allb: Button = row["all"]
-        var have := int(ammo[t])
-        var launcher_ok := _count_structs(0, "launcher", t, true) > 0
-        var sel := int(sat_counts[t])
-        nm.text = "%s (%d)" % [MISSILES[t]["short"], have]
-        nm.modulate = Color(1, 1, 1) if launcher_ok else Color(0.6, 0.6, 0.6)
-        cnt.text = str(sel)
-        minus.disabled = sel <= 0
-        plus.disabled = (not launcher_ok) or sel >= have
-        allb.disabled = (not launcher_ok) or have <= 0
+        var b: Button = sat_type_btns[t]
+        var info: Dictionary = MISSILES[t]
+        b.text = "%s\nDMG %d      x%d" % [info["short"], int(float(info["dmg"]) * float(info["count"])), int(ammo[t])]
+        if t == sat_type:
+            b.modulate = Color(1.0, 1.0, 1.0)
+        elif int(ammo[t]) > 0:
+            b.modulate = Color(0.72, 0.72, 0.78)
+        else:
+            b.modulate = Color(0.45, 0.45, 0.5)
     for k in range(sat_island_btns.size()):
-        var b: Button = sat_island_btns[k]
+        var ib: Button = sat_island_btns[k]
         var idx := k + 1
         if idx >= island_count:
-            b.visible = false
+            ib.visible = false
             continue
-        b.visible = true
+        ib.visible = true
         var te: Dictionary = emp[idx]
-        b.disabled = bool(te["dead"])
-        b.text = ("ENEMY %d" % idx) if not bool(te["dead"]) else "ENEMY %d (out)" % idx
-        b.modulate = Color(1, 1, 1) if idx == sat_island else Color(0.75, 0.75, 0.75)
-    var tgt: Dictionary = emp[sat_island]
-    var tstructs: Array = tgt["structs"]
-    var houses := 0
-    var launchers := 0
-    var defs := 0
-    var down := 0
-    for sv in tstructs:
-        var s: Dictionary = sv
-        if str(s["state"]) == "destroyed":
-            down += 1
-            continue
-        var kind: String = s["kind"]
-        if kind == "house":
-            houses += 1
-        elif kind == "launcher":
-            launchers += 1
-        else:
-            defs += 1
-    var txt := "Enemy %d: houses %d, launchers %d, air defense %d, wrecked %d\n" % [sat_island, houses, launchers, defs, down]
-    if sat_has_point:
-        txt += "Impact point set. Selected: %d. " % _sat_selected_total()
-    else:
-        txt += "Tap or drag on the map to set the impact point. "
-    txt += "Air defense will try to shoot some down - mix weapon types!"
-    sat_info.text = txt
-    sat_launch_btn.disabled = (not sat_has_point) or _sat_selected_total() < 1
-    sat_launch_btn.text = "LAUNCH SALVO (%d)" % _sat_selected_total()
+        ib.disabled = bool(te["dead"])
+        ib.modulate = Color(1.0, 1.0, 1.0) if idx == sat_island else Color(0.7, 0.7, 0.7)
+
+
+# =====================================================================
+# Window and hotbar logic
+# =====================================================================
 
 
 func _refresh_ui() -> void:
@@ -3138,74 +2641,74 @@ func _refresh_ui() -> void:
     var e: Dictionary = emp[0]
     var money: int = e["money"]
     var ammo: Array = e["ammo"]
-    var peace_txt := "Rivals can attack any time!"
+    var total := _ammo_total(0)
+    stat_missile.text = "Missiles   %d/%d" % [total, MAX_MISSILES]
+    stat_aa.text = "Air defense   %d/%d" % [_count_structs(0, "defense", -1, true), MAX_DEFENSES]
+    stat_house.text = "Houses   %d/%d" % [_count_structs(0, "house", -1, true), MAX_HOUSES]
+    money_label.text = "$ %s" % _fmt_money(money)
+    income_label.text = "%s/s" % _fmt_money(_income(0))
     if elapsed < PEACE_TIME:
         var left := int(PEACE_TIME - elapsed)
-        peace_txt = "Peace time left: %d:%02d" % [int(left / 60), left % 60]
-    var bf := _free_workers(0, "builder")
-    var rf := _free_workers(0, "repairer")
-    money_label.text = "$%d   (+$%d / sec)" % [money, _income(0)]
-    stats_label.text = "Builders %d/%d free   Repairers %d/%d free\nHouses %d   Launchers %d   Air defense %d   Wrecked %d\nStock: Cruise %d  Ballistic %d  Hyper %d  MIRV %d  Drone %d\n%s" % [
-        bf, int(e["builders"]), rf, int(e["repairers"]),
-        _count_structs(0, "house", -1, true), _count_structs(0, "launcher", -1, true),
-        _count_structs(0, "defense", -1, true), _count_destroyed(0),
-        int(ammo[0]), int(ammo[1]), int(ammo[2]), int(ammo[3]), int(ammo[4]), peace_txt]
+        stats_label.text = "Peace time  %d:%02d" % [int(left / 60), left % 60]
+    else:
+        stats_label.text = "WAR! Rivals can attack"
 
-    # economy tab
-    var bb: Button = eco_buttons["builder"]
-    var rb: Button = eco_buttons["repairer"]
-    var hb: Button = eco_buttons["house"]
-    var ub: Button = eco_buttons["upgrade"]
-    var pb: Button = eco_buttons["repair"]
-    bb.text = "Hire Builder  $%d   (%d/%d)\nBuilders construct and upgrade" % [_worker_price(0, "builder"), int(e["builders"]), MAX_WORKERS]
-    bb.disabled = int(e["builders"]) >= MAX_WORKERS or money < _worker_price(0, "builder")
-    rb.text = "Hire Repair Worker  $%d   (%d/%d)\nRepair workers fix wrecked structures" % [_worker_price(0, "repairer"), int(e["repairers"]), MAX_WORKERS]
-    rb.disabled = int(e["repairers"]) >= MAX_WORKERS or money < _worker_price(0, "repairer")
-    var nh := _count_structs(0, "house", -1, false)
-    hb.text = "Build House  $%d   (%d/%d)\nHouse Lv1 earns +$%d per sec" % [_house_price(0), nh, MAX_HOUSES, int(HOUSE_INCOME[0])]
-    hb.disabled = nh >= MAX_HOUSES or money < _house_price(0)
-    var low := _lowest_house(0)
-    if low.is_empty():
-        ub.text = "Upgrade House\nNo house can be upgraded now"
+    # military window
+    for t in range(5):
+        var c: Dictionary = cards_missile[t]
+        var m: Dictionary = MISSILES[t]
+        var price: int = m["price"]
+        var info: Label = c["info"]
+        info.text = "DMG %d\nRadius %d    Evade %d%%\nOwned: %d" % [int(float(m["dmg"]) * float(m["count"])), int(m["radius"]), _evade(t), int(ammo[t])]
+        var b1: Button = c["b1"]
+        var b5: Button = c["b5"]
+        b1.text = "$%s   X1" % _fmt_money(price)
+        b5.text = "$%s   X5" % _fmt_money(price * 5)
+        b1.disabled = money < price or total >= MAX_MISSILES
+        b5.disabled = money < price * 5 or total + 5 > MAX_MISSILES
+    for t2 in range(5):
+        var c2: Dictionary = cards_aa[t2]
+        var d: Dictionary = DEFENSES[t2]
+        var dprice: int = d["price"]
+        var info2: Label = c2["info"]
+        info2.text = "Range %d    Shots %d\nReload %.1fs    Refill $%d\nOwned: %d" % [int(d["range"]), int(d["mag"]), float(d["cd"]), int(d["ref"]), _count_structs(0, "defense", t2, false)]
+        var db: Button = c2["b1"]
+        db.text = "$%s   BUY" % _fmt_money(dprice)
+        db.disabled = money < dprice or _count_structs(0, "defense", -1, false) >= MAX_DEFENSES
+
+    # worker window
+    var kinds := ["builder", "brep", "arep"]
+    var descs := ["Auto-builds and upgrades houses", "Fixes wrecked houses (they pay nothing while broken)", "Repairs wrecked air defense"]
+    for k in range(3):
+        var wc: Dictionary = cards_worker[k]
+        var kind: String = kinds[k]
+        var n := _worker_total(e, kind)
+        var mx := _worker_max(kind)
+        var winfo: Label = wc["info"]
+        winfo.text = "%s\nHired %d / %d" % [descs[k], n, mx]
+        var wb: Button = wc["b1"]
+        var wprice := _worker_price(0, kind)
+        if n >= mx:
+            wb.text = "MAX"
+            wb.disabled = true
+        else:
+            wb.text = "$%s   HIRE" % _fmt_money(wprice)
+            wb.disabled = money < wprice
+    var lvl: int = e["blevel"]
+    var ut: Label = up_card["title"]
+    var ui: Label = up_card["info"]
+    var ub: Button = up_card["b1"]
+    ut.text = "Builder Lv.%d" % lvl
+    if lvl >= MAX_LEVEL:
+        ui.text = "Max level reached.\nEvery house earns +$%d/s" % int(HOUSE_INCOME[MAX_LEVEL - 1])
+        ub.text = "MAX"
         ub.disabled = true
     else:
-        var lv: int = low["lvl"]
-        ub.text = "Upgrade House Lv%d -> Lv%d  $%d\nIncome +$%d -> +$%d per sec" % [lv, lv + 1, int(HOUSE_UPGRADE[lv - 1]), int(HOUSE_INCOME[lv - 1]), int(HOUSE_INCOME[lv])]
-        ub.disabled = money < int(HOUSE_UPGRADE[lv - 1])
-    var dmg_total := 0
-    var structs: Array = e["structs"]
-    for sv in structs:
-        var s: Dictionary = sv
-        var st: String = s["state"]
-        if bool(s["fixing"]) or st == "building":
-            continue
-        if st == "destroyed" or float(s["hp"]) < float(s["maxhp"]) - 0.5:
-            dmg_total += _repair_cost(s)
-    pb.text = "Repair All Damage  about $%d\n%d wrecked / damaged structures" % [dmg_total, _count_destroyed(0)]
-    pb.disabled = dmg_total <= 0 or money < 15
-
-    # missiles tab
-    for t in range(5):
-        var info: Dictionary = MISSILES[t]
-        var pad: Button = btn_pads[t]
-        var buy: Button = btn_buys[t]
-        var nl := _count_structs(0, "launcher", t, false)
-        var okl := _count_structs(0, "launcher", t, true)
-        pad.text = "%s Launcher  $%d\nHave %d (max %d)" % [info["short"], int(info["pad"]), nl, MAX_LAUNCHERS]
-        pad.disabled = money < int(info["pad"]) or _count_structs(0, "launcher", -1, false) >= MAX_LAUNCHERS
-        buy.text = "%s  $%d   (have %d/%d)\n%s, dmg %d" % [info["short"], int(info["price"]), int(ammo[t]), _missile_cap(0, t), info["cls"], int(float(info["dmg"]) * float(info["count"]))]
-        buy.disabled = okl < 1 or money < int(info["price"]) or int(ammo[t]) >= _missile_cap(0, t)
-
-    # air defense tab
-    var dcount := _count_structs(0, "defense", -1, false)
-    for t in range(5):
-        var di: Dictionary = DEFENSES[t]
-        var db: Button = btn_defs[t]
-        db.text = "%s  $%d   (have %d)\n%s, range %d" % [di["name"], int(di["price"]), _count_structs(0, "defense", t, false), di["cls"], int(di["range"])]
-        db.disabled = money < int(di["price"]) or dcount >= MAX_DEFENSES
-    var rc := _restock_cost(0)
-    btn_restock.text = "Reload interceptors  $%d" % rc
-    btn_restock.disabled = rc <= 0 or money < rc
+        var uprice: int = BUILDER_UPGRADE[lvl - 1]
+        ui.text = "Houses Lv%d -> Lv%d\nEarning +$%d -> +$%d per house" % [lvl, lvl + 1, int(HOUSE_INCOME[lvl - 1]), int(HOUSE_INCOME[lvl])]
+        ub.text = "$%s   UPGRADE" % _fmt_money(uprice)
+        ub.disabled = money < uprice or int(e["builders"]) < 1
+    _refresh_hotbar()
     if sat_open:
         _refresh_sat()
 
@@ -3213,8 +2716,10 @@ func _refresh_ui() -> void:
 # =====================================================================
 # Touch helpers
 # =====================================================================
+
+
 func _over_ui(pos: Vector2) -> bool:
-    for c in [hud_panel, top_right, bottom_right, build_panel, place_bar, overlay]:
+    for c in [stats_panel, tabs_box, hot_box, menu_btn, mil_panel, work_panel, overlay]:
         var ctl: Control = c
         if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
             return true
@@ -3226,7 +2731,10 @@ func _over_sat_ui(pos: Vector2) -> bool:
         var ctl: Control = c
         if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
             return true
+    if menu_btn.get_global_rect().has_point(pos) or overlay.is_visible_in_tree():
+        return true
     return false
+
 
 func _show_overlay(title: String, sub: String) -> void:
     joy_id = -1
@@ -3245,22 +2753,16 @@ func _show_overlay(title: String, sub: String) -> void:
 func _on_menu_pressed() -> void:
     if game_state != "playing":
         return
-    build_panel.hide()
+    _close_windows()
     game_state = "paused"
     _show_overlay("PAUSED", "Your progress is saved automatically.")
-
-
-func _on_build_toggle() -> void:
-    if game_state != "playing":
-        return
-    _cancel_place()
-    build_panel.visible = not build_panel.visible
-    _refresh_ui()
 
 
 func _say(message: String) -> void:
     if status_label:
         status_label.text = message
+    if sat_hint:
+        sat_hint.text = message
 
 
 func _place_joystick(c: Vector2) -> void:
@@ -3295,14 +2797,7 @@ func _sat_input(event: InputEvent) -> void:
         if te.pressed:
             if _over_sat_ui(te.position):
                 return
-            sat_drag_id = te.index
-            _sat_set_point(te.position)
-        elif te.index == sat_drag_id:
-            sat_drag_id = -1
-    elif event is InputEventScreenDrag:
-        var de := event as InputEventScreenDrag
-        if de.index == sat_drag_id:
-            _sat_set_point(de.position)
+            _sat_tap(te.position)
 
 
 func _input(event: InputEvent) -> void:
@@ -3354,7 +2849,7 @@ func _enter_game(msg: String) -> void:
         camera.fov = 70.0
     _sat_ui_show(false)
     overlay.hide()
-    build_panel.hide()
+    _close_windows()
     game_state = "playing"
     ui_timer = 0.0
     _say(msg)
@@ -3364,7 +2859,7 @@ func _enter_game(msg: String) -> void:
 func _start_new(count: int) -> void:
     _reset_state(count)
     _build_world()
-    _enter_game("You own one house and $%d. Hire a builder (BUILD > ECONOMY), then build houses for income. Rivals start the same way and attack after the peace time." % START_MONEY)
+    _enter_game("You own one house and $%d. Open WORKER and hire a builder: builders raise houses for income by themselves. Rivals start the same way and attack after the peace time." % START_MONEY)
     _save_game()
 
 
@@ -3380,3 +2875,647 @@ func _resume_game() -> void:
     overlay.hide()
     game_state = "playing"
 
+
+func _def_pos(slot: int) -> Vector2:
+    var col := slot % 10
+    var row := int(slot / 10)
+    return Vector2(-45.0 + float(col) * 10.0, -4.0 - float(row) * 7.0)
+
+
+func _missile_pos(slot: int) -> Vector2:
+    var col := slot % 25
+    var row := int(slot / 25)
+    return Vector2(-46.0 + float(col) * 3.8, -26.0 - float(row) * 4.5)
+
+
+func _worker_total(e: Dictionary, kind: String) -> int:
+    if kind == "builder":
+        return int(e["builders"])
+    if kind == "brep":
+        return int(e["brep"])
+    return int(e["arep"])
+
+
+func _worker_max(kind: String) -> int:
+    if kind == "builder":
+        return MAX_BUILDERS
+    if kind == "brep":
+        return MAX_BREP
+    return MAX_AREP
+
+
+func _ammo_total(i: int) -> int:
+    var e: Dictionary = emp[i]
+    var ammo: Array = e["ammo"]
+    var n := 0
+    for v in ammo:
+        n += int(v)
+    return n
+
+
+func _free_def_slot(i: int) -> int:
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    var used := {}
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) == "defense":
+            used[int(s["slot"])] = true
+    for slot in range(MAX_DEFENSES):
+        if not used.has(slot):
+            return slot
+    return -1
+
+
+func _do_upgrade_builder(i: int) -> int:
+    var e: Dictionary = emp[i]
+    var lvl: int = e["blevel"]
+    if lvl >= MAX_LEVEL:
+        return 2
+    if int(e["builders"]) < 1:
+        return 3
+    var price: int = BUILDER_UPGRADE[lvl - 1]
+    if int(e["money"]) < price:
+        return 1
+    e["money"] = int(e["money"]) - price
+    e["blevel"] = lvl + 1
+    if i == 0:
+        _play_ui("build")
+    return 0
+
+
+func _do_buy_defense(i: int, t: int) -> int:
+    var e: Dictionary = emp[i]
+    if _count_structs(i, "defense", -1, false) >= MAX_DEFENSES:
+        return 2
+    var price: int = DEFENSES[t]["price"]
+    if int(e["money"]) < price:
+        return 1
+    var slot := _free_def_slot(i)
+    if slot < 0:
+        return 2
+    e["money"] = int(e["money"]) - price
+    var dp := _def_pos(slot)
+    var s := _add_struct(i, "defense", t, dp.x, dp.y, "ok", slot)
+    _spawn_struct_node(i, s, 1.2)
+    _refresh_struct_label(i, s)
+    if i == 0:
+        _play_ui("hammer", -2.0)
+    return 0
+
+
+# ---------- automatic workers ----------
+
+
+func _island_tick(i: int, delta: float) -> void:
+    var e: Dictionary = emp[i]
+    if bool(e["dead"]):
+        return
+    e["auto"] = float(e["auto"]) - delta
+    if float(e["auto"]) > 0.0:
+        return
+    e["auto"] = 1.0
+    _auto_workers(i)
+    _auto_restock(i)
+
+
+func _auto_workers(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    var blvl: int = e["blevel"]
+    var fb := _free_workers(i, "builder")
+    # builders first upgrade every house to the builder level ...
+    for sv in structs:
+        if fb < 1:
+            break
+        var s: Dictionary = sv
+        if str(s["kind"]) != "house" or str(s["state"]) != "ok" or bool(s["upg"]) or bool(s["fixing"]):
+            continue
+        if int(s["lvl"]) < blvl:
+            s["upg"] = true
+            _start_job(i, s, "upgrade", TIME_UPGRADE)
+            fb -= 1
+    # ... then raise new houses (already at the builder level)
+    while fb > 0 and _count_structs(i, "house", -1, false) < MAX_HOUSES:
+        var slot := _free_slot(i)
+        if slot < 0:
+            break
+        var hp := _house_pos(slot)
+        var ns := _add_struct(i, "house", 0, hp.x, hp.y, "building", slot)
+        ns["lvl"] = blvl
+        var mx: float = HOUSE_HP[blvl - 1]
+        ns["maxhp"] = mx
+        ns["hp"] = mx
+        _spawn_struct_node(i, ns, TIME_HOUSE)
+        _refresh_struct_label(i, ns)
+        _start_job(i, ns, "build", TIME_HOUSE)
+        fb -= 1
+    # repair crews
+    var fh := _free_workers(i, "brep")
+    var fa := _free_workers(i, "arep")
+    for sv2 in structs:
+        var r: Dictionary = sv2
+        var st: String = r["state"]
+        if bool(r["fixing"]) or st == "building":
+            continue
+        var hurt := st == "destroyed" or float(r["hp"]) < float(r["maxhp"]) - 0.5
+        if not hurt:
+            continue
+        var is_house := str(r["kind"]) == "house"
+        if is_house and fh < 1:
+            continue
+        if (not is_house) and fa < 1:
+            continue
+        if bool(r["upg"]):
+            continue
+        r["fixing"] = true
+        _start_job(i, r, "repair", TIME_REPAIR if st == "destroyed" else 6.0)
+        if is_house:
+            fh -= 1
+        else:
+            fa -= 1
+
+
+func _auto_restock(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
+            continue
+        var sub: int = s["sub"]
+        var mag: int = s["mag"]
+        if mag >= int(DEFENSES[sub]["mag"]):
+            continue
+        var cost: int = DEFENSES[sub]["ref"]
+        if int(e["money"]) >= cost:
+            e["money"] = int(e["money"]) - cost
+            s["mag"] = mag + 1
+
+
+# ---------- standing missiles on the island ----------
+
+
+func _sync_missiles(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var ammo: Array = e["ammo"]
+    var nodes: Array = e["mnodes"]
+    var used := {}
+    for nv in nodes:
+        var nd: Dictionary = nv
+        used[int(nd["slot"])] = true
+    var cursor := 0
+    for t in range(5):
+        var have := 0
+        for nv2 in nodes:
+            var nd2: Dictionary = nv2
+            if int(nd2["t"]) == t:
+                have += 1
+        while have < int(ammo[t]):
+            while cursor < MAX_MISSILES and used.has(cursor):
+                cursor += 1
+            if cursor >= MAX_MISSILES:
+                return
+            used[cursor] = true
+            var mp := _missile_pos(cursor)
+            var m := _make_missile_model(i == 0, t, false)
+            if t < 4:
+                m.rotation.x = PI / 2.0
+                m.position = Vector3(mp.x, 2.7, mp.y)
+            else:
+                m.position = Vector3(mp.x, 1.4, mp.y)
+            m.scale = Vector3.ONE * 0.9
+            _isl(i).add_child(m)
+            nodes.append({"t": t, "slot": cursor, "node": m})
+            have += 1
+
+
+func _take_missile_pos(i: int, t: int) -> Vector3:
+    var e: Dictionary = emp[i]
+    var nodes: Array = e["mnodes"]
+    for k in range(nodes.size() - 1, -1, -1):
+        var nd: Dictionary = nodes[k]
+        if int(nd["t"]) != t:
+            continue
+        nodes.remove_at(k)
+        var nn = nd["node"]
+        if nn != null and is_instance_valid(nn):
+            var n3: Node3D = nn
+            var p := n3.global_position
+            n3.queue_free()
+            return p
+        break
+    return _isl(i).to_global(Vector3(0.0, 3.0, -30.0))
+
+
+func _rebuild_node(i: int, s: Dictionary, anim: float) -> void:
+    var old = s["node"]
+    if old != null and is_instance_valid(old):
+        var o: Node3D = old
+        o.queue_free()
+    s["node"] = null
+    _spawn_struct_node(i, s, anim)
+
+
+func _open_sat_with(t: int) -> void:
+    _open_sat()
+    if sat_open:
+        sat_type = t
+        _refresh_sat()
+
+
+func _sat_tap(pos: Vector2) -> void:
+    if game_state != "playing" or not sat_open or sat_cool > 0.0:
+        return
+    var e: Dictionary = emp[0]
+    var ammo: Array = e["ammo"]
+    var have: int = ammo[sat_type]
+    sat_local = _sat_screen_to_local(pos)
+    sat_has_point = true
+    _update_sat_marker()
+    if have < 1:
+        _play_ui("error")
+        _say("No %s left. Buy more in MILITARY, or pick another weapon." % MISSILES[sat_type]["short"])
+        _refresh_sat()
+        return
+    var n := mini(sat_mult, have)
+    var delay := 0.0
+    for k in range(n):
+        _queue_launch(0, sat_island, sat_type, sat_local, delay)
+        delay += 0.14
+    ammo[sat_type] = have - n
+    sat_cool = 0.22
+    _say("%d x %s launched at Enemy %d!" % [n, MISSILES[sat_type]["short"], sat_island])
+    _vibrate(40)
+    _refresh_sat()
+    _refresh_ui()
+
+
+func _fmt_money(n: int) -> String:
+    if n >= 1000000:
+        return "%.1fM" % (float(n) / 1000000.0)
+    if n >= 100000:
+        return "%dK" % (n / 1000)
+    if n >= 1000:
+        return "%.1fK" % (float(n) / 1000.0)
+    return str(n)
+
+
+func _style_text(l: Label, size: int, col: Color) -> void:
+    l.add_theme_font_size_override("font_size", size)
+    l.add_theme_color_override("font_color", col)
+    l.add_theme_constant_override("outline_size", 6)
+    l.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
+
+
+func _tab_button(text: String, col: Color, cb: Callable) -> Button:
+    var b := _make_button(text, Color(0.16, 0.19, 0.24, 0.94), cb)
+    b.custom_minimum_size = Vector2(200.0, 58.0)
+    b.add_theme_font_size_override("font_size", 28)
+    b.add_theme_color_override("font_color", col)
+    b.add_theme_color_override("font_hover_color", col.lightened(0.3))
+    b.add_theme_color_override("font_pressed_color", col)
+    return b
+
+
+func _build_tabs() -> void:
+    tabs_box = HBoxContainer.new()
+    tabs_box.add_theme_constant_override("separation", 10)
+    ui_root.add_child(tabs_box)
+    tabs_box.add_child(_tab_button("MILITARY", Color(0.3, 0.95, 0.95), _toggle_mil))
+    tabs_box.add_child(_tab_button("ATTACK", Color(1.0, 0.82, 0.1), _open_sat))
+    tabs_box.add_child(_tab_button("WORKER", Color(0.3, 0.95, 0.95), _toggle_work))
+    tabs_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 8)
+    tabs_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+
+func _make_slot(idx: int) -> Dictionary:
+    var b := Button.new()
+    b.custom_minimum_size = Vector2(74.0, 74.0)
+    _style_button(b, Color(0.1, 0.12, 0.17, 0.9))
+    b.pressed.connect(_play_ui.bind("click", -8.0))
+    b.pressed.connect(_on_hot_slot.bind(idx))
+    var ic := MiniIcon.new()
+    ic.custom_minimum_size = Vector2(62.0, 62.0)
+    b.add_child(ic)
+    ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
+    var lbl := Label.new()
+    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(lbl, 20, Color(1.0, 1.0, 1.0))
+    b.add_child(lbl)
+    lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 4)
+    lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    var num := Label.new()
+    num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    num.text = str(idx + 1)
+    _style_text(num, 16, Color(0.8, 0.85, 0.9))
+    b.add_child(num)
+    num.position = Vector2(6.0, 2.0)
+    return {"btn": b, "icon": ic, "lbl": lbl}
+
+
+func _build_hotbar() -> void:
+    hot_box = HBoxContainer.new()
+    hot_box.add_theme_constant_override("separation", 6)
+    ui_root.add_child(hot_box)
+    var bag := Button.new()
+    bag.custom_minimum_size = Vector2(74.0, 74.0)
+    _style_button(bag, Color(0.14, 0.18, 0.26, 0.9))
+    var bi := MiniIcon.new()
+    bi.kind = 6
+    bag.add_child(bi)
+    bi.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
+    hot_box.add_child(bag)
+    hot_slots = []
+    for k in range(10):
+        var d := _make_slot(k)
+        var sb: Button = d["btn"]
+        hot_box.add_child(sb)
+        hot_slots.append(d)
+    hot_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 6)
+    hot_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    hot_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
+func _tab_style(btns: Array, sel: int) -> void:
+    for k in range(btns.size()):
+        var b: Button = btns[k]
+        var on := k == sel
+        _style_button(b, Color(1.0, 0.85, 0.05) if on else Color(0.04, 0.04, 0.05))
+        var fc := Color(0.05, 0.05, 0.05) if on else Color(1.0, 1.0, 1.0)
+        b.add_theme_color_override("font_color", fc)
+        b.add_theme_color_override("font_hover_color", fc)
+        b.add_theme_color_override("font_pressed_color", fc)
+
+
+func _make_window(tab_names: Array, on_tab: Callable, tab_btns: Array) -> Dictionary:
+    var panel := PanelContainer.new()
+    _style_panel(panel, Color(0.05, 0.07, 0.1, 0.96))
+    ui_root.add_child(panel)
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", 8)
+    panel.add_child(v)
+    var head := HBoxContainer.new()
+    head.add_theme_constant_override("separation", 8)
+    v.add_child(head)
+    for k in range(tab_names.size()):
+        var tb := _make_button(str(tab_names[k]), Color(0.05, 0.05, 0.06), on_tab.bind(k))
+        tb.custom_minimum_size = Vector2(220.0, 54.0)
+        tb.add_theme_font_size_override("font_size", 26)
+        head.add_child(tb)
+        tab_btns.append(tb)
+    var sp := Control.new()
+    sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    head.add_child(sp)
+    var xb := _make_button("X", Color(0.1, 0.3, 0.95), _close_windows)
+    xb.custom_minimum_size = Vector2(64.0, 54.0)
+    head.add_child(xb)
+    panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+    panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+    panel.position.y += 18.0
+    panel.hide()
+    return {"panel": panel, "vbox": v}
+
+
+func _make_grid(parent: Control) -> GridContainer:
+    var sc := ScrollContainer.new()
+    sc.custom_minimum_size = Vector2(920.0, 430.0)
+    sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(sc)
+    var g := GridContainer.new()
+    g.columns = 2
+    g.add_theme_constant_override("h_separation", 10)
+    g.add_theme_constant_override("v_separation", 10)
+    sc.add_child(g)
+    return g
+
+
+func _make_card(icon_kind: int, icon_sub: int, title: String, lines: Array, cb1: Callable, cb5: Callable) -> Dictionary:
+    var card := PanelContainer.new()
+    _style_panel(card, Color(0.1, 0.11, 0.14, 0.98))
+    card.custom_minimum_size = Vector2(445.0, 126.0)
+    card.mouse_filter = Control.MOUSE_FILTER_PASS
+    var h := HBoxContainer.new()
+    h.add_theme_constant_override("separation", 10)
+    h.mouse_filter = Control.MOUSE_FILTER_PASS
+    card.add_child(h)
+    var ic := MiniIcon.new()
+    ic.kind = icon_kind
+    ic.sub = icon_sub
+    ic.custom_minimum_size = Vector2(96.0, 96.0)
+    h.add_child(ic)
+    var mid := VBoxContainer.new()
+    mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    mid.mouse_filter = Control.MOUSE_FILTER_PASS
+    h.add_child(mid)
+    var t := Label.new()
+    t.text = title
+    t.add_theme_font_size_override("font_size", 23)
+    t.add_theme_color_override("font_color", Color(0.9, 0.92, 0.95))
+    mid.add_child(t)
+    var info := Label.new()
+    info.text = "\n".join(PackedStringArray(lines))
+    info.add_theme_font_size_override("font_size", 19)
+    info.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+    mid.add_child(info)
+    var side := VBoxContainer.new()
+    side.add_theme_constant_override("separation", 6)
+    h.add_child(side)
+    var b1 := _make_button("", Color(0.1, 0.32, 0.95), cb1)
+    b1.custom_minimum_size = Vector2(160.0, 52.0)
+    b1.add_theme_font_size_override("font_size", 21)
+    side.add_child(b1)
+    var b5: Button = null
+    if not cb5.is_null():
+        b5 = _make_button("", Color(0.1, 0.32, 0.95), cb5)
+        b5.custom_minimum_size = Vector2(160.0, 52.0)
+        b5.add_theme_font_size_override("font_size", 21)
+        side.add_child(b5)
+    return {"card": card, "title": t, "info": info, "b1": b1, "b5": b5}
+
+
+func _evade(t: int) -> int:
+    var sum := 0.0
+    for d in range(5):
+        sum += float(DEF_TABLE[d][t])
+    return int(round((1.0 - sum / 5.0) * 100.0))
+
+
+func _build_military_window() -> void:
+    mil_tab_btns = []
+    var w := _make_window(["MISSILE", "ANTI - AIR"], _mil_tab, mil_tab_btns)
+    mil_panel = w["panel"]
+    var v: VBoxContainer = w["vbox"]
+    var gm := _make_grid(v)
+    mil_body_missile = gm.get_parent()
+    cards_missile = []
+    for t in range(5):
+        var m: Dictionary = MISSILES[t]
+        var c := _make_card(0, t, str(m["name"]), [
+            "DMG %d" % int(float(m["dmg"]) * float(m["count"])),
+            "Radius %d    Evade %d%%" % [int(m["radius"]), _evade(t)],
+            str(m["cls"])],
+            _ui_buy_missile.bind(t, 1), _ui_buy_missile.bind(t, 5))
+        gm.add_child(c["card"])
+        cards_missile.append(c)
+    var ga := _make_grid(v)
+    mil_body_aa = ga.get_parent()
+    cards_aa = []
+    for t in range(5):
+        var d: Dictionary = DEFENSES[t]
+        var c2 := _make_card(1, t, str(d["name"]), [
+            "Range %d    Shots %d" % [int(d["range"]), int(d["mag"])],
+            "Reload %.1fs    Refill $%d" % [float(d["cd"]), int(d["ref"])],
+            str(d["cls"])],
+            _ui_buy_def.bind(t), Callable())
+        ga.add_child(c2["card"])
+        cards_aa.append(c2)
+    mil_body_aa.hide()
+
+
+func _build_worker_window() -> void:
+    work_tab_btns = []
+    var w := _make_window(["HIRE", "UPGRADE"], _work_tab, work_tab_btns)
+    work_panel = w["panel"]
+    var v: VBoxContainer = w["vbox"]
+    var gh := _make_grid(v)
+    work_body_hire = gh.get_parent()
+    cards_worker = []
+    var specs := [
+        [2, "Builder", "Auto-builds and upgrades houses", "builder"],
+        [3, "Build Repairman", "Fixes wrecked houses (no gold while broken)", "brep"],
+        [4, "AntiAir Repairman", "Repairs wrecked air defense", "arep"],
+    ]
+    for sp in specs:
+        var kind: String = sp[3]
+        var c := _make_card(int(sp[0]), 0, str(sp[1]), [str(sp[2]), ""], _ui_hire.bind(kind), Callable())
+        gh.add_child(c["card"])
+        cards_worker.append(c)
+    var gu := _make_grid(v)
+    work_body_up = gu.get_parent()
+    up_card = _make_card(5, 0, "Builder Lv.1", ["", ""], _ui_upgrade_builder, Callable())
+    gu.add_child(up_card["card"])
+    work_body_up.hide()
+
+
+func _update_mult_style() -> void:
+    for k in range(sat_mult_btns.size()):
+        var b: Button = sat_mult_btns[k]
+        var on := (k == 0 and sat_mult == 1) or (k == 1 and sat_mult == 5)
+        _style_button(b, Color(1.0, 0.85, 0.05) if on else Color(0.05, 0.05, 0.06))
+        var fc := Color(0.05, 0.05, 0.05) if on else Color(1.0, 1.0, 1.0)
+        b.add_theme_color_override("font_color", fc)
+        b.add_theme_color_override("font_hover_color", fc)
+        b.add_theme_color_override("font_pressed_color", fc)
+
+
+func _sat_set_type(t: int) -> void:
+    sat_type = t
+    _update_sat_marker()
+    _refresh_sat()
+
+
+func _sat_set_mult(m: int) -> void:
+    sat_mult = m
+    _update_mult_style()
+
+
+func _close_windows() -> void:
+    if mil_panel != null:
+        mil_panel.hide()
+    if work_panel != null:
+        work_panel.hide()
+
+
+func _toggle_mil() -> void:
+    if game_state != "playing" or sat_open:
+        return
+    var show_it := not mil_panel.visible
+    _close_windows()
+    mil_panel.visible = show_it
+    _refresh_ui()
+
+
+func _toggle_work() -> void:
+    if game_state != "playing" or sat_open:
+        return
+    var show_it := not work_panel.visible
+    _close_windows()
+    work_panel.visible = show_it
+    _refresh_ui()
+
+
+func _mil_tab(k: int) -> void:
+    mil_tab = k
+    mil_body_missile.visible = k == 0
+    mil_body_aa.visible = k == 1
+    _tab_style(mil_tab_btns, k)
+
+
+func _work_tab(k: int) -> void:
+    work_tab = k
+    work_body_hire.visible = k == 0
+    work_body_up.visible = k == 1
+    _tab_style(work_tab_btns, k)
+
+
+func _on_hot_slot(idx: int) -> void:
+    if game_state != "playing" or idx >= hot_items.size():
+        return
+    var it: Dictionary = hot_items[idx]
+    if str(it["k"]) == "m":
+        _open_sat_with(int(it["t"]))
+    else:
+        _say("%s x%d on your island. Air defense shoots incoming missiles by itself." % [DEFENSES[int(it["t"])]["short"], int(it["n"])])
+
+
+func _ui_buy_missile(t: int, n: int) -> void:
+    var nm: String = MISSILES[t]["name"]
+    _ui_result(_do_buy_missile(0, t, n), nm, "Bought %s (x%d). It stands on your island and sits in your bottom boxes." % [nm, n])
+
+
+func _ui_buy_def(t: int) -> void:
+    var nm: String = DEFENSES[t]["name"]
+    _ui_result(_do_buy_defense(0, t), nm, "%s installed on your island." % nm)
+
+
+func _ui_upgrade_builder() -> void:
+    _ui_result(_do_upgrade_builder(0), "the builder upgrade", "Builders upgraded! All houses will be upgraded to the new level.")
+
+
+# =====================================================================
+# UI refresh
+# =====================================================================
+
+
+func _refresh_hotbar() -> void:
+    var e: Dictionary = emp[0]
+    var ammo: Array = e["ammo"]
+    hot_items = []
+    for t in range(5):
+        if int(ammo[t]) > 0:
+            hot_items.append({"k": "m", "t": t, "n": int(ammo[t])})
+    for t2 in range(5):
+        var n := _count_structs(0, "defense", t2, true)
+        if n > 0:
+            hot_items.append({"k": "d", "t": t2, "n": n})
+    for idx in range(hot_slots.size()):
+        var d: Dictionary = hot_slots[idx]
+        var b: Button = d["btn"]
+        var ic: MiniIcon = d["icon"]
+        var lbl: Label = d["lbl"]
+        if idx < hot_items.size():
+            var it: Dictionary = hot_items[idx]
+            b.visible = true
+            ic.visible = true
+            ic.kind = 0 if str(it["k"]) == "m" else 1
+            ic.sub = int(it["t"])
+            ic.queue_redraw()
+            lbl.text = "x%d" % int(it["n"])
+        else:
+            ic.visible = false
+            lbl.text = ""
+            b.visible = idx < 8
