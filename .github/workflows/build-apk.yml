@@ -29,6 +29,27 @@ jobs:
       - name: Import project
         run: godot --headless --verbose --import || true
 
+      - name: Smoke test - does the game start
+        run: |
+          timeout 120 godot --headless --quit-after 120 > run1.log 2>&1 || true
+          tail -40 run1.log
+          if grep -qE "SCRIPT ERROR|Parse Error|Compile Error|Failed to load script" run1.log; then
+            echo "::error title=Game script has errors::$(grep -E 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script' -A1 run1.log | head -8 | tr '\n' ' ')"
+            exit 1
+          fi
+
+      - name: Self test - plays the game automatically
+        continue-on-error: true
+        run: |
+          timeout 400 godot --headless --quit-after 100000 -- --selftest > run2.log 2>&1 || true
+          tail -60 run2.log
+          if grep -qE "SCRIPT ERROR|Parse Error" run2.log; then
+            echo "::warning title=Selftest found errors::$(grep -E 'SCRIPT ERROR|Parse Error' -A1 run2.log | head -10 | tr '\n' ' ')"
+          fi
+          if ! grep -q "SELFTEST done" run2.log; then
+            echo "::warning title=Selftest did not finish::$(tail -6 run2.log | tr '\n' ' ')"
+          fi
+
       - name: Export APK
         run: |
           mkdir -v -p build
