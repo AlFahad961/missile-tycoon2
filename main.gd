@@ -5,34 +5,40 @@ extends Node3D
 ## Procedural sound, layered air defense, drones. (Godot 4.x, Compatibility renderer)
 ## Left half of the screen = floating joystick, right half = drag to look around.
 
-const SAVE_PATH := "user://missile_tycoon_v6.json"
+const SAVE_PATH := "user://missile_tycoon_v7.json"
 const SETTINGS_PATH := "user://settings_v1.json"
-const PLOT_HALF := 50.0
-const PLAYER_HALF := 47.0
-const RING := [0.0, 0.0, 100.0, 115.0, 135.0]
-const WALK_SPEED := 12.0
+const PLOT_HALF := 80.0
+const PLAYER_HALF := 77.0
+const RING := [0.0, 0.0, 150.0, 180.0, 215.0]
+const WALK_SPEED := 20.0
 const MAX_HOUSES := 50
 const MAX_DEFENSES := 30
 const MAX_MISSILES := 100
+const MAX_JETS := 12
+const NM := 8
+const RW_X := 62.0
+const RW_Z0 := 66.0
+const RW_Z1 := -70.0
+const MIL_RECT := Rect2(-77.0, -78.0, 96.0, 86.0)
 const MAX_BUILDERS := 5
 const MAX_BREP := 5
 const MAX_AREP := 3
 const MAX_LEVEL := 5
 const START_MONEY := 600
-const PEACE_TIME := 300.0
+const PEACE_TIME := 600.0
 const SPACING := 7.0
-const SAT_HEIGHT := 150.0
-const BUILDER_PRICES := [500, 900, 1500, 2400, 3600]
-const BREP_PRICES := [700, 1200, 1900, 2800, 4000]
-const AREP_PRICES := [3000, 6000, 10000]
-const BUILDER_UPGRADE := [2500, 8000, 25000, 80000]
+const SAT_HEIGHT := 190.0
+const BUILDER_PRICES := [600, 1100, 1900, 3000, 4500]
+const BREP_PRICES := [800, 1400, 2300, 3400, 5000]
+const AREP_PRICES := [3500, 7000, 12000]
+const BUILDER_UPGRADE := [4000, 14000, 45000, 140000]
 const LOOK_SENS := [0.006, 0.010, 0.016]
 const SENS_NAMES := ["LOW", "MEDIUM", "HIGH"]
 const RATE := 16000
 
-const TIME_HOUSE := 12.0
-const TIME_UPGRADE := 9.0
-const TIME_REPAIR := 12.0
+const TIME_HOUSE := 45.0
+const TIME_UPGRADE := 60.0
+const TIME_REPAIR := 20.0
 
 const HOUSE_INCOME := [2, 6, 14, 30, 60]
 const HOUSE_HP := [150.0, 250.0, 400.0, 600.0, 900.0]
@@ -45,42 +51,65 @@ const TEAM_COLORS := [
     Color(1.0, 0.6, 0.1),
 ]
 
-# Weapon index: 0 cruise, 1 ballistic, 2 hypersonic, 3 MIRV, 4 drone
-# Weapon index: 0 cruise, 1 ballistic, 2 hypersonic, 3 MIRV, 4 drone
 const MISSILES := [
-    {"name": "Cruise Missile", "cls": "Tomahawk / Babur class", "short": "Cruise", "price": 300,
-        "dmg": 55.0, "radius": 5.0, "speed": 45.0, "arc": 0.05, "cep": 3.0, "count": 1},
-    {"name": "Ballistic Missile", "cls": "Iskander / Fateh class", "short": "Ballistic", "price": 900,
-        "dmg": 110.0, "radius": 8.0, "speed": 75.0, "arc": 0.45, "cep": 5.0, "count": 1},
-    {"name": "Hypersonic Missile", "cls": "Kinzhal / Fattah class", "short": "Hypersonic", "price": 2200,
-        "dmg": 190.0, "radius": 6.0, "speed": 150.0, "arc": 0.12, "cep": 3.0, "count": 1},
-    {"name": "MIRV Strategic", "cls": "Sarmat class, 3 warheads", "short": "MIRV", "price": 5000,
-        "dmg": 80.0, "radius": 7.0, "speed": 110.0, "arc": 0.5, "cep": 14.0, "count": 3},
-    {"name": "Kamikaze Drone", "cls": "Shahed class", "short": "Drone", "price": 120,
-        "dmg": 40.0, "radius": 3.5, "speed": 24.0, "arc": 0.03, "cep": 6.0, "count": 1},
+    {"name": "Cruise Missile", "cls": "Tomahawk / Babur class", "short": "Cruise", "price": 450,
+        "dmg": 55.0, "radius": 5.0, "speed": 60.0, "arc": 0.05, "cep": 3.0, "count": 1, "unlock": 0.0, "cap": 4},
+    {"name": "Ballistic Missile", "cls": "Iskander / Fateh class", "short": "Ballistic", "price": 1400,
+        "dmg": 110.0, "radius": 8.0, "speed": 95.0, "arc": 0.45, "cep": 5.0, "count": 1, "unlock": 240.0, "cap": 2},
+    {"name": "Hypersonic Missile", "cls": "Kinzhal / Fattah class", "short": "Hypersonic", "price": 3500,
+        "dmg": 190.0, "radius": 6.0, "speed": 170.0, "arc": 0.12, "cep": 3.0, "count": 1, "unlock": 900.0, "cap": 2},
+    {"name": "MIRV Strategic", "cls": "Sarmat / Topol class, 3 warheads", "short": "MIRV", "price": 8000,
+        "dmg": 80.0, "radius": 7.0, "speed": 130.0, "arc": 0.5, "cep": 14.0, "count": 3, "unlock": 1500.0, "cap": 1},
+    {"name": "Kamikaze Drone", "cls": "Shahed class", "short": "Drone", "price": 200,
+        "dmg": 40.0, "radius": 3.5, "speed": 32.0, "arc": 0.03, "cep": 6.0, "count": 1, "unlock": 0.0, "cap": 6},
+    {"name": "Rocket Barrage", "cls": "Fajr / MLRS class, 2 rockets", "short": "Rockets", "price": 250,
+        "dmg": 30.0, "radius": 4.5, "speed": 70.0, "arc": 0.22, "cep": 7.0, "count": 2, "unlock": 0.0, "cap": 8},
+    {"name": "Stealth Cruise", "cls": "Storm Shadow / JASSM class", "short": "Stealth", "price": 2400,
+        "dmg": 120.0, "radius": 4.0, "speed": 85.0, "arc": 0.04, "cep": 2.0, "count": 1, "unlock": 600.0, "cap": 4},
+    {"name": "ICBM", "cls": "Minuteman / Agni-V class, huge blast", "short": "ICBM", "price": 20000,
+        "dmg": 420.0, "radius": 16.0, "speed": 150.0, "arc": 0.8, "cep": 6.0, "count": 1, "unlock": 2400.0, "cap": 1},
 ]
 
 
 const DEFENSES := [
-    {"name": "CIWS Gun", "cls": "Phalanx / Pantsir-gun class", "short": "CIWS", "price": 800, "range": 22.0,
-        "cd": 1.2, "mag": 40, "ref": 2},
-    {"name": "Iron Dome", "cls": "Iron Dome / Tor class, short range", "short": "Iron Dome", "price": 2500, "range": 45.0,
-        "cd": 2.0, "mag": 20, "ref": 20},
-    {"name": "HQ-9 / Patriot", "cls": "HQ-9 / Patriot class, medium range", "short": "HQ-9", "price": 6000, "range": 75.0,
-        "cd": 3.0, "mag": 12, "ref": 60},
-    {"name": "S-400", "cls": "S-400 class, long range", "short": "S-400", "price": 12000, "range": 110.0,
-        "cd": 3.5, "mag": 10, "ref": 110},
-    {"name": "THAAD / S-500", "cls": "THAAD / S-500 class, anti-ballistic", "short": "THAAD", "price": 22000, "range": 130.0,
-        "cd": 4.5, "mag": 8, "ref": 200},
+    {"name": "CIWS Gun", "cls": "Phalanx / Pantsir-gun class", "short": "CIWS", "price": 1200, "range": 26.0,
+        "cd": 1.2, "mag": 40, "ref": 3, "unlock": 0.0},
+    {"name": "Iron Dome", "cls": "Iron Dome / Tor class, short range", "short": "Iron Dome", "price": 4000, "range": 50.0,
+        "cd": 2.0, "mag": 20, "ref": 30, "unlock": 300.0},
+    {"name": "HQ-9 / Patriot", "cls": "HQ-9 / Patriot class, medium range", "short": "HQ-9", "price": 9500, "range": 80.0,
+        "cd": 3.0, "mag": 12, "ref": 90, "unlock": 720.0},
+    {"name": "S-400", "cls": "S-400 class, long range", "short": "S-400", "price": 19000, "range": 115.0,
+        "cd": 3.5, "mag": 10, "ref": 165, "unlock": 1300.0},
+    {"name": "THAAD / S-500", "cls": "THAAD / S-500 class, anti-ballistic", "short": "THAAD", "price": 36000, "range": 135.0,
+        "cd": 4.5, "mag": 8, "ref": 300, "unlock": 2000.0},
 ]
 
 
+# columns: cruise, ballistic, hypersonic, MIRV, drone, rockets, stealth, ICBM
 const DEF_TABLE := [
-    [0.55, 0.05, 0.0, 0.0, 0.85],
-    [0.75, 0.25, 0.05, 0.1, 0.9],
-    [0.8, 0.6, 0.2, 0.35, 0.6],
-    [0.85, 0.75, 0.45, 0.55, 0.5],
-    [0.3, 0.9, 0.6, 0.7, 0.05],
+    [0.55, 0.05, 0.0, 0.0, 0.85, 0.7, 0.2, 0.0],
+    [0.75, 0.25, 0.05, 0.1, 0.9, 0.9, 0.35, 0.0],
+    [0.8, 0.6, 0.2, 0.35, 0.6, 0.6, 0.45, 0.05],
+    [0.85, 0.75, 0.45, 0.55, 0.5, 0.5, 0.55, 0.2],
+    [0.3, 0.9, 0.6, 0.7, 0.05, 0.1, 0.3, 0.55],
+]
+
+# chance that each air-defense type hits an (unstealthy) jet
+const JET_DEF := [0.25, 0.35, 0.6, 0.7, 0.15]
+
+const JETS := [
+    {"name": "JF-17 Thunder", "cls": "Pakistan / China light multirole", "short": "JF-17", "price": 9000, "shots": 2,
+        "dmg": 55.0, "radius": 5.0, "speed": 58.0, "evade": 0.05, "fee": 250, "unlock": 600.0},
+    {"name": "F-16 Fighting Falcon", "cls": "USA multirole fighter", "short": "F-16", "price": 16000, "shots": 3,
+        "dmg": 60.0, "radius": 5.0, "speed": 66.0, "evade": 0.12, "fee": 400, "unlock": 1000.0},
+    {"name": "J-10C Vigorous Dragon", "cls": "China delta-canard fighter", "short": "J-10C", "price": 22000, "shots": 3,
+        "dmg": 70.0, "radius": 5.5, "speed": 70.0, "evade": 0.2, "fee": 500, "unlock": 1400.0},
+    {"name": "Rafale", "cls": "France omnirole fighter", "short": "Rafale", "price": 34000, "shots": 4,
+        "dmg": 80.0, "radius": 5.5, "speed": 72.0, "evade": 0.28, "fee": 700, "unlock": 1900.0},
+    {"name": "F-22 Raptor", "cls": "USA stealth air-superiority", "short": "F-22", "price": 65000, "shots": 4,
+        "dmg": 100.0, "radius": 6.0, "speed": 84.0, "evade": 0.65, "fee": 1000, "unlock": 2600.0},
+    {"name": "F-35 Lightning II", "cls": "USA stealth strike fighter", "short": "F-35", "price": 82000, "shots": 6,
+        "dmg": 85.0, "radius": 6.0, "speed": 76.0, "evade": 0.55, "fee": 1200, "unlock": 3200.0},
 ]
 
 
@@ -124,6 +153,7 @@ void fragment() {
     float m = mod(g.x + g.y, 2.0);
     ALBEDO = mix(c1, c2, m);
     ROUGHNESS = 0.95;
+    SPECULAR = 0.02;
 }
 """
 
@@ -155,6 +185,7 @@ var island_nodes: Array = []
 var island_pos: Array = []
 var clouds: Array = []
 var projectiles: Array = []
+var sorties: Array = []
 var player: Node3D
 var player_off := Vector3(0.0, 0.0, 5.0)
 var walk_amount := 0.0
@@ -225,6 +256,20 @@ var cards_worker: Array = []
 var up_card: Dictionary = {}
 var stat_missile: Label
 var stat_aa: Label
+var stat_jets: Label
+var sat_page := 0
+var sat_page_btns: Array = []
+var place_mode := false
+var place_kind := ""
+var place_id := 0
+var place_ok := false
+var place_panel: Control
+var place_label: Label
+var place_zone: MeshInstance3D
+var cards_jet: Array = []
+var mil_body_jet: Control
+var mil_body_manage: Control
+var manage_list: VBoxContainer
 var stat_house: Label
 var income_label: Label
 
@@ -314,12 +359,17 @@ func _mat(color: Color, rough: float = 0.85) -> StandardMaterial3D:
     var m := StandardMaterial3D.new()
     m.albedo_color = color
     m.roughness = rough
+    m.metallic_specular = 0.12
     mat_cache[key] = m
     return m
 
 
 func _glow_mat(color: Color) -> StandardMaterial3D:
+    var gkey := "glow_" + color.to_html(true)
+    if mat_cache.has(gkey):
+        return mat_cache[gkey]
     var m := StandardMaterial3D.new()
+    mat_cache[gkey] = m
     m.albedo_color = color
     m.emission_enabled = true
     m.emission = color
@@ -533,8 +583,8 @@ func _build_environment() -> void:
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color(0.82, 0.9, 1.0)
-    env.ambient_light_energy = 1.0
-    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.ambient_light_energy = 0.42
+    env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
     env.fog_enabled = true
     env.fog_light_color = Color(0.74, 0.88, 0.98)
     env.fog_density = 0.0008
@@ -544,10 +594,10 @@ func _build_environment() -> void:
 
     var sun := DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48.0, -35.0, 0.0)
-    sun.light_energy = 1.55
+    sun.light_energy = 1.15
     sun.light_color = Color(1.0, 0.96, 0.88)
     sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 90.0
+    sun.directional_shadow_max_distance = 140.0
     add_child(sun)
 
     var water := MeshInstance3D.new()
@@ -607,7 +657,7 @@ func _new_empire(aggr: float) -> Dictionary:
     return {
         "money": START_MONEY, "builders": 0, "brep": 0, "arep": 0, "blevel": 1,
         "structs": [], "jobs": [],
-        "ammo": [0, 0, 0, 0, 0], "aggr": aggr, "grudge": -1, "phase": "build",
+        "ammo": [0, 0, 0, 0, 0, 0, 0, 0], "jets": [], "aggr": aggr, "grudge": -1, "phase": "build",
         "salvo": randi_range(5, 7), "rest": 0.0, "think": randf_range(2.0, 4.0),
         "cool": 0.0, "dead": false, "wnodes": [], "mnodes": [], "auto": randf_range(0.2, 1.0),
     }
@@ -632,13 +682,7 @@ func _reset_state(count: int) -> void:
     sat_type = 0
     sat_mult = 1
     sat_cool = 0.0
-    player_off = Vector3(0.0, 0.0, 5.0)
-
-
-func _house_pos(slot: int) -> Vector2:
-    var col := slot % 10
-    var row := int(slot / 10)
-    return Vector2(-45.0 + float(col) * 5.0, 12.0 + float(row) * 6.0)
+    player_off = Vector3(0.0, 0.0, 24.0)
 
 
 func _struct_world(i: int, s: Dictionary) -> Vector3:
@@ -656,6 +700,7 @@ func _build_world() -> void:
     island_nodes.clear()
     island_pos.clear()
     projectiles.clear()
+    sorties.clear()
     launch_queue.clear()
     sat_marker = null
 
@@ -689,7 +734,18 @@ func _build_world() -> void:
                 _spawn_struct_node(i, s, 0.0)
             _refresh_struct_label(i, s)
         _refresh_workers(i)
+        var jl0: Array = e["jets"]
+        for jv0 in jl0:
+            var j0: Dictionary = jv0
+            j0["node"] = null
+            j0["state"] = "parked"
+        var pt: Array = e.get("ptrucks", [])
+        for pv in pt:
+            var pd: Dictionary = pv
+            _spawn_mtruck(i, int(pd["t"]), Vector2(float(pd["lx"]), float(pd["lz"])), int(pd["n"]), false)
+        e["ptrucks"] = []
         _sync_missiles(i)
+        _sync_jets(i)
         if bool(e["dead"]):
             var dead: Node3D = island_nodes[i]
             dead.position.y = -8.0
@@ -699,42 +755,6 @@ func _build_world() -> void:
     _look_at_target(false)
 
 
-func _make_island(i: int, p: Vector3) -> Node3D:
-    var root := Node3D.new()
-    root.name = "Island_%d" % i
-    root.position = p
-    root.rotation.y = _yaw_to(-p)
-    var team := _team(i)
-    var side := PLOT_HALF * 2.0
-    # team-coloured rim, then a checkered grass baseplate on top (completely empty)
-    _box(root, Vector3(side + 4.0, 1.2, side + 4.0), Vector3(0.0, -0.3, 0.0), team.darkened(0.25))
-    var top := MeshInstance3D.new()
-    var bm := BoxMesh.new()
-    bm.size = Vector3(side, 0.3, side)
-    top.mesh = bm
-    top.position = Vector3(0.0, 0.45, 0.0)
-    top.material_override = _checker_mat(i)
-    root.add_child(top)
-    _island_props(root)
-    # grey military apron behind the houses (missiles and air defense stand here)
-    _box(root, Vector3(side - 4.0, 0.06, 50.0), Vector3(0.0, 0.63, -23.0), Color(0.34, 0.36, 0.41))
-    var lab := Label3D.new()
-    lab.text = "YOU" if i == 0 else "ENEMY %d" % i
-    lab.font_size = 72
-    lab.pixel_size = 0.08
-    lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    lab.no_depth_test = true
-    lab.render_priority = 3
-    lab.outline_size = 16
-    lab.modulate = team.lightened(0.3)
-    lab.position = Vector3(0.0, 30.0, 0.0)
-    root.add_child(lab)
-    return root
-
-
-# =====================================================================
-# Structures: visuals
-# =====================================================================
 func _house_model(n: Node3D, color: Color, lvl: int) -> void:
     var glow := _glow_mat(Color(0.35, 0.95, 1.0))
     var hedge := Color(0.2, 0.5, 0.22)
@@ -788,50 +808,6 @@ func _house_model(n: Node3D, color: Color, lvl: int) -> void:
         _cyl(n, 0.03, 0.03, 0.8, Vector3(0.0, total + 0.6, 0.0), Color(0.6, 0.6, 0.65))
 
 
-func _defense_model(n: Node3D, t: int, team: Color) -> void:
-    var gray := Color(0.35, 0.38, 0.4)
-    var white := Color(0.9, 0.92, 0.95)
-    if t == 0:
-        _cyl(n, 0.6, 0.75, 0.6, Vector3(0.0, 0.3, 0.0), gray)
-        _sphere(n, 0.5, Vector3(0.0, 0.85, 0.0), white)
-        _box(n, Vector3(0.14, 0.14, 1.1), Vector3(0.0, 0.95, -0.6), Color(0.2, 0.2, 0.22))
-    elif t == 1:
-        _box(n, Vector3(1.4, 0.5, 2.0), Vector3(0.0, 0.45, 0.0), Color(0.3, 0.38, 0.28))
-        for k in range(3):
-            var c1 := _cyl(n, 0.14, 0.14, 1.4, Vector3((float(k) - 1.0) * 0.5, 1.1, 0.0), white)
-            c1.rotation.x = deg_to_rad(-60.0)
-        _box(n, Vector3(0.9, 0.9, 0.15), Vector3(-1.0, 1.0, 0.9), gray)
-    elif t == 2:
-        _box(n, Vector3(1.6, 0.4, 2.6), Vector3(0.0, 0.35, 0.0), Color(0.28, 0.33, 0.3))
-        for k in range(4):
-            var x2: float = (float(k % 2) - 0.5) * 0.8
-            var z2: float = (float(int(k / 2)) - 0.5) * 0.9
-            var c2 := _cyl(n, 0.15, 0.15, 1.7, Vector3(x2, 1.0, z2), white)
-            c2.rotation.x = deg_to_rad(-65.0)
-        _cyl(n, 0.08, 0.08, 1.8, Vector3(-1.1, 1.2, 1.0), gray)
-        _box(n, Vector3(0.9, 0.6, 0.1), Vector3(-1.1, 2.2, 1.0), gray)
-    elif t == 3:
-        _box(n, Vector3(2.0, 0.5, 3.2), Vector3(0.0, 0.4, 0.0), Color(0.25, 0.3, 0.28))
-        for k in range(6):
-            var x3: float = (float(k % 3) - 1.0) * 0.55
-            var z3: float = (float(int(k / 3)) - 0.5) * 0.9
-            var c3 := _cyl(n, 0.16, 0.16, 2.0, Vector3(x3, 1.2, z3), white)
-            c3.rotation.x = deg_to_rad(-70.0)
-        _cyl(n, 0.1, 0.1, 2.6, Vector3(1.2, 1.5, 1.2), gray)
-        var dish3 := _sphere(n, 0.7, Vector3(1.2, 2.9, 1.2), white)
-        dish3.scale = Vector3(1.0, 0.25, 1.0)
-    else:
-        _box(n, Vector3(2.4, 0.5, 3.6), Vector3(0.0, 0.4, 0.0), Color(0.22, 0.27, 0.25))
-        for k in range(8):
-            var x4: float = (float(k % 4) - 1.5) * 0.5
-            var z4: float = (float(int(k / 4)) - 0.5) * 1.0
-            var c4 := _cyl(n, 0.18, 0.18, 2.4, Vector3(x4, 1.4, z4), white)
-            c4.rotation.x = deg_to_rad(-72.0)
-        _box(n, Vector3(1.6, 1.8, 0.2), Vector3(0.0, 1.6, 2.2), gray)
-        _box(n, Vector3(1.2, 1.2, 0.1), Vector3(0.0, 1.6, 2.35), Color(0.3, 0.7, 0.9))
-    _sphere(n, 0.14, Vector3(0.0, 0.1, 0.0), team)
-
-
 func _make_rubble() -> Node3D:
     var r := Node3D.new()
     for k in range(7):
@@ -863,10 +839,11 @@ func _spawn_struct_node(i: int, s: Dictionary, anim_time: float) -> void:
         if i > 0:
             color = team.lightened(0.1 * float(slot % 3))
         _house_model(node, color, int(s["lvl"]))
+        _merge_model(node, [])
         s["bs"] = 2.2
     else:
         _defense_model(node, sub, team)
-        var dscale := [1.4, 1.7, 2.0, 2.4, 2.8]
+        var dscale := [2.2, 1.5, 1.2, 1.15, 1.15]
         s["bs"] = dscale[sub]
     var target := _struct_scale(s)
     if anim_time > 0.0:
@@ -964,7 +941,7 @@ func _refresh_workers(i: int) -> void:
     for kind in range(3):
         for k in range(int(counts[kind])):
             var ch := _make_character(shirts[kind])
-            ch.position = Vector3(12.0 + float(k) * 4.0, 0.6, 14.0 + float(kind) * 7.0)
+            ch.position = Vector3(-8.0 + float(k) * 4.0, 0.6, 20.0 + float(kind) * 7.0)
             ch.rotation.y = randf_range(-0.6, 0.6)
             ch.scale = Vector3.ONE * 1.5
             _isl(i).add_child(ch)
@@ -1187,22 +1164,6 @@ func _do_hire(i: int, kind: String) -> int:
     return 0
 
 
-func _do_buy_missile(i: int, t: int, n: int = 1) -> int:
-    var e: Dictionary = emp[i]
-    var room := MAX_MISSILES - _ammo_total(i)
-    if room < 1:
-        return 2
-    var cnt := mini(n, room)
-    var price: int = int(MISSILES[t]["price"]) * cnt
-    if int(e["money"]) < price:
-        return 1
-    e["money"] = int(e["money"]) - price
-    var ammo: Array = e["ammo"]
-    ammo[t] = int(ammo[t]) + cnt
-    _sync_missiles(i)
-    return 0
-
-
 func _process_jobs(delta: float) -> void:
     for i in range(island_count):
         var e: Dictionary = emp[i]
@@ -1266,11 +1227,11 @@ func _err_text(code: int, what: String) -> String:
         return "%s: limit reached." % what
     if code == 3:
         return "Hire a builder first (WORKER > HIRE)."
+    if code == 4:
+        return "%s is still locked. Keep playing to unlock it." % what
+    if code == 6:
+        return "That spot is blocked or outside the military area."
     return "Nothing to do for %s." % what
-
-
-const AI_PAD_UNLOCK := [0.0, 120.0, 330.0, 650.0, 30.0]
-const AI_PAD_ORDER := [0, 4, 1, 2, 3]
 
 
 func _ai_tick(i: int, delta: float) -> void:
@@ -1286,68 +1247,6 @@ func _ai_tick(i: int, delta: float) -> void:
         _ai_salvo(i)
 
 
-func _ai_think(i: int) -> void:
-    var e: Dictionary = emp[i]
-    var money_i: int = e["money"]
-    var aggr: float = e["aggr"]
-    var nb: int = e["builders"]
-    var lvl: int = e["blevel"]
-    var defs_all := _count_structs(i, "defense", -1, false)
-
-    # 1. builders first: they raise houses for income by themselves
-    if nb < 1:
-        _do_hire(i, "builder")
-        return
-    if nb < 2 and elapsed > 45.0:
-        if _do_hire(i, "builder") == 0:
-            return
-    # 2. a repair crew once something is broken (or after a while)
-    var hurt := _count_destroyed(i) > 0 or _damaged_count(i) > 0
-    if int(e["brep"]) < 1 and (hurt or elapsed > 160.0):
-        if _do_hire(i, "brep") == 0:
-            return
-    # 3. build a stockpile before the war starts
-    if elapsed > 150.0 and _ammo_total(i) < int(e["salvo"]):
-        var mt0 := _ai_pick_weapon(i)
-        if mt0 >= 0 and _do_buy_missile(i, mt0) == 0:
-            return
-    # 4. air defense grows with time (cautious rivals build earlier)
-    var want_def := mini(MAX_DEFENSES, int((elapsed - 60.0) / 70.0) + (1 if aggr < 0.5 else 0))
-    if defs_all < want_def:
-        var tier := mini(4, int(elapsed / 220.0))
-        var dt := -1
-        for t2 in range(tier, -1, -1):
-            if money_i >= int(DEFENSES[t2]["price"]):
-                dt = t2
-                break
-        if dt >= 0:
-            if _do_buy_defense(i, dt) == 0:
-                return
-    if int(e["arep"]) < 1 and defs_all >= 2:
-        if _do_hire(i, "arep") == 0:
-            return
-    # 5. better builders = better houses = more money
-    if lvl < MAX_LEVEL and elapsed > 80.0 * float(lvl):
-        var need := int(float(BUILDER_UPGRADE[lvl - 1]) * 1.2)
-        if money_i >= need:
-            if _do_upgrade_builder(i) == 0:
-                return
-    # 6. more crews as the game goes on
-    var goal_b := mini(MAX_BUILDERS, 2 + int(elapsed / 150.0))
-    if nb < goal_b and money_i >= int(float(_worker_price(i, "builder")) * 1.2):
-        if _do_hire(i, "builder") == 0:
-            return
-    var goal_r := mini(MAX_BREP, 1 + int(elapsed / 300.0))
-    if int(e["brep"]) < goal_r and money_i >= int(float(_worker_price(i, "brep")) * 1.5):
-        if _do_hire(i, "brep") == 0:
-            return
-    # 7. keep stockpiling weapons for the next salvo
-    if _ammo_total(i) < int(e["salvo"]) + 3:
-        var mt := _ai_pick_weapon(i)
-        if mt >= 0:
-            _do_buy_missile(i, mt)
-
-
 func _damaged_count(i: int) -> int:
     var e: Dictionary = emp[i]
     var structs: Array = e["structs"]
@@ -1357,24 +1256,6 @@ func _damaged_count(i: int) -> int:
         if str(s["state"]) == "ok" and float(s["hp"]) < float(s["maxhp"]) - 0.5:
             n += 1
     return n
-
-
-func _ai_pick_weapon(i: int) -> int:
-    var e: Dictionary = emp[i]
-    if _ammo_total(i) >= MAX_MISSILES:
-        return -1
-    var options: Array = []
-    for t in AI_PAD_ORDER:
-        if elapsed < float(AI_PAD_UNLOCK[t]):
-            continue
-        if int(e["money"]) < int(MISSILES[t]["price"]):
-            continue
-        options.append(t)
-    if options.is_empty():
-        return -1
-    if options.size() > 1 and randf() < 0.65:
-        return int(options[options.size() - 1])
-    return int(options[randi() % options.size()])
 
 
 func _ai_pick_target(i: int) -> int:
@@ -1421,45 +1302,6 @@ func _weighted_struct(target: int) -> Dictionary:
     return pool[pool.size() - 1]
 
 
-func _ai_salvo(i: int) -> void:
-    var e: Dictionary = emp[i]
-    var target := _ai_pick_target(i)
-    var ammo: Array = e["ammo"]
-    var primary := {}
-    if target >= 0:
-        primary = _weighted_struct(target)
-    if target < 0 or primary.is_empty():
-        e["rest"] = 20.0
-        return
-    var delay := 0.0
-    var fired := 0
-    for t in range(5):
-        var n: int = ammo[t]
-        for k in range(n):
-            var aim_s := primary
-            if randf() < 0.3:
-                var alt := _weighted_struct(target)
-                if not alt.is_empty():
-                    aim_s = alt
-            var aim := Vector2(float(aim_s["lx"]), float(aim_s["lz"]))
-            _queue_launch(i, target, t, aim, delay)
-            delay += 0.22
-            fired += 1
-        ammo[t] = 0
-    var aggr: float = e["aggr"]
-    var base_rest := randf_range(70.0, 115.0) * (1.3 - 0.6 * aggr)
-    e["rest"] = base_rest * maxf(0.55, 1.0 - elapsed / 1500.0)
-    e["salvo"] = randi_range(5, 8) + int(elapsed / 240.0)
-    e["grudge"] = target
-    if target == 0 and fired > 0:
-        _say("WARNING! Enemy %d launched %d missiles/drones at you!" % [i, fired])
-        _play_ui("siren", -3.0)
-
-
-
-# =====================================================================
-# Combat: launch queue, flight, air defense, blasts, collapse
-# =====================================================================
 func _queue_launch(attacker: int, target: int, t: int, aim: Vector2, delay: float) -> void:
     launch_queue.append({"a": attacker, "tg": target, "t": t, "aim": aim, "delay": delay})
 
@@ -1472,13 +1314,16 @@ func _process_launch_queue(delta: float) -> void:
         if d > 0.0:
             continue
         launch_queue.remove_at(k)
-        _spawn_missile(int(q["a"]), int(q["tg"]), int(q["t"]), q["aim"])
+        if q.has("jet"):
+            _start_sortie(int(q["a"]), int(q["tg"]), q["jet"], q["aim"])
+        else:
+            _spawn_missile(int(q["a"]), int(q["tg"]), int(q["t"]), q["aim"])
 
 
 func _make_missile_model(friendly: bool, mtype: int, with_trail: bool = true) -> Node3D:
     var root := Node3D.new()
     var model := Node3D.new()
-    var sc: float = [2.2, 2.8, 2.6, 3.0, 2.2][mtype]
+    var sc: float = [2.2, 2.8, 2.6, 3.0, 2.2, 1.7, 2.4, 4.0][mtype]
     model.scale = Vector3.ONE * sc
     root.add_child(model)
     var body_col := Color(0.93, 0.93, 0.96) if friendly else Color(0.4, 0.08, 0.08)
@@ -1503,6 +1348,13 @@ func _make_missile_model(friendly: bool, mtype: int, with_trail: bool = true) ->
     elif mtype == 3:
         body_col = Color(0.25, 0.27, 0.3) if friendly else Color(0.35, 0.05, 0.05)
         tip_col = Color(1.0, 0.85, 0.2)
+    elif mtype == 5:
+        body_col = Color(0.6, 0.62, 0.6) if friendly else Color(0.4, 0.12, 0.1)
+    elif mtype == 6:
+        body_col = Color(0.26, 0.28, 0.32) if friendly else Color(0.3, 0.06, 0.06)
+        tip_col = Color(0.85, 0.15, 0.15)
+    elif mtype == 7:
+        tip_col = Color(0.95, 0.15, 0.12)
     var body := _cyl(model, 0.2, 0.2, 1.2, Vector3.ZERO, body_col)
     body.rotation.x = PI / 2.0
     var nose := _cyl(model, 0.0, 0.2, 0.45, Vector3(0.0, 0.0, -0.82), tip_col)
@@ -1525,14 +1377,14 @@ func _make_missile_model(friendly: bool, mtype: int, with_trail: bool = true) ->
 
 func _spawn_missile(attacker: int, target: int, t: int, aim_local: Vector2) -> void:
     var info: Dictionary = MISSILES[t]
-    var from_pos := _take_missile_pos(attacker, t) + Vector3(0.0, 4.0, 0.0)
+    var from_pos := _take_missile_pos(attacker, t) + Vector3(0.0, 1.0, 0.0)
     var warheads: int = info["count"]
     var cep: float = info["cep"]
     var isl_t := _isl(target)
     for w in range(warheads):
         var lp := aim_local + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * cep
-        lp.x = clampf(lp.x, -48.0, 48.0)
-        lp.y = clampf(lp.y, -48.0, 48.0)
+        lp.x = clampf(lp.x, -78.0, 78.0)
+        lp.y = clampf(lp.y, -78.0, 78.0)
         var to_pos := isl_t.to_global(Vector3(lp.x, 1.4, lp.y))
         var m := _make_missile_model(attacker == 0, t)
         level_root.add_child(m)
@@ -1642,7 +1494,7 @@ func _on_impact(d: Dictionary) -> void:
     var lp: Vector2 = d["lp"]
     var info: Dictionary = MISSILES[wt]
     var pos: Vector3 = d["end"]
-    var sizes := [4.0, 5.5, 5.0, 4.5, 2.4]
+    var sizes := [4.0, 5.5, 5.0, 4.5, 2.4, 3.0, 3.5, 12.0]
     var esize: float = sizes[wt]
     _explode(pos, Color(1.0, 0.5, 0.1), esize)
     _play3d("boom", pos, 6.0 + esize)
@@ -1653,7 +1505,9 @@ func _on_impact(d: Dictionary) -> void:
     if target == 0:
         _vibrate(120)
         shake = 0.6
-    _apply_blast(target, lp, float(info["radius"]), float(info["dmg"]), attacker)
+    var blast_r: float = float(d["jrad"]) if d.has("jrad") else float(info["radius"])
+    var blast_d: float = float(d["jdmg"]) if d.has("jdmg") else float(info["dmg"])
+    _apply_blast(target, lp, blast_r, blast_d, attacker)
     _refresh_ui()
     _save_game()
 
@@ -1716,6 +1570,7 @@ func _check_alive(i: int, attacker: int) -> void:
 func _island_collapsed(i: int, by: int) -> void:
     var e: Dictionary = emp[i]
     e["dead"] = true
+    _clear_jets(i)
     var jobs: Array = e["jobs"]
     jobs.clear()
     if i == 0:
@@ -1936,6 +1791,8 @@ func _process(delta: float) -> void:
         for i in range(1, island_count):
             _ai_tick(i, delta)
         _update_projectiles(delta)
+        _update_sorties(delta)
+        _process_jets(delta)
         sat_cool = maxf(0.0, sat_cool - delta)
         ui_timer += delta
         if ui_timer >= 0.5:
@@ -2070,6 +1927,9 @@ func _open_sat() -> void:
     _close_windows()
     _ensure_target()
     sat_open = true
+    for cl in clouds:
+        var cn: Node3D = cl
+        cn.visible = false
     sat_island = selected_enemy
     sat_has_point = false
     sat_drag_id = -1
@@ -2090,12 +1950,17 @@ func _close_sat() -> void:
     if not sat_open:
         return
     sat_open = false
+    place_mode = false
+    for cl2 in clouds:
+        var cn2: Node3D = cl2
+        cn2.visible = true
     sat_drag_id = -1
     camera.fov = 70.0
     _remove_sat_marker()
     _update_rings()
     _sat_ui_show(false)
-    selected_enemy = sat_island
+    if sat_island > 0:
+        selected_enemy = sat_island
     _ensure_target()
     _look_at_target(false)
     camera.position = _player_world() + Vector3(0.0, 6.0, 12.0)
@@ -2130,7 +1995,7 @@ func _sat_screen_to_local(pos: Vector2) -> Vector2:
     var tt := (plane_y - o.y) / dir.y
     var hit := o + dir * tt
     var local := _isl(sat_island).to_local(hit)
-    return Vector2(clampf(local.x, -48.0, 48.0), clampf(local.z, -48.0, 48.0))
+    return Vector2(clampf(local.x, -78.0, 78.0), clampf(local.z, -78.0, 78.0))
 
 
 func _sat_set_point(pos: Vector2) -> void:
@@ -2138,11 +2003,6 @@ func _sat_set_point(pos: Vector2) -> void:
     sat_has_point = true
     _update_sat_marker()
     _refresh_sat()
-
-
-func _sat_blast_radius() -> float:
-    var info: Dictionary = MISSILES[sat_type]
-    return maxf(4.0, float(info["radius"]) + float(info["cep"]) * 0.5)
 
 
 func _update_sat_marker() -> void:
@@ -2193,13 +2053,23 @@ func _save_game() -> void:
                 "kind": s["kind"], "sub": s["sub"], "lx": s["lx"], "lz": s["lz"], "hp": s["hp"],
                 "lvl": s["lvl"], "state": s["state"], "slot": s["slot"], "mag": s["mag"],
             })
+        var jl: Array = []
+        var jets: Array = e["jets"]
+        for jv in jets:
+            var jj: Dictionary = jv
+            jl.append({"t": jj["t"], "slot": jj["slot"]})
+        var tl: Array = []
+        var trucks: Array = e["mnodes"]
+        for tv in trucks:
+            var tt: Dictionary = tv
+            tl.append({"t": tt["t"], "n": tt["n"], "lx": tt["lx"], "lz": tt["lz"]})
         arr.append({
             "money": e["money"], "builders": e["builders"], "brep": e["brep"], "arep": e["arep"],
             "blevel": e["blevel"], "ammo": e["ammo"], "aggr": e["aggr"], "grudge": e["grudge"],
-            "salvo": e["salvo"], "rest": e["rest"], "dead": e["dead"], "structs": sl,
+            "salvo": e["salvo"], "rest": e["rest"], "dead": e["dead"], "structs": sl, "jets": jl, "mtrucks": tl,
         })
     var data := {
-        "v": 6, "island_count": island_count, "emp": arr,
+        "v": 7, "island_count": island_count, "emp": arr,
         "selected": selected_enemy, "elapsed": elapsed,
     }
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -2216,7 +2086,7 @@ func _load_game() -> bool:
     var parsed = JSON.parse_string(f.get_as_text())
     if typeof(parsed) != TYPE_DICTIONARY:
         return false
-    if int(parsed.get("v", 0)) != 6:
+    if int(parsed.get("v", 0)) != 7:
         return false
     var count := clampi(int(parsed.get("island_count", 2)), 2, 4)
     var emp_raw = parsed.get("emp", [])
@@ -2239,8 +2109,20 @@ func _load_game() -> bool:
         e["dead"] = bool(src.get("dead", false))
         var am = src.get("ammo", [])
         var ammo: Array = e["ammo"]
-        for t in range(5):
+        for t in range(NM):
             ammo[t] = int(am[t]) if t < am.size() else 0
+        var jraw = src.get("jets", [])
+        var jlist: Array = e["jets"]
+        for jv in jraw:
+            var jd: Dictionary = jv
+            if jlist.size() < MAX_JETS:
+                jlist.append({"t": clampi(int(jd.get("t", 0)), 0, JETS.size() - 1), "state": "parked", "slot": int(jd.get("slot", jlist.size())), "node": null, "timer": 0.0})
+        var traw = src.get("mtrucks", [])
+        var ptl: Array = []
+        for tv in traw:
+            var td: Dictionary = tv
+            ptl.append(td)
+        e["ptrucks"] = ptl
         var raw_structs = src.get("structs", [])
         for rv in raw_structs:
             var r: Dictionary = rv
@@ -2401,6 +2283,9 @@ func _build_hud() -> void:
     stat_aa = Label.new()
     _style_text(stat_aa, 22, Color(1.0, 1.0, 1.0))
     v.add_child(stat_aa)
+    stat_jets = Label.new()
+    _style_text(stat_jets, 22, Color(1.0, 1.0, 1.0))
+    v.add_child(stat_jets)
     stat_house = Label.new()
     _style_text(stat_house, 22, Color(1.0, 1.0, 1.0))
     v.add_child(stat_house)
@@ -2434,111 +2319,6 @@ func _build_hud() -> void:
     ui_root.add_child(menu_btn)
     menu_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
     menu_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-
-
-func _build_sat_ui() -> void:
-    sat_root = Control.new()
-    sat_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    ui_root.add_child(sat_root)
-    sat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    sat_panels = []
-
-    sat_money = Label.new()
-    _style_text(sat_money, 36, Color(0.25, 1.0, 0.3))
-    sat_money.position = Vector2(14.0, 8.0)
-    sat_root.add_child(sat_money)
-
-    var top := VBoxContainer.new()
-    top.add_theme_constant_override("separation", 8)
-    sat_root.add_child(top)
-    var tp := PanelContainer.new()
-    _style_panel(tp, Color(0.16, 0.19, 0.23, 0.92))
-    top.add_child(tp)
-    sat_title = Label.new()
-    sat_title.text = "SELECT TARGET"
-    sat_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    sat_title.custom_minimum_size = Vector2(520.0, 0.0)
-    sat_title.add_theme_font_size_override("font_size", 36)
-    tp.add_child(sat_title)
-    sat_island_box = HBoxContainer.new()
-    sat_island_box.alignment = BoxContainer.ALIGNMENT_CENTER
-    sat_island_box.add_theme_constant_override("separation", 10)
-    top.add_child(sat_island_box)
-    sat_island_btns = []
-    for k in range(1, 4):
-        var b := _make_button("ENEMY %d" % k, Color(0.7, 0.2, 0.2), _sat_pick_island.bind(k))
-        b.custom_minimum_size = Vector2(170.0, 54.0)
-        sat_island_box.add_child(b)
-        sat_island_btns.append(b)
-    top.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 6)
-    top.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    sat_panels.append(top)
-
-    var lp := VBoxContainer.new()
-    lp.add_theme_constant_override("separation", 6)
-    lp.position = Vector2(12.0, 70.0)
-    sat_root.add_child(lp)
-    sat_panels.append(lp)
-    sat_type_btns = []
-    for t in range(5):
-        var tb := Button.new()
-        tb.custom_minimum_size = Vector2(310.0, 78.0)
-        _style_button(tb, Color(0.07, 0.12, 0.2, 0.88))
-        for stn in ["normal", "hover", "pressed", "disabled", "focus"]:
-            var sbx: StyleBoxFlat = tb.get_theme_stylebox(stn)
-            sbx.content_margin_left = 84.0
-        tb.alignment = HORIZONTAL_ALIGNMENT_LEFT
-        tb.add_theme_font_size_override("font_size", 20)
-        tb.pressed.connect(_play_ui.bind("click", -8.0))
-        tb.pressed.connect(_sat_set_type.bind(t))
-        var ic := MiniIcon.new()
-        ic.kind = 0
-        ic.sub = t
-        ic.position = Vector2(8.0, 7.0)
-        ic.size = Vector2(64.0, 64.0)
-        tb.add_child(ic)
-        lp.add_child(tb)
-        sat_type_btns.append(tb)
-
-    var rb := VBoxContainer.new()
-    rb.add_theme_constant_override("separation", 14)
-    sat_root.add_child(rb)
-    sat_mult_btns = []
-    for m in [1, 5]:
-        var xb := _make_button("X%d" % m, Color(0.05, 0.05, 0.06), _sat_set_mult.bind(m))
-        xb.custom_minimum_size = Vector2(104.0, 104.0)
-        xb.add_theme_font_size_override("font_size", 36)
-        rb.add_child(xb)
-        sat_mult_btns.append(xb)
-    rb.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, 14)
-    rb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-    rb.grow_vertical = Control.GROW_DIRECTION_BOTH
-    sat_panels.append(rb)
-
-    var bot := VBoxContainer.new()
-    bot.alignment = BoxContainer.ALIGNMENT_CENTER
-    bot.add_theme_constant_override("separation", 8)
-    bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    sat_root.add_child(bot)
-    sat_hint = Label.new()
-    sat_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    sat_hint.custom_minimum_size = Vector2(820.0, 0.0)
-    sat_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    sat_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _style_text(sat_hint, 22, Color(1.0, 0.93, 0.6))
-    bot.add_child(sat_hint)
-    sat_back_btn = _make_button("Back", Color(0.05, 0.1, 0.2), _close_sat)
-    sat_back_btn.custom_minimum_size = Vector2(280.0, 64.0)
-    sat_back_btn.add_theme_font_size_override("font_size", 34)
-    sat_back_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
-    sat_back_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.4))
-    sat_back_btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.85, 0.1))
-    bot.add_child(sat_back_btn)
-    bot.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
-    bot.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    bot.grow_vertical = Control.GROW_DIRECTION_BEGIN
-    sat_panels.append(sat_back_btn)
-    sat_root.visible = false
 
 
 func _build_overlay() -> void:
@@ -2615,123 +2395,6 @@ func _sat_ui_show(on: bool) -> void:
     if on:
         _close_windows()
         _update_mult_style()
-
-
-func _refresh_sat() -> void:
-    if sat_root == null or emp.is_empty():
-        return
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    sat_money.text = "$ %s" % _fmt_money(int(e["money"]))
-    sat_title.text = "SELECT TARGET  -  ENEMY %d" % sat_island
-    for t in range(5):
-        var b: Button = sat_type_btns[t]
-        var info: Dictionary = MISSILES[t]
-        b.text = "%s\nDMG %d      x%d" % [info["short"], int(float(info["dmg"]) * float(info["count"])), int(ammo[t])]
-        if t == sat_type:
-            b.modulate = Color(1.0, 1.0, 1.0)
-        elif int(ammo[t]) > 0:
-            b.modulate = Color(0.72, 0.72, 0.78)
-        else:
-            b.modulate = Color(0.45, 0.45, 0.5)
-    for k in range(sat_island_btns.size()):
-        var ib: Button = sat_island_btns[k]
-        var idx := k + 1
-        if idx >= island_count:
-            ib.visible = false
-            continue
-        ib.visible = true
-        var te: Dictionary = emp[idx]
-        ib.disabled = bool(te["dead"])
-        ib.modulate = Color(1.0, 1.0, 1.0) if idx == sat_island else Color(0.7, 0.7, 0.7)
-
-
-# =====================================================================
-# Window and hotbar logic
-# =====================================================================
-
-
-func _refresh_ui() -> void:
-    if money_label == null or emp.is_empty():
-        return
-    var e: Dictionary = emp[0]
-    var money: int = e["money"]
-    var ammo: Array = e["ammo"]
-    var total := _ammo_total(0)
-    stat_missile.text = "Missiles   %d/%d" % [total, MAX_MISSILES]
-    stat_aa.text = "Air defense   %d/%d" % [_count_structs(0, "defense", -1, true), MAX_DEFENSES]
-    stat_house.text = "Houses   %d/%d" % [_count_structs(0, "house", -1, true), MAX_HOUSES]
-    money_label.text = "$ %s" % _fmt_money(money)
-    income_label.text = "%s/s" % _fmt_money(_income(0))
-    if elapsed < PEACE_TIME:
-        var left := int(PEACE_TIME - elapsed)
-        stats_label.text = "Peace time  %d:%02d" % [int(left / 60), left % 60]
-    else:
-        stats_label.text = "WAR! Rivals can attack"
-
-    # military window
-    for t in range(5):
-        var c: Dictionary = cards_missile[t]
-        var m: Dictionary = MISSILES[t]
-        var price: int = m["price"]
-        var info: Label = c["info"]
-        info.text = "DMG %d\nRadius %d    Evade %d%%\nOwned: %d" % [int(float(m["dmg"]) * float(m["count"])), int(m["radius"]), _evade(t), int(ammo[t])]
-        var b1: Button = c["b1"]
-        var b5: Button = c["b5"]
-        b1.text = "$%s   X1" % _fmt_money(price)
-        b5.text = "$%s   X5" % _fmt_money(price * 5)
-        b1.disabled = money < price or total >= MAX_MISSILES
-        b5.disabled = money < price * 5 or total + 5 > MAX_MISSILES
-    for t2 in range(5):
-        var c2: Dictionary = cards_aa[t2]
-        var d: Dictionary = DEFENSES[t2]
-        var dprice: int = d["price"]
-        var info2: Label = c2["info"]
-        info2.text = "Range %d    Shots %d\nReload %.1fs    Refill $%d\nOwned: %d" % [int(d["range"]), int(d["mag"]), float(d["cd"]), int(d["ref"]), _count_structs(0, "defense", t2, false)]
-        var db: Button = c2["b1"]
-        db.text = "$%s   BUY" % _fmt_money(dprice)
-        db.disabled = money < dprice or _count_structs(0, "defense", -1, false) >= MAX_DEFENSES
-
-    # worker window
-    var kinds := ["builder", "brep", "arep"]
-    var descs := ["Auto-builds and upgrades houses", "Fixes wrecked houses (they pay nothing while broken)", "Repairs wrecked air defense"]
-    for k in range(3):
-        var wc: Dictionary = cards_worker[k]
-        var kind: String = kinds[k]
-        var n := _worker_total(e, kind)
-        var mx := _worker_max(kind)
-        var winfo: Label = wc["info"]
-        winfo.text = "%s\nHired %d / %d" % [descs[k], n, mx]
-        var wb: Button = wc["b1"]
-        var wprice := _worker_price(0, kind)
-        if n >= mx:
-            wb.text = "MAX"
-            wb.disabled = true
-        else:
-            wb.text = "$%s   HIRE" % _fmt_money(wprice)
-            wb.disabled = money < wprice
-    var lvl: int = e["blevel"]
-    var ut: Label = up_card["title"]
-    var ui: Label = up_card["info"]
-    var ub: Button = up_card["b1"]
-    ut.text = "Builder Lv.%d" % lvl
-    if lvl >= MAX_LEVEL:
-        ui.text = "Max level reached.\nEvery house earns +$%d/s" % int(HOUSE_INCOME[MAX_LEVEL - 1])
-        ub.text = "MAX"
-        ub.disabled = true
-    else:
-        var uprice: int = BUILDER_UPGRADE[lvl - 1]
-        ui.text = "Houses Lv%d -> Lv%d\nEarning +$%d -> +$%d per house" % [lvl, lvl + 1, int(HOUSE_INCOME[lvl - 1]), int(HOUSE_INCOME[lvl])]
-        ub.text = "$%s   UPGRADE" % _fmt_money(uprice)
-        ub.disabled = money < uprice or int(e["builders"]) < 1
-    _refresh_hotbar()
-    if sat_open:
-        _refresh_sat()
-
-
-# =====================================================================
-# Touch helpers
-# =====================================================================
 
 
 func _over_ui(pos: Vector2) -> bool:
@@ -2892,18 +2555,6 @@ func _resume_game() -> void:
     game_state = "playing"
 
 
-func _def_pos(slot: int) -> Vector2:
-    var col := slot % 10
-    var row := int(slot / 10)
-    return Vector2(-45.0 + float(col) * 10.0, -4.0 - float(row) * 7.0)
-
-
-func _missile_pos(slot: int) -> Vector2:
-    var col := slot % 25
-    var row := int(slot / 25)
-    return Vector2(-46.0 + float(col) * 3.8, -26.0 - float(row) * 4.5)
-
-
 func _worker_total(e: Dictionary, kind: String) -> int:
     if kind == "builder":
         return int(e["builders"])
@@ -2929,20 +2580,6 @@ func _ammo_total(i: int) -> int:
     return n
 
 
-func _free_def_slot(i: int) -> int:
-    var e: Dictionary = emp[i]
-    var structs: Array = e["structs"]
-    var used := {}
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) == "defense":
-            used[int(s["slot"])] = true
-    for slot in range(MAX_DEFENSES):
-        if not used.has(slot):
-            return slot
-    return -1
-
-
 func _do_upgrade_builder(i: int) -> int:
     var e: Dictionary = emp[i]
     var lvl: int = e["blevel"]
@@ -2958,29 +2595,6 @@ func _do_upgrade_builder(i: int) -> int:
     if i == 0:
         _play_ui("build")
     return 0
-
-
-func _do_buy_defense(i: int, t: int) -> int:
-    var e: Dictionary = emp[i]
-    if _count_structs(i, "defense", -1, false) >= MAX_DEFENSES:
-        return 2
-    var price: int = DEFENSES[t]["price"]
-    if int(e["money"]) < price:
-        return 1
-    var slot := _free_def_slot(i)
-    if slot < 0:
-        return 2
-    e["money"] = int(e["money"]) - price
-    var dp := _def_pos(slot)
-    var s := _add_struct(i, "defense", t, dp.x, dp.y, "ok", slot)
-    _spawn_struct_node(i, s, 1.2)
-    _refresh_struct_label(i, s)
-    if i == 0:
-        _play_ui("hammer", -2.0)
-    return 0
-
-
-# ---------- automatic workers ----------
 
 
 func _island_tick(i: int, delta: float) -> void:
@@ -3072,60 +2686,6 @@ func _auto_restock(i: int) -> void:
 # ---------- standing missiles on the island ----------
 
 
-func _sync_missiles(i: int) -> void:
-    var e: Dictionary = emp[i]
-    var ammo: Array = e["ammo"]
-    var nodes: Array = e["mnodes"]
-    var used := {}
-    for nv in nodes:
-        var nd: Dictionary = nv
-        used[int(nd["slot"])] = true
-    var cursor := 0
-    for t in range(5):
-        var have := 0
-        for nv2 in nodes:
-            var nd2: Dictionary = nv2
-            if int(nd2["t"]) == t:
-                have += 1
-        while have < int(ammo[t]):
-            while cursor < MAX_MISSILES and used.has(cursor):
-                cursor += 1
-            if cursor >= MAX_MISSILES:
-                return
-            used[cursor] = true
-            var mp := _missile_pos(cursor)
-            var m := _make_missile_model(i == 0, t, false)
-            var msc: float = [2.2, 2.8, 2.6, 3.0, 2.2][t]
-            if t < 4:
-                m.rotation.x = PI / 2.0
-                m.position = Vector3(mp.x, 0.7 + 0.85 * msc * 1.5, mp.y)
-                m.scale = Vector3.ONE * 1.5
-            else:
-                m.position = Vector3(mp.x, 1.6, mp.y)
-                m.scale = Vector3.ONE * 1.0
-            _isl(i).add_child(m)
-            nodes.append({"t": t, "slot": cursor, "node": m})
-            have += 1
-
-
-func _take_missile_pos(i: int, t: int) -> Vector3:
-    var e: Dictionary = emp[i]
-    var nodes: Array = e["mnodes"]
-    for k in range(nodes.size() - 1, -1, -1):
-        var nd: Dictionary = nodes[k]
-        if int(nd["t"]) != t:
-            continue
-        nodes.remove_at(k)
-        var nn = nd["node"]
-        if nn != null and is_instance_valid(nn):
-            var n3: Node3D = nn
-            var p := n3.global_position
-            n3.queue_free()
-            return p
-        break
-    return _isl(i).to_global(Vector3(0.0, 3.0, -30.0))
-
-
 func _rebuild_node(i: int, s: Dictionary, anim: float) -> void:
     var old = s["node"]
     if old != null and is_instance_valid(old):
@@ -3133,40 +2693,6 @@ func _rebuild_node(i: int, s: Dictionary, anim: float) -> void:
         o.queue_free()
     s["node"] = null
     _spawn_struct_node(i, s, anim)
-
-
-func _open_sat_with(t: int) -> void:
-    _open_sat()
-    if sat_open:
-        sat_type = t
-        _refresh_sat()
-
-
-func _sat_tap(pos: Vector2) -> void:
-    if game_state != "playing" or not sat_open or sat_cool > 0.0:
-        return
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    var have: int = ammo[sat_type]
-    sat_local = _sat_screen_to_local(pos)
-    sat_has_point = true
-    _update_sat_marker()
-    if have < 1:
-        _play_ui("error")
-        _say("No %s left. Buy more in MILITARY, or pick another weapon." % MISSILES[sat_type]["short"])
-        _refresh_sat()
-        return
-    var n := mini(sat_mult, have)
-    var delay := 0.0
-    for k in range(n):
-        _queue_launch(0, sat_island, sat_type, sat_local, delay)
-        delay += 0.14
-    ammo[sat_type] = have - n
-    sat_cool = 0.22
-    _say("%d x %s launched at Enemy %d!" % [n, MISSILES[sat_type]["short"], sat_island])
-    _vibrate(40)
-    _refresh_sat()
-    _refresh_ui()
 
 
 func _fmt_money(n: int) -> String:
@@ -3233,29 +2759,6 @@ func _make_slot(idx: int) -> Dictionary:
     return {"btn": b, "icon": ic, "lbl": lbl}
 
 
-func _build_hotbar() -> void:
-    hot_box = HBoxContainer.new()
-    hot_box.add_theme_constant_override("separation", 6)
-    ui_root.add_child(hot_box)
-    var bag := Button.new()
-    bag.custom_minimum_size = Vector2(74.0, 74.0)
-    _style_button(bag, Color(0.14, 0.18, 0.26, 0.9))
-    var bi := MiniIcon.new()
-    bi.kind = 6
-    bag.add_child(bi)
-    bi.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
-    hot_box.add_child(bag)
-    hot_slots = []
-    for k in range(10):
-        var d := _make_slot(k)
-        var sb: Button = d["btn"]
-        hot_box.add_child(sb)
-        hot_slots.append(d)
-    hot_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 6)
-    hot_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-    hot_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
-
-
 func _tab_style(btns: Array, sel: int) -> void:
     for k in range(btns.size()):
         var b: Button = btns[k]
@@ -3279,7 +2782,7 @@ func _make_window(tab_names: Array, on_tab: Callable, tab_btns: Array) -> Dictio
     v.add_child(head)
     for k in range(tab_names.size()):
         var tb := _make_button(str(tab_names[k]), Color(0.05, 0.05, 0.06), on_tab.bind(k))
-        tb.custom_minimum_size = Vector2(220.0, 54.0)
+        tb.custom_minimum_size = Vector2(205.0, 54.0)
         tb.add_theme_font_size_override("font_size", 26)
         head.add_child(tb)
         tab_btns.append(tb)
@@ -3355,45 +2858,6 @@ func _make_card(icon_kind: int, icon_sub: int, title: String, lines: Array, cb1:
     return {"card": card, "title": t, "info": info, "b1": b1, "b5": b5}
 
 
-func _evade(t: int) -> int:
-    var sum := 0.0
-    for d in range(5):
-        sum += float(DEF_TABLE[d][t])
-    return int(round((1.0 - sum / 5.0) * 100.0))
-
-
-func _build_military_window() -> void:
-    mil_tab_btns = []
-    var w := _make_window(["MISSILE", "ANTI - AIR"], _mil_tab, mil_tab_btns)
-    mil_panel = w["panel"]
-    var v: VBoxContainer = w["vbox"]
-    var gm := _make_grid(v)
-    mil_body_missile = gm.get_parent()
-    cards_missile = []
-    for t in range(5):
-        var m: Dictionary = MISSILES[t]
-        var c := _make_card(0, t, str(m["name"]), [
-            "DMG %d" % int(float(m["dmg"]) * float(m["count"])),
-            "Radius %d    Evade %d%%" % [int(m["radius"]), _evade(t)],
-            str(m["cls"])],
-            _ui_buy_missile.bind(t, 1), _ui_buy_missile.bind(t, 5))
-        gm.add_child(c["card"])
-        cards_missile.append(c)
-    var ga := _make_grid(v)
-    mil_body_aa = ga.get_parent()
-    cards_aa = []
-    for t in range(5):
-        var d: Dictionary = DEFENSES[t]
-        var c2 := _make_card(1, t, str(d["name"]), [
-            "Range %d    Shots %d" % [int(d["range"]), int(d["mag"])],
-            "Reload %.1fs    Refill $%d" % [float(d["cd"]), int(d["ref"])],
-            str(d["cls"])],
-            _ui_buy_def.bind(t), Callable())
-        ga.add_child(c2["card"])
-        cards_aa.append(c2)
-    mil_body_aa.hide()
-
-
 func _build_worker_window() -> void:
     work_tab_btns = []
     var w := _make_window(["HIRE", "UPGRADE"], _work_tab, work_tab_btns)
@@ -3466,28 +2930,11 @@ func _toggle_work() -> void:
     _refresh_ui()
 
 
-func _mil_tab(k: int) -> void:
-    mil_tab = k
-    mil_body_missile.visible = k == 0
-    mil_body_aa.visible = k == 1
-    _tab_style(mil_tab_btns, k)
-
-
 func _work_tab(k: int) -> void:
     work_tab = k
     work_body_hire.visible = k == 0
     work_body_up.visible = k == 1
     _tab_style(work_tab_btns, k)
-
-
-func _on_hot_slot(idx: int) -> void:
-    if game_state != "playing" or idx >= hot_items.size():
-        return
-    var it: Dictionary = hot_items[idx]
-    if str(it["k"]) == "m":
-        _open_sat_with(int(it["t"]))
-    else:
-        _say("%s x%d on your island. Air defense shoots incoming missiles by itself." % [DEFENSES[int(it["t"])]["short"], int(it["n"])])
 
 
 func _ui_buy_missile(t: int, n: int) -> void:
@@ -3509,86 +2956,6 @@ func _ui_upgrade_builder() -> void:
 # =====================================================================
 
 
-func _refresh_hotbar() -> void:
-    var e: Dictionary = emp[0]
-    var ammo: Array = e["ammo"]
-    hot_items = []
-    for t in range(5):
-        if int(ammo[t]) > 0:
-            hot_items.append({"k": "m", "t": t, "n": int(ammo[t])})
-    for t2 in range(5):
-        var n := _count_structs(0, "defense", t2, true)
-        if n > 0:
-            hot_items.append({"k": "d", "t": t2, "n": n})
-    for idx in range(hot_slots.size()):
-        var d: Dictionary = hot_slots[idx]
-        var b: Button = d["btn"]
-        var ic: MiniIcon = d["icon"]
-        var lbl: Label = d["lbl"]
-        if idx < hot_items.size():
-            var it: Dictionary = hot_items[idx]
-            b.visible = true
-            ic.visible = true
-            ic.kind = 0 if str(it["k"]) == "m" else 1
-            ic.sub = int(it["t"])
-            ic.queue_redraw()
-            lbl.text = "x%d" % int(it["n"])
-        else:
-            ic.visible = false
-            lbl.text = ""
-            b.visible = idx < 8
-
-
-func _selftest() -> void:
-    print("SELFTEST start")
-    await get_tree().process_frame
-    _start_new(3)
-    var me: Dictionary = emp[0]
-    me["money"] = 50000000
-    print("SELFTEST hire ", _do_hire(0, "builder"), _do_hire(0, "builder"), _do_hire(0, "brep"), _do_hire(0, "arep"))
-    for t in range(5):
-        print("SELFTEST buy ", t, " ", _do_buy_missile(0, t, 5), " ", _do_buy_defense(0, t))
-    print("SELFTEST up ", _do_upgrade_builder(0), _do_upgrade_builder(0))
-    _toggle_mil()
-    _mil_tab(1)
-    _close_windows()
-    _toggle_work()
-    _work_tab(1)
-    _close_windows()
-    _refresh_ui()
-    for k in range(120):
-        _process(0.25)
-    _refresh_ui()
-    _open_sat()
-    _sat_set_type(1)
-    _sat_set_mult(5)
-    for k2 in range(3):
-        await get_tree().process_frame
-    _sat_tap(Vector2(640.0, 360.0))
-    _sat_set_type(4)
-    sat_cool = 0.0
-    _sat_tap(Vector2(500.0, 300.0))
-    _sat_pick_island(2)
-    _close_sat()
-    for t2 in range(1, 3):
-        var ee: Dictionary = emp[t2]
-        ee["money"] = 5000000
-    elapsed = PEACE_TIME + 5.0
-    for k3 in range(1200):
-        _process(0.25)
-    _refresh_ui()
-    _save_game()
-    print("SELFTEST load ", _load_game())
-    _build_world()
-    _refresh_ui()
-    print("SELFTEST done")
-    get_tree().quit()
-
-
-# =====================================================================
-# Small procedural icons used by the shop cards, hotbar and satellite list
-# kind: 0 missile, 1 air defense, 2/3/4 workers, 5 house, 6 backpack
-# =====================================================================
 class MiniIcon extends Control:
     var kind := 0
     var sub := 0
@@ -3608,6 +2975,8 @@ class MiniIcon extends Control:
             _draw_house(w, h)
         elif kind == 6:
             _draw_bag(w, h)
+        elif kind == 7:
+            _draw_jet(w, h)
         else:
             _draw_worker(w, h)
 
@@ -3618,6 +2987,12 @@ class MiniIcon extends Control:
         if sub == 4:
             draw_colored_polygon(PackedVector2Array([Vector2(cx, h * 0.12), Vector2(w * 0.9, h * 0.8), Vector2(cx, h * 0.66), Vector2(w * 0.1, h * 0.8)]), Color(0.75, 0.77, 0.8))
             draw_rect(Rect2(cx - w * 0.04, h * 0.2, w * 0.08, h * 0.5), red)
+            return
+        if sub == 5:
+            for k in range(3):
+                var x0 := w * (0.28 + 0.22 * float(k))
+                draw_rect(Rect2(x0 - w * 0.05, h * 0.3, w * 0.1, h * 0.5), Color(0.62, 0.64, 0.62))
+                draw_colored_polygon(PackedVector2Array([Vector2(x0, h * 0.14), Vector2(x0 + w * 0.05, h * 0.3), Vector2(x0 - w * 0.05, h * 0.3)]), Color(0.85, 0.42, 0.18))
             return
         var bw := w * 0.1
         var col := white
@@ -3633,6 +3008,13 @@ class MiniIcon extends Control:
             bw = w * 0.17
             col = Color(0.4, 0.43, 0.48)
             tip = Color(1.0, 0.85, 0.2)
+        elif sub == 6:
+            bw = w * 0.09
+            col = Color(0.3, 0.32, 0.36)
+            tip = Color(0.85, 0.15, 0.15)
+        elif sub == 7:
+            bw = w * 0.2
+            tip = Color(0.9, 0.18, 0.15)
         var top := h * 0.1
         var nose := h * 0.26
         var bot := h * 0.8
@@ -3645,21 +3027,61 @@ class MiniIcon extends Control:
             for dx in [-0.55, 0.0, 0.55]:
                 draw_colored_polygon(PackedVector2Array([Vector2(cx + bw * dx, nose - h * 0.12), Vector2(cx + bw * dx + w * 0.04, nose), Vector2(cx + bw * dx - w * 0.04, nose)]), Color(1.0, 0.85, 0.2))
 
-    func _draw_defense(w: float, h: float) -> void:
-        var gray := Color(0.45, 0.5, 0.52)
-        var white := Color(0.9, 0.92, 0.95)
-        draw_rect(Rect2(w * 0.12, h * 0.72, w * 0.76, h * 0.14), gray)
-        if sub == 0:
-            draw_circle(Vector2(w * 0.45, h * 0.58), w * 0.18, white)
-            draw_rect(Rect2(w * 0.45, h * 0.52, w * 0.4, h * 0.07), Color(0.3, 0.3, 0.34))
-            return
-        var counts := [0, 3, 4, 6, 8]
-        var n: int = counts[sub]
+    func _wheels(w: float, h: float, n: int, x0: float, x1: float) -> void:
         for k in range(n):
-            var x0 := w * 0.22 + (w * 0.5) * float(k) / float(maxi(n - 1, 1))
-            draw_line(Vector2(x0, h * 0.72), Vector2(x0 + w * 0.14, h * 0.24), white, maxf(3.0, w * 0.06))
-        if sub >= 2:
-            draw_circle(Vector2(w * 0.82, h * 0.42), w * 0.08, Color(0.3, 0.85, 1.0))
+            var x := x0 + (x1 - x0) * float(k) / float(maxi(n - 1, 1))
+            draw_circle(Vector2(w * x, h * 0.84), w * 0.055, Color(0.08, 0.08, 0.09))
+            draw_circle(Vector2(w * x, h * 0.84), w * 0.025, Color(0.5, 0.5, 0.53))
+
+    func _draw_defense(w: float, h: float) -> void:
+        var gray := Color(0.5, 0.52, 0.54)
+        if sub == 0:
+            draw_rect(Rect2(w * 0.2, h * 0.7, w * 0.6, h * 0.16), gray.darkened(0.2))
+            draw_rect(Rect2(w * 0.3, h * 0.5, w * 0.34, h * 0.22), gray)
+            draw_rect(Rect2(w * 0.38, h * 0.2, w * 0.18, h * 0.3), Color(0.82, 0.84, 0.86))
+            draw_circle(Vector2(w * 0.47, h * 0.2), w * 0.09, Color(0.88, 0.89, 0.92))
+            draw_rect(Rect2(w * 0.04, h * 0.55, w * 0.3, h * 0.07), Color(0.15, 0.15, 0.17))
+            return
+        var body := Color(0.3, 0.38, 0.26)
+        if sub == 1 or sub == 4:
+            body = Color(0.76, 0.66, 0.48)
+        draw_rect(Rect2(w * 0.1, h * 0.66, w * 0.8, h * 0.1), body.darkened(0.2))
+        draw_rect(Rect2(w * 0.68, h * 0.5, w * 0.2, h * 0.18), body)
+        draw_rect(Rect2(w * 0.8, h * 0.54, w * 0.06, h * 0.08), Color(0.12, 0.2, 0.3))
+        _wheels(w, h, 3 if sub < 3 else 4, 0.22, 0.78)
+        if sub == 1:
+            draw_colored_polygon(PackedVector2Array([Vector2(w * 0.4, h * 0.66), Vector2(w * 0.18, h * 0.3), Vector2(w * 0.36, h * 0.2), Vector2(w * 0.58, h * 0.56)]), Color(0.72, 0.5, 0.28))
+            draw_line(Vector2(w * 0.1, h * 0.66), Vector2(w * 0.1, h * 0.2), Color(0.8, 0.8, 0.84), 3.0)
+            draw_circle(Vector2(w * 0.1, h * 0.2), w * 0.05, Color(0.85, 0.15, 0.15))
+        elif sub == 2:
+            draw_colored_polygon(PackedVector2Array([Vector2(w * 0.5, h * 0.66), Vector2(w * 0.2, h * 0.24), Vector2(w * 0.32, h * 0.16), Vector2(w * 0.6, h * 0.58)]), Color(0.78, 0.8, 0.77))
+        elif sub == 3:
+            for k in range(3):
+                var x0 := w * (0.22 + 0.1 * float(k))
+                draw_rect(Rect2(x0, h * 0.14, w * 0.075, h * 0.52), Color(0.32, 0.42, 0.28))
+            draw_rect(Rect2(w * 0.68, h * 0.2, w * 0.06, h * 0.26), Color(0.4, 0.46, 0.34))
+        else:
+            draw_colored_polygon(PackedVector2Array([Vector2(w * 0.5, h * 0.66), Vector2(w * 0.16, h * 0.28), Vector2(w * 0.32, h * 0.14), Vector2(w * 0.62, h * 0.56)]), Color(0.82, 0.72, 0.54))
+
+    func _draw_jet(w: float, h: float) -> void:
+        var cx := w * 0.5
+        var col := Color(0.62, 0.68, 0.72)
+        var span := 0.38
+        var sweep := 0.16
+        if sub == 4 or sub == 5:
+            col = Color(0.4, 0.43, 0.48)
+            span = 0.42
+            sweep = 0.2
+        elif sub == 2 or sub == 3:
+            span = 0.4
+            sweep = 0.24
+        draw_colored_polygon(PackedVector2Array([Vector2(cx, h * 0.08), Vector2(cx + w * 0.07, h * 0.3), Vector2(cx + w * 0.06, h * 0.82), Vector2(cx - w * 0.06, h * 0.82), Vector2(cx - w * 0.07, h * 0.3)]), col)
+        draw_colored_polygon(PackedVector2Array([Vector2(cx + w * 0.06, h * 0.4), Vector2(cx + w * span, h * (0.42 + sweep)), Vector2(cx + w * span, h * (0.5 + sweep)), Vector2(cx + w * 0.06, h * 0.66)]), col.darkened(0.12))
+        draw_colored_polygon(PackedVector2Array([Vector2(cx - w * 0.06, h * 0.4), Vector2(cx - w * span, h * (0.42 + sweep)), Vector2(cx - w * span, h * (0.5 + sweep)), Vector2(cx - w * 0.06, h * 0.66)]), col.darkened(0.12))
+        draw_colored_polygon(PackedVector2Array([Vector2(cx + w * 0.05, h * 0.72), Vector2(cx + w * 0.2, h * 0.86), Vector2(cx + w * 0.05, h * 0.86)]), col.darkened(0.2))
+        draw_colored_polygon(PackedVector2Array([Vector2(cx - w * 0.05, h * 0.72), Vector2(cx - w * 0.2, h * 0.86), Vector2(cx - w * 0.05, h * 0.86)]), col.darkened(0.2))
+        draw_rect(Rect2(cx - w * 0.025, h * 0.22, w * 0.05, h * 0.14), Color(0.15, 0.25, 0.4))
+        draw_circle(Vector2(cx, h * 0.86), w * 0.035, Color(1.0, 0.6, 0.2))
 
     func _draw_house(w: float, h: float) -> void:
         draw_rect(Rect2(w * 0.2, h * 0.45, w * 0.6, h * 0.4), Color(0.7, 0.32, 0.28))
@@ -3688,38 +3110,2144 @@ class MiniIcon extends Control:
         draw_rect(Rect2(cx + w * 0.3, h * 0.42, w * 0.16, h * 0.09), Color(0.6, 0.6, 0.65))
 
 
+func _wheel(parent: Node3D, x: float, z: float, r: float) -> void:
+    var w := _cyl(parent, r, r, 0.36, Vector3(x, r, z), Color(0.07, 0.07, 0.08))
+    w.rotation.x = PI / 2.0
+    var hub := _cyl(parent, r * 0.5, r * 0.5, 0.4, Vector3(x, r, z), Color(0.5, 0.5, 0.53))
+    hub.rotation.x = PI / 2.0
+
+
+# truck faces +x. Returns the height of the cargo deck.
+func _truck_chassis(parent: Node3D, body: Color, cab: Color, axles: int, length: float) -> float:
+    var half := length * 0.5
+    _box(parent, Vector3(length, 0.3, 1.3), Vector3(0.0, 0.7, 0.0), body.darkened(0.35))
+    var dl := length - 1.8
+    _box(parent, Vector3(dl, 0.14, 1.85), Vector3(-half + dl * 0.5, 0.92, 0.0), body)
+    var cx := half - 0.85
+    _box(parent, Vector3(1.55, 1.1, 1.85), Vector3(cx, 1.3, 0.0), cab)
+    _box(parent, Vector3(0.12, 0.5, 1.55), Vector3(half - 0.05, 1.5, 0.0), Color(0.1, 0.18, 0.26))
+    _box(parent, Vector3(0.8, 0.4, 0.06), Vector3(cx + 0.05, 1.5, 0.94), Color(0.1, 0.18, 0.26))
+    _box(parent, Vector3(0.8, 0.4, 0.06), Vector3(cx + 0.05, 1.5, -0.94), Color(0.1, 0.18, 0.26))
+    _box(parent, Vector3(0.3, 0.3, 1.95), Vector3(half + 0.05, 0.6, 0.0), body.darkened(0.45))
+    for sz in [-0.7, 0.7]:
+        var hl := _box(parent, Vector3(0.08, 0.16, 0.3), Vector3(half, 0.95, float(sz)), Color.WHITE)
+        hl.material_override = _glow_mat(Color(1.0, 0.95, 0.7))
+    var r := 0.52
+    for k in range(axles):
+        var ax := half - 1.1 - float(k) * 1.25
+        _wheel(parent, ax, 0.9, r)
+        _wheel(parent, ax, -0.9, r)
+    return 0.99
+
+
+func _msl_mesh(parent: Node3D, body: Color, tip: Color, ln: float, rad: float, wing: bool) -> Node3D:
+    var root := Node3D.new()
+    parent.add_child(root)
+    _cyl(root, rad, rad, ln * 0.78, Vector3(0.0, ln * 0.39, 0.0), body)
+    _cyl(root, 0.0, rad, ln * 0.22, Vector3(0.0, ln * 0.89, 0.0), tip)
+    _box(root, Vector3(rad * 4.5, ln * 0.12, 0.05), Vector3(0.0, ln * 0.06, 0.0), tip)
+    _box(root, Vector3(0.05, ln * 0.12, rad * 4.5), Vector3(0.0, ln * 0.06, 0.0), tip)
+    if wing:
+        _box(root, Vector3(0.04, ln * 0.4, rad * 9.0), Vector3(0.0, ln * 0.25, 0.0), body.lightened(0.1))
+    return root
+
+
+# config per missile type: truck colours, axles, length, rack tilt, missile size, layout
+func _mtruck_cfg(t: int) -> Dictionary:
+    if t == 0:
+        return {"body": Color(0.42, 0.47, 0.32), "cab": Color(0.38, 0.43, 0.3), "ax": 3, "len": 5.8, "tilt": 35.0,
+            "ln": 2.5, "rad": 0.17, "mb": Color(0.92, 0.93, 0.96), "mt": Color(0.95, 0.4, 0.15), "plate": 0.15,
+            "pos": [Vector3(0, 0, -0.66), Vector3(0, 0, -0.22), Vector3(0, 0, 0.22), Vector3(0, 0, 0.66)], "wing": false}
+    if t == 1:
+        return {"body": Color(0.28, 0.34, 0.26), "cab": Color(0.26, 0.32, 0.24), "ax": 4, "len": 7.2, "tilt": 55.0,
+            "ln": 3.6, "rad": 0.27, "mb": Color(0.62, 0.66, 0.68), "mt": Color(0.5, 0.5, 0.54), "plate": 0.2,
+            "pos": [Vector3(0, 0, -0.45), Vector3(0, 0, 0.45)], "wing": false}
+    if t == 2:
+        return {"body": Color(0.2, 0.22, 0.26), "cab": Color(0.18, 0.2, 0.24), "ax": 4, "len": 6.8, "tilt": 42.0,
+            "ln": 3.2, "rad": 0.21, "mb": Color(0.15, 0.17, 0.2), "mt": Color(0.2, 0.9, 1.0), "plate": 0.2,
+            "pos": [Vector3(0, 0, -0.45), Vector3(0, 0, 0.45)], "wing": false}
+    if t == 3:
+        return {"body": Color(0.24, 0.29, 0.25), "cab": Color(0.22, 0.27, 0.23), "ax": 4, "len": 8.0, "tilt": 72.0,
+            "ln": 5.2, "rad": 0.42, "mb": Color(0.36, 0.38, 0.42), "mt": Color(1.0, 0.85, 0.2), "plate": 0.3,
+            "pos": [Vector3(0, 0, 0)], "wing": false}
+    if t == 4:
+        return {"body": Color(0.55, 0.5, 0.38), "cab": Color(0.5, 0.45, 0.34), "ax": 2, "len": 5.0, "tilt": 22.0,
+            "ln": 1.7, "rad": 0.09, "mb": Color(0.88, 0.88, 0.9), "mt": Color(0.95, 0.45, 0.15), "plate": 0.1,
+            "pos": [Vector3(0, 0, -0.55), Vector3(0, 0, 0.0), Vector3(0, 0, 0.55),
+                Vector3(0, 1.8, -0.55), Vector3(0, 1.8, 0.0), Vector3(0, 1.8, 0.55)], "wing": true}
+    if t == 5:
+        var ps: Array = []
+        for lay in range(2):
+            for c in range(4):
+                ps.append(Vector3(float(lay) * 0.34, 0.0, -0.57 + float(c) * 0.38))
+        return {"body": Color(0.3, 0.4, 0.28), "cab": Color(0.27, 0.36, 0.25), "ax": 3, "len": 6.2, "tilt": 42.0,
+            "ln": 2.2, "rad": 0.13, "mb": Color(0.62, 0.64, 0.62), "mt": Color(0.85, 0.42, 0.18), "plate": 0.2,
+            "pos": ps, "wing": false}
+    if t == 6:
+        return {"body": Color(0.22, 0.24, 0.28), "cab": Color(0.2, 0.22, 0.26), "ax": 3, "len": 6.0, "tilt": 30.0,
+            "ln": 2.9, "rad": 0.17, "mb": Color(0.28, 0.3, 0.34), "mt": Color(0.85, 0.15, 0.15), "plate": 0.2,
+            "pos": [Vector3(0, 0, -0.32), Vector3(0, 0, 0.32), Vector3(0.4, 0, -0.32), Vector3(0.4, 0, 0.32)], "wing": false}
+    return {"body": Color(0.3, 0.34, 0.3), "cab": Color(0.28, 0.32, 0.28), "ax": 4, "len": 9.0, "tilt": 80.0,
+        "ln": 6.8, "rad": 0.52, "mb": Color(0.94, 0.94, 0.96), "mt": Color(0.9, 0.18, 0.15), "plate": 0.4,
+        "pos": [Vector3(0, 0, 0)], "wing": false}
+
+
+func _missile_truck_model(t: int) -> Node3D:
+    var cfg: Dictionary = _mtruck_cfg(t)
+    var root := Node3D.new()
+    var len: float = cfg["len"]
+    var half := len * 0.5
+    var deck := _truck_chassis(root, cfg["body"], cfg["cab"], int(cfg["ax"]), len)
+    var tilt: float = cfg["tilt"]
+    var ln: float = cfg["ln"]
+    var rad: float = cfg["rad"]
+    var th := deg_to_rad(tilt)
+    var pxx := -half + ln * sin(th) + 0.2
+    pxx = minf(pxx, half - 2.2)
+    var rack := Node3D.new()
+    rack.position = Vector3(pxx, deck + 0.1, 0.0)
+    rack.rotation.z = th
+    root.add_child(rack)
+    var plate: float = cfg["plate"]
+    var poss: Array = cfg["pos"]
+    var maxz := 0.0
+    var maxy := 0.0
+    for pv in poss:
+        var pp: Vector3 = pv
+        maxz = maxf(maxz, absf(pp.z))
+        maxy = maxf(maxy, pp.y)
+    _box(rack, Vector3(plate, ln + maxy + 0.2, maxz * 2.0 + rad * 2.0 + 0.3), Vector3(-rad - plate * 0.5, (ln + maxy) * 0.5, 0.0), Color(0.16, 0.17, 0.19))
+    # support strut
+    var strut := _cyl(root, 0.08, 0.08, 1.6, Vector3(pxx + 0.9, deck + 0.7, 0.0), Color(0.2, 0.2, 0.22))
+    strut.rotation.z = deg_to_rad(40.0)
+    var ms: Array = []
+    var tips: Array = []
+    for pv2 in poss:
+        var pp2: Vector3 = pv2
+        var m := _msl_mesh(rack, cfg["mb"], cfg["mt"], ln, rad, bool(cfg["wing"]))
+        m.position = Vector3(pp2.x, pp2.y, pp2.z)
+        ms.append(m)
+        var tip_local := rack.transform * Vector3(pp2.x, pp2.y + ln, pp2.z)
+        tips.append(tip_local)
+    root.set_meta("ms", ms)
+    root.set_meta("tips", tips)
+    for mn in ms:
+        _merge_model(mn, [])
+    _merge_model(root, ms)
+    return root
+
+
+func _defense_model(n: Node3D, t: int, team: Color) -> void:
+    if t == 0:
+        _model_ciws(n)
+    elif t == 1:
+        _model_dome(n)
+    elif t == 2:
+        _model_hq9(n)
+    elif t == 3:
+        _model_s400(n)
+    else:
+        _model_thaad(n)
+    _sphere(n, 0.18, Vector3(0.0, 0.1, 2.2 if t >= 2 else 1.4), team)
+    _merge_model(n, [])
+
+
+func _model_ciws(n: Node3D) -> void:
+    var base := Color(0.5, 0.52, 0.54)
+    _box(n, Vector3(2.4, 0.5, 2.4), Vector3(0.0, 0.25, 0.0), base.darkened(0.15))
+    _box(n, Vector3(2.0, 0.22, 2.0), Vector3(0.0, 0.6, 0.0), base)
+    _cyl(n, 0.85, 0.95, 0.6, Vector3(0.0, 0.95, 0.0), base.lightened(0.05))
+    _box(n, Vector3(1.25, 0.9, 1.1), Vector3(0.0, 1.2, 0.0), base.darkened(0.1))
+    _box(n, Vector3(0.35, 0.9, 1.0), Vector3(-0.8, 1.25, 0.1), base.darkened(0.25))
+    _box(n, Vector3(0.35, 0.9, 1.0), Vector3(0.8, 1.25, 0.1), base.darkened(0.25))
+    _cyl(n, 0.55, 0.62, 0.8, Vector3(0.0, 1.95, 0.35), Color(0.8, 0.82, 0.83))
+    _sphere(n, 0.55, Vector3(0.0, 2.35, 0.35), Color(0.86, 0.87, 0.89))
+    _box(n, Vector3(0.6, 0.6, 1.0), Vector3(0.0, 1.35, -0.85), Color(0.3, 0.32, 0.34))
+    for k in range(6):
+        var a := float(k) / 6.0 * TAU
+        var bar := _cyl(n, 0.07, 0.07, 1.3, Vector3(cos(a) * 0.17, 1.35 + sin(a) * 0.17, -1.75), Color(0.12, 0.12, 0.14))
+        bar.rotation.x = PI / 2.0
+    var ring := _cyl(n, 0.28, 0.28, 0.12, Vector3(0.0, 1.35, -2.3), Color(0.2, 0.2, 0.22))
+    ring.rotation.x = PI / 2.0
+
+
+func _model_dome(n: Node3D) -> void:
+    var tan := Color(0.66, 0.56, 0.4)
+    var wood := Color(0.72, 0.52, 0.3)
+    _box(n, Vector3(5.2, 0.28, 2.0), Vector3(0.0, 0.8, 0.0), tan.darkened(0.2))
+    for ax in [-1.9, -0.8]:
+        _wheel(n, float(ax), 1.0, 0.5)
+        _wheel(n, float(ax), -1.0, 0.5)
+    _box(n, Vector3(1.0, 0.9, 1.9), Vector3(2.2, 1.35, 0.0), tan)
+    _box(n, Vector3(0.1, 0.4, 1.6), Vector3(2.72, 1.5, 0.0), Color(0.1, 0.18, 0.26))
+    var rack := Node3D.new()
+    rack.position = Vector3(0.4, 1.0, 0.0)
+    rack.rotation.z = deg_to_rad(52.0)
+    n.add_child(rack)
+    _box(rack, Vector3(1.0, 2.2, 1.9), Vector3(0.0, 1.1, 0.0), wood)
+    _box(rack, Vector3(0.08, 2.0, 1.7), Vector3(0.54, 1.1, 0.0), Color(0.18, 0.15, 0.12))
+    for r in range(5):
+        for c in range(4):
+            _box(rack, Vector3(0.06, 0.26, 0.28), Vector3(0.58, 0.28 + float(r) * 0.4, -0.6 + float(c) * 0.4), Color(0.04, 0.04, 0.05))
+    var m1 := _msl_mesh(rack, Color(0.92, 0.93, 0.96), Color(0.9, 0.3, 0.2), 0.6, 0.1, false)
+    m1.position = Vector3(0.55, 1.95, 0.4)
+    _box(n, Vector3(1.2, 0.9, 1.3), Vector3(-1.6, 1.4, 0.0), tan.darkened(0.1))
+    _cyl(n, 0.07, 0.07, 3.6, Vector3(-2.3, 2.3, 0.0), Color(0.75, 0.76, 0.8))
+    var disc := _cyl(n, 0.4, 0.4, 0.08, Vector3(-2.3, 4.1, 0.0), Color(0.85, 0.15, 0.15))
+    disc.rotation.x = PI / 2.0
+    var disc2 := _cyl(n, 0.22, 0.22, 0.1, Vector3(-2.3, 4.1, 0.0), Color.WHITE)
+    disc2.rotation.x = PI / 2.0
+    for k in range(5):
+        _cyl(n, 0.1, 0.1, 0.05, Vector3(-2.3, 0.6 + float(k) * 0.65, 0.0), Color(0.8, 0.8, 0.84))
+
+
+func _model_thaad(n: Node3D) -> void:
+    var tan := Color(0.78, 0.68, 0.5)
+    var deck := _truck_chassis(n, tan, tan.darkened(0.05), 4, 7.6)
+    var rack := Node3D.new()
+    rack.position = Vector3(-1.2, deck + 0.15, 0.0)
+    rack.rotation.z = deg_to_rad(52.0)
+    n.add_child(rack)
+    _box(rack, Vector3(1.0, 4.2, 1.9), Vector3(0.0, 2.1, 0.0), tan.darkened(0.08))
+    _box(rack, Vector3(0.1, 4.0, 1.7), Vector3(0.55, 2.1, 0.0), tan.lightened(0.05))
+    for k in range(5):
+        _box(rack, Vector3(0.06, 4.0, 0.06), Vector3(0.6, 2.1, -0.72 + float(k) * 0.36), tan.darkened(0.35))
+    for r in range(4):
+        _box(rack, Vector3(0.06, 0.06, 1.7), Vector3(0.6, 0.6 + float(r) * 1.0, 0.0), tan.darkened(0.35))
+    _box(rack, Vector3(1.1, 0.2, 2.0), Vector3(0.0, 4.25, 0.0), tan.darkened(0.2))
+    var strut := _cyl(n, 0.1, 0.1, 3.0, Vector3(0.2, deck + 1.3, 0.0), Color(0.62, 0.55, 0.42))
+    strut.rotation.z = deg_to_rad(-35.0)
+    _cyl(n, 0.12, 0.12, 0.9, Vector3(-3.7, 0.5, 0.0), Color(0.3, 0.3, 0.32))
+    _box(n, Vector3(0.7, 0.5, 0.5), Vector3(0.6, deck + 0.3, 1.0), tan.darkened(0.15))
+    _cyl(n, 0.05, 0.05, 1.4, Vector3(1.2, 2.3, -0.7), Color(0.7, 0.7, 0.72))
+
+
+func _model_s400(n: Node3D) -> void:
+    var green := Color(0.28, 0.36, 0.24)
+    var deck := _truck_chassis(n, green, green.darkened(0.05), 4, 8.2)
+    var rack := Node3D.new()
+    rack.position = Vector3(-2.1, deck + 0.1, 0.0)
+    rack.rotation.z = deg_to_rad(76.0)
+    n.add_child(rack)
+    for c in range(2):
+        for r in range(2):
+            var can := _cyl(rack, 0.52, 0.52, 5.4, Vector3(float(c) * 1.1, 2.7, -0.58 + float(r) * 1.16), Color(0.3, 0.38, 0.26))
+            for b in range(5):
+                _cyl(rack, 0.55, 0.55, 0.1, Vector3(float(c) * 1.1, 0.6 + float(b) * 1.0, -0.58 + float(r) * 1.16), Color(0.36, 0.44, 0.3))
+            _cyl(rack, 0.5, 0.5, 0.14, Vector3(float(c) * 1.1, 5.42, -0.58 + float(r) * 1.16), Color(0.2, 0.26, 0.18))
+            can.rotation.z = 0.0
+    _box(rack, Vector3(0.3, 5.2, 1.9), Vector3(-0.5, 2.6, 0.0), Color(0.2, 0.25, 0.2))
+    var strut := _cyl(n, 0.1, 0.1, 3.2, Vector3(-0.3, deck + 1.3, 0.0), Color(0.22, 0.28, 0.2))
+    strut.rotation.z = deg_to_rad(-30.0)
+    # radar truck beside
+    var rt := Node3D.new()
+    rt.position = Vector3(1.0, 0.0, 5.2)
+    n.add_child(rt)
+    var rdeck := _truck_chassis(rt, green, green.darkened(0.05), 3, 6.0)
+    _box(rt, Vector3(2.4, 0.7, 1.6), Vector3(-0.9, rdeck + 0.4, 0.0), green.darkened(0.12))
+    _cyl(rt, 0.12, 0.12, 1.8, Vector3(-0.9, rdeck + 1.5, 0.0), Color(0.3, 0.34, 0.3))
+    var panel := _box(rt, Vector3(0.18, 2.0, 2.6), Vector3(-0.9, rdeck + 3.0, 0.0), Color(0.34, 0.4, 0.3))
+    panel.rotation.z = deg_to_rad(-12.0)
+    _cyl(rt, 0.04, 0.04, 2.2, Vector3(1.4, 2.8, 0.7), Color(0.6, 0.6, 0.64))
+
+
+func _model_hq9(n: Node3D) -> void:
+    var olive := Color(0.36, 0.4, 0.3)
+    var deck := _truck_chassis(n, olive, olive.darkened(0.04), 4, 7.6)
+    var rack := Node3D.new()
+    rack.position = Vector3(-1.4, deck + 0.12, 0.0)
+    rack.rotation.z = deg_to_rad(66.0)
+    n.add_child(rack)
+    for c in range(2):
+        for r in range(2):
+            _box(rack, Vector3(0.78, 4.4, 0.78), Vector3(float(c) * 0.95, 2.2, -0.5 + float(r) * 1.0), Color(0.76, 0.78, 0.75))
+            _box(rack, Vector3(0.82, 0.16, 0.82), Vector3(float(c) * 0.95, 4.45, -0.5 + float(r) * 1.0), Color(0.3, 0.32, 0.3))
+            _box(rack, Vector3(0.82, 0.12, 0.82), Vector3(float(c) * 0.95, 1.2, -0.5 + float(r) * 1.0), Color(0.3, 0.32, 0.3))
+    _box(rack, Vector3(0.25, 4.4, 2.2), Vector3(-0.5, 2.2, 0.0), Color(0.22, 0.25, 0.22))
+    var strut := _cyl(n, 0.1, 0.1, 3.0, Vector3(0.0, deck + 1.2, 0.0), Color(0.24, 0.27, 0.22))
+    strut.rotation.z = deg_to_rad(-32.0)
+    # phased-array panel on the cab roof
+    _cyl(n, 0.08, 0.08, 1.0, Vector3(3.0, 2.3, 0.0), Color(0.3, 0.32, 0.3))
+    var pn := _box(n, Vector3(0.14, 1.0, 1.6), Vector3(3.0, 3.2, 0.0), Color(0.5, 0.54, 0.46))
+    pn.rotation.z = deg_to_rad(-10.0)
+    _box(n, Vector3(0.7, 0.6, 0.6), Vector3(0.2, deck + 0.35, 1.0), olive.darkened(0.15))
+
+
+func _house_pos(slot: int) -> Vector2:
+    var col := slot % 10
+    var row := int(slot / 10)
+    return Vector2(-74.0 + float(col) * 6.5, 16.0 + float(row) * 7.0)
+
+
+func _def_pos(slot: int) -> Vector2:
+    var col := slot % 7
+    var row := int(slot / 7)
+    return Vector2(-70.0 + float(col) * 12.0, -12.0 - float(row) * 8.0)
+
+
+func _missile_pos(slot: int) -> Vector2:
+    var col := slot % 8
+    var row := int(slot / 8)
+    return Vector2(-68.0 + float(col) * 12.0, -50.0 - float(row) * 5.6)
+
+
+func _stand_pos(slot: int) -> Vector2:
+    var col := slot % 2
+    var row := int(slot / 2)
+    return Vector2(34.0 + float(col) * 12.0, -52.0 + float(row) * 16.0)
+
+
+func _make_island(i: int, p: Vector3) -> Node3D:
+    var root := Node3D.new()
+    root.name = "Island_%d" % i
+    root.position = p
+    root.rotation.y = _yaw_to(-p)
+    var team := _team(i)
+    var side := PLOT_HALF * 2.0
+    _box(root, Vector3(side + 5.0, 1.4, side + 5.0), Vector3(0.0, -0.35, 0.0), team.darkened(0.25))
+    var top := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(side, 0.3, side)
+    top.mesh = bm
+    top.position = Vector3(0.0, 0.45, 0.0)
+    top.material_override = _checker_mat(i)
+    root.add_child(top)
+    # concrete military apron
+    _box(root, Vector3(98.0, 0.06, 88.0), Vector3(-29.0, 0.63, -36.0), Color(0.36, 0.38, 0.42))
+    var holder := Node3D.new()
+    root.add_child(holder)
+    _island_props(holder)
+    _airport(holder)
+    _merge_model(holder, [])
+    var lab := Label3D.new()
+    lab.text = "YOU" if i == 0 else "ENEMY %d" % i
+    lab.font_size = 72
+    lab.pixel_size = 0.1
+    lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+    lab.no_depth_test = true
+    lab.render_priority = 3
+    lab.outline_size = 16
+    lab.modulate = team.lightened(0.3)
+    lab.position = Vector3(0.0, 40.0, 0.0)
+    root.add_child(lab)
+    return root
+
+
 func _island_props(root: Node3D) -> void:
     var white := Color(0.92, 0.92, 0.95)
     # road between the military apron and the houses
-    _box(root, Vector3(92.0, 0.07, 6.0), Vector3(0.0, 0.66, 6.0), Color(0.15, 0.16, 0.19))
-    _box(root, Vector3(92.0, 0.09, 0.25), Vector3(0.0, 0.68, 3.0), white)
-    _box(root, Vector3(92.0, 0.09, 0.25), Vector3(0.0, 0.68, 9.0), white)
-    for k in range(12):
-        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-41.0 + float(k) * 7.5, 0.68, 6.0), Color(0.95, 0.82, 0.2))
-    # street lamps
-    for k2 in range(8):
-        var lx := -42.0 + float(k2) * 12.0
-        _cyl(root, 0.12, 0.16, 4.2, Vector3(lx, 2.7, 9.7), Color(0.3, 0.3, 0.34))
-        var bulb := _sphere(root, 0.4, Vector3(lx, 4.9, 9.7), Color.WHITE)
+    _box(root, Vector3(100.0, 0.07, 6.0), Vector3(-29.0, 0.66, 11.0), Color(0.15, 0.16, 0.19))
+    _box(root, Vector3(100.0, 0.09, 0.25), Vector3(-29.0, 0.68, 8.2), white)
+    _box(root, Vector3(100.0, 0.09, 0.25), Vector3(-29.0, 0.68, 13.8), white)
+    for k in range(14):
+        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-76.0 + float(k) * 7.5, 0.68, 11.0), Color(0.95, 0.82, 0.2))
+    for k2 in range(9):
+        var lx := -76.0 + float(k2) * 12.0
+        _cyl(root, 0.12, 0.16, 4.2, Vector3(lx, 2.7, 14.7), Color(0.3, 0.3, 0.34))
+        var bulb := _sphere(root, 0.4, Vector3(lx, 4.9, 14.7), Color.WHITE)
         bulb.material_override = _glow_mat(Color(1.0, 0.93, 0.65))
-    # trees on the free right side and along the back edge
     var rng := RandomNumberGenerator.new()
     rng.seed = 12345
-    for k3 in range(16):
-        var tx := rng.randf_range(34.0, 47.0)
-        var tz := rng.randf_range(12.0, 45.0)
-        if k3 >= 8:
-            tx = -42.0 + float(k3 - 8) * 11.0
-            tz = 47.0
-        var th := rng.randf_range(0.9, 1.3)
+    for k3 in range(22):
+        var tx := rng.randf_range(-76.0, 18.0)
+        var tz := rng.randf_range(56.0, 77.0)
+        if k3 >= 14:
+            tx = -78.0 + rng.randf_range(0.0, 2.0)
+            tz = rng.randf_range(20.0, 54.0)
+        var th := rng.randf_range(0.9, 1.4)
         _cyl(root, 0.22 * th, 0.32 * th, 1.8 * th, Vector3(tx, 1.5, tz), Color(0.4, 0.26, 0.14))
         _sphere(root, 1.5 * th, Vector3(tx, 3.4 * th, tz), Color(0.1, 0.42, 0.17))
         _sphere(root, 1.0 * th, Vector3(tx + 0.5, 4.5 * th, tz - 0.3), Color(0.14, 0.5, 0.2))
-    # fuel tanks and red pipes behind the missile field
-    for k4 in range(4):
-        var tx2 := -36.0 + float(k4) * 24.0
-        _cyl(root, 2.8, 2.8, 5.0, Vector3(tx2, 3.2, -46.5), Color(0.85, 0.87, 0.9))
-        _cyl(root, 2.9, 2.9, 0.5, Vector3(tx2, 5.9, -46.5), Color(0.5, 0.52, 0.56))
-    _box(root, Vector3(88.0, 0.5, 0.5), Vector3(0.0, 2.0, -43.6), Color(0.6, 0.14, 0.14))
-    for k5 in range(9):
-        _box(root, Vector3(0.4, 1.8, 0.4), Vector3(-40.0 + float(k5) * 10.0, 1.3, -43.6), Color(0.45, 0.45, 0.5))
+    # fuel depot at the back
+    for k4 in range(3):
+        var tx2 := -50.0 + float(k4) * 22.0
+        _cyl(root, 2.8, 2.8, 5.0, Vector3(tx2, 3.2, 70.0), Color(0.85, 0.87, 0.9))
+        _cyl(root, 2.9, 2.9, 0.5, Vector3(tx2, 5.9, 70.0), Color(0.5, 0.52, 0.56))
+    _box(root, Vector3(50.0, 0.5, 0.5), Vector3(-39.0, 2.0, 66.0), Color(0.6, 0.14, 0.14))
+
+
+func _airport(root: Node3D) -> void:
+    var asphalt := Color(0.14, 0.15, 0.17)
+    var conc := Color(0.5, 0.52, 0.55)
+    var white := Color(0.95, 0.95, 0.97)
+    # apron and taxiway
+    _box(root, Vector3(26.0, 0.07, 124.0), Vector3(40.0, 0.64, -12.0), conc)
+    _box(root, Vector3(6.0, 0.08, 150.0), Vector3(54.0, 0.65, -4.0), Color(0.22, 0.23, 0.26))
+    # runway
+    _box(root, Vector3(13.0, 0.09, 150.0), Vector3(RW_X, 0.66, -2.0), asphalt)
+    for k in range(16):
+        _box(root, Vector3(0.5, 0.1, 5.0), Vector3(RW_X, 0.7, -68.0 + float(k) * 9.0), white)
+    _box(root, Vector3(0.35, 0.1, 150.0), Vector3(RW_X - 6.0, 0.7, -2.0), white)
+    _box(root, Vector3(0.35, 0.1, 150.0), Vector3(RW_X + 6.0, 0.7, -2.0), white)
+    for end_z in [-70.0, 66.0]:
+        for k2 in range(6):
+            _box(root, Vector3(0.7, 0.1, 5.0), Vector3(RW_X - 4.5 + float(k2) * 1.8, 0.7, float(end_z) + (4.0 if end_z < 0.0 else -4.0)), white)
+    # parking stand markers
+    for sl in range(MAX_JETS):
+        var sp := _stand_pos(sl)
+        _box(root, Vector3(8.0, 0.09, 0.25), Vector3(sp.x, 0.7, sp.y + 7.0), Color(0.95, 0.8, 0.15))
+    # terminal, tower and hangars on the west side of the apron
+    _box(root, Vector3(7.0, 3.5, 44.0), Vector3(23.5, 2.2, 8.0), Color(0.82, 0.84, 0.88))
+    _box(root, Vector3(7.2, 0.5, 44.5), Vector3(23.5, 4.2, 8.0), Color(0.25, 0.3, 0.4))
+    for k3 in range(10):
+        var gw := _box(root, Vector3(0.1, 1.0, 2.6), Vector3(27.1, 2.4, -10.0 + float(k3) * 4.4), Color.WHITE)
+        gw.material_override = _glow_mat(Color(0.5, 0.85, 1.0))
+    _cyl(root, 1.1, 1.4, 11.0, Vector3(23.5, 6.2, 34.0), Color(0.85, 0.86, 0.9))
+    _cyl(root, 2.4, 1.5, 2.2, Vector3(23.5, 12.9, 34.0), Color(0.3, 0.55, 0.7))
+    _cyl(root, 2.6, 2.6, 0.3, Vector3(23.5, 14.2, 34.0), Color(0.3, 0.32, 0.36))
+    for hz in [-60.0, -44.0]:
+        _box(root, Vector3(10.0, 5.0, 14.0), Vector3(23.0, 3.2, float(hz)), Color(0.6, 0.64, 0.7))
+        var arch := _cyl(root, 7.0, 7.0, 10.0, Vector3(23.0, 5.7, float(hz)), Color(0.55, 0.6, 0.66))
+        arch.rotation.z = PI / 2.0
+        arch.scale = Vector3(0.45, 1.0, 1.0)
+        _box(root, Vector3(0.2, 4.0, 10.0), Vector3(28.1, 2.8, float(hz)), Color(0.2, 0.22, 0.26))
+    # windsock
+    _cyl(root, 0.1, 0.1, 5.0, Vector3(74.0, 3.1, 40.0), Color(0.8, 0.8, 0.85))
+    _box(root, Vector3(1.8, 0.5, 0.5), Vector3(74.0, 5.4, 40.8), Color(1.0, 0.45, 0.1))
+
+
+func _unlocked(kind: String, t: int) -> bool:
+    var need := 0.0
+    if kind == "m":
+        need = float(MISSILES[t]["unlock"])
+    elif kind == "d":
+        need = float(DEFENSES[t]["unlock"])
+    else:
+        need = float(JETS[t]["unlock"])
+    return elapsed >= need
+
+
+func _unlock_text(kind: String, t: int) -> String:
+    var need := 0.0
+    if kind == "m":
+        need = float(MISSILES[t]["unlock"])
+    elif kind == "d":
+        need = float(DEFENSES[t]["unlock"])
+    else:
+        need = float(JETS[t]["unlock"])
+    var left := int(maxf(0.0, need - elapsed))
+    return "%d:%02d" % [int(left / 60), left % 60]
+
+
+func _spot_free(i: int, x: float, z: float, ignore_id: int) -> bool:
+    if not MIL_RECT.has_point(Vector2(x, z)):
+        return false
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) != "defense" or int(s["id"]) == ignore_id:
+            continue
+        if absf(float(s["lx"]) - x) < 10.5 and absf(float(s["lz"]) - z) < 4.6:
+            return false
+    var trucks: Array = e["mnodes"]
+    for tv in trucks:
+        var tr: Dictionary = tv
+        if int(tr["id"]) == ignore_id:
+            continue
+        if absf(float(tr["lx"]) - x) < 10.5 and absf(float(tr["lz"]) - z) < 4.6:
+            return false
+    return true
+
+
+func _pick_spot(i: int, kind: String) -> Vector2:
+    var n := 35 if kind == "d" else 48
+    for slot in range(n):
+        var p := _def_pos(slot) if kind == "d" else _missile_pos(slot)
+        if _spot_free(i, p.x, p.y, -1):
+            return p
+    for k in range(80):
+        var rp := Vector2(randf_range(-75.0, 17.0), randf_range(-76.0, 6.0))
+        if _spot_free(i, rp.x, rp.y, -1):
+            return rp
+    return Vector2(randf_range(-60.0, 0.0), randf_range(-70.0, -20.0))
+
+
+func _spawn_mtruck(i: int, t: int, pos: Vector2, n: int, anim: bool) -> Dictionary:
+    uid_counter += 1
+    var node := _missile_truck_model(t)
+    node.position = Vector3(pos.x, 0.6, pos.y)
+    var bsz := 1.15
+    _isl(i).add_child(node)
+    if anim:
+        node.scale = Vector3.ONE * bsz * 0.2
+        var tw := node.create_tween()
+        tw.tween_property(node, "scale", Vector3.ONE * bsz, 0.7)
+    else:
+        node.scale = Vector3.ONE * bsz
+    var tr := {"id": uid_counter, "t": t, "n": n, "cap": int(MISSILES[t]["cap"]), "node": node, "lx": pos.x, "lz": pos.y}
+    var e: Dictionary = emp[i]
+    var trucks: Array = e["mnodes"]
+    trucks.append(tr)
+    _truck_apply(tr)
+    return tr
+
+
+func _truck_apply(tr: Dictionary) -> void:
+    var node: Node3D = tr["node"]
+    var ms: Array = node.get_meta("ms")
+    var n: int = tr["n"]
+    for k in range(ms.size()):
+        var m: Node3D = ms[k]
+        m.visible = k < n
+
+
+func _remove_truck(i: int, tr: Dictionary) -> void:
+    var nn = tr["node"]
+    if nn != null and is_instance_valid(nn):
+        var n3: Node3D = nn
+        n3.queue_free()
+    var e: Dictionary = emp[i]
+    var trucks: Array = e["mnodes"]
+    trucks.erase(tr)
+
+
+func _sync_missiles(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var ammo: Array = e["ammo"]
+    var trucks: Array = e["mnodes"]
+    for t in range(NM):
+        var want: int = int(ammo[t])
+        var have := 0
+        for tv in trucks:
+            var tr0: Dictionary = tv
+            if int(tr0["t"]) == t:
+                have += int(tr0["n"])
+        while have > want:
+            var last: Dictionary = {}
+            for tv2 in trucks:
+                var tr1: Dictionary = tv2
+                if int(tr1["t"]) == t:
+                    last = tr1
+            if last.is_empty():
+                break
+            var drop := mini(int(last["n"]), have - want)
+            last["n"] = int(last["n"]) - drop
+            have -= drop
+            if int(last["n"]) <= 0:
+                _remove_truck(i, last)
+            else:
+                _truck_apply(last)
+        while have < want:
+            var room: Dictionary = {}
+            for tv3 in trucks:
+                var tr2: Dictionary = tv3
+                if int(tr2["t"]) == t and int(tr2["n"]) < int(tr2["cap"]):
+                    room = tr2
+                    break
+            if room.is_empty():
+                var add := mini(int(MISSILES[t]["cap"]), want - have)
+                _spawn_mtruck(i, t, _pick_spot(i, "m"), add, true)
+                have += add
+            else:
+                var add2 := mini(int(room["cap"]) - int(room["n"]), want - have)
+                room["n"] = int(room["n"]) + add2
+                have += add2
+                _truck_apply(room)
+
+
+func _take_missile_pos(i: int, t: int) -> Vector3:
+    var e: Dictionary = emp[i]
+    var trucks: Array = e["mnodes"]
+    for k in range(trucks.size() - 1, -1, -1):
+        var tr: Dictionary = trucks[k]
+        if int(tr["t"]) != t or int(tr["n"]) < 1:
+            continue
+        var node: Node3D = tr["node"]
+        var tips: Array = node.get_meta("tips")
+        var n: int = int(tr["n"]) - 1
+        var tip: Vector3 = tips[n]
+        var wp := node.to_global(tip)
+        tr["n"] = n
+        if n <= 0:
+            _remove_truck(i, tr)
+        else:
+            _truck_apply(tr)
+        return wp
+    return _isl(i).to_global(Vector3(-30.0, 6.0, -40.0))
+
+
+func _find_struct(i: int, sid: int) -> Dictionary:
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    for sv in structs:
+        var s: Dictionary = sv
+        if int(s["id"]) == sid:
+            return s
+    return {}
+
+
+func _find_truck(i: int, tid: int) -> Dictionary:
+    var e: Dictionary = emp[i]
+    var trucks: Array = e["mnodes"]
+    for tv in trucks:
+        var tr: Dictionary = tv
+        if int(tr["id"]) == tid:
+            return tr
+    return {}
+
+
+func _remove_struct(i: int, s: Dictionary) -> void:
+    _cancel_jobs_for(i, s)
+    for key in ["node", "rub", "ring", "lbl"]:
+        var nn = s[key]
+        if nn != null and is_instance_valid(nn):
+            var n3: Node3D = nn
+            n3.queue_free()
+        s[key] = null
+    var e: Dictionary = emp[i]
+    var structs: Array = e["structs"]
+    structs.erase(s)
+
+
+# codes: 0 ok, 5 not found, 6 spot blocked
+func _do_sell_defense(i: int, sid: int) -> int:
+    var s := _find_struct(i, sid)
+    if s.is_empty() or str(s["kind"]) != "defense":
+        return 5
+    var refund := 0
+    if str(s["state"]) == "ok":
+        refund = int(float(DEFENSES[int(s["sub"])]["price"]) * 0.5)
+    _remove_struct(i, s)
+    var e: Dictionary = emp[i]
+    e["money"] = int(e["money"]) + refund
+    return 0
+
+
+func _do_sell_truck(i: int, tid: int) -> int:
+    var tr := _find_truck(i, tid)
+    if tr.is_empty():
+        return 5
+    var t: int = tr["t"]
+    var n: int = tr["n"]
+    var e: Dictionary = emp[i]
+    var ammo: Array = e["ammo"]
+    ammo[t] = maxi(0, int(ammo[t]) - n)
+    e["money"] = int(e["money"]) + int(float(MISSILES[t]["price"]) * 0.5 * float(n))
+    _remove_truck(i, tr)
+    return 0
+
+
+func _do_move_defense(i: int, sid: int, x: float, z: float) -> int:
+    var s := _find_struct(i, sid)
+    if s.is_empty():
+        return 5
+    if not _spot_free(i, x, z, sid):
+        return 6
+    s["lx"] = x
+    s["lz"] = z
+    var nn = s["node"]
+    if nn != null and is_instance_valid(nn):
+        var n3: Node3D = nn
+        n3.position = Vector3(x, 0.6, z)
+    var rn = s["rub"]
+    if rn != null and is_instance_valid(rn):
+        var r3: Node3D = rn
+        r3.position = Vector3(x, 0.6, z)
+    var rg = s["ring"]
+    if rg != null and is_instance_valid(rg):
+        var g3: Node3D = rg
+        g3.position = Vector3(x, 0.7, z)
+    var lb = s["lbl"]
+    if lb != null and is_instance_valid(lb):
+        var l3: Node3D = lb
+        l3.position = Vector3(x, 13.0, z)
+    return 0
+
+
+func _do_move_truck(i: int, tid: int, x: float, z: float) -> int:
+    var tr := _find_truck(i, tid)
+    if tr.is_empty():
+        return 5
+    if not _spot_free(i, x, z, tid):
+        return 6
+    tr["lx"] = x
+    tr["lz"] = z
+    var node: Node3D = tr["node"]
+    node.position = Vector3(x, 0.6, z)
+    return 0
+
+
+func _do_buy_missile(i: int, t: int, n: int = 1) -> int:
+    var e: Dictionary = emp[i]
+    if not _unlocked("m", t):
+        return 4
+    var room := MAX_MISSILES - _ammo_total(i)
+    if room < 1:
+        return 2
+    var cnt := mini(n, room)
+    var price: int = int(MISSILES[t]["price"]) * cnt
+    if int(e["money"]) < price:
+        return 1
+    e["money"] = int(e["money"]) - price
+    var ammo: Array = e["ammo"]
+    ammo[t] = int(ammo[t]) + cnt
+    _sync_missiles(i)
+    return 0
+
+
+func _do_buy_defense(i: int, t: int) -> int:
+    var e: Dictionary = emp[i]
+    if not _unlocked("d", t):
+        return 4
+    if _count_structs(i, "defense", -1, false) >= MAX_DEFENSES:
+        return 2
+    var price: int = DEFENSES[t]["price"]
+    if int(e["money"]) < price:
+        return 1
+    e["money"] = int(e["money"]) - price
+    var dp := _pick_spot(i, "d")
+    var s := _add_struct(i, "defense", t, dp.x, dp.y, "ok", 0)
+    _spawn_struct_node(i, s, 1.2)
+    _refresh_struct_label(i, s)
+    if i == 0:
+        _play_ui("hammer", -2.0)
+    return 0
+
+
+func _jet_model(jt: int, team: Color) -> Node3D:
+    var root := Node3D.new()
+    var mdl := Node3D.new()
+    root.add_child(mdl)
+    root.set_meta("mdl", mdl)
+    var cols := [Color(0.5, 0.58, 0.6), Color(0.5, 0.52, 0.56), Color(0.58, 0.62, 0.68), Color(0.6, 0.62, 0.66),
+        Color(0.28, 0.3, 0.34), Color(0.42, 0.44, 0.48)]
+    var lens := [4.0, 4.0, 4.2, 4.2, 4.8, 4.4]
+    var spans := [2.8, 2.7, 3.0, 2.9, 3.3, 3.3]
+    var sweeps := [0.45, 0.55, 0.8, 0.8, 0.7, 0.62]
+    var chords := [1.3, 1.25, 1.9, 1.9, 1.9, 1.8]
+    var col: Color = cols[jt]
+    var ln: float = lens[jt]
+    var span: float = spans[jt]
+    var sweep: float = sweeps[jt]
+    var chord: float = chords[jt]
+    var fr := 0.32 if jt < 4 else 0.4
+    var fus := _cyl(mdl, fr, fr * 0.8, ln * 0.72, Vector3(0.0, 0.0, ln * 0.12), col)
+    fus.rotation.x = PI / 2.0
+    var nose := _cyl(mdl, 0.0, fr, ln * 0.3, Vector3(0.0, 0.0, -ln * 0.4), col.lightened(0.05))
+    nose.rotation.x = -PI / 2.0
+    var can := _sphere(mdl, 0.3, Vector3(0.0, fr * 0.8, -ln * 0.18), Color(0.12, 0.2, 0.32))
+    can.scale = Vector3(0.75, 0.7, 2.0)
+    for sd in [-1.0, 1.0]:
+        var wing := _box(mdl, Vector3(span * 0.52, 0.07, chord), Vector3(float(sd) * span * 0.26, -0.04, ln * 0.18), col.darkened(0.08))
+        wing.rotation.y = float(sd) * -sweep * -1.0
+        var tipm := _box(mdl, Vector3(0.1, 0.1, 0.55), Vector3(float(sd) * span * 0.47, -0.04, ln * 0.3), team)
+        tipm.material_override = _glow_mat(team)
+        var hs := _box(mdl, Vector3(span * 0.26, 0.05, 0.6), Vector3(float(sd) * 0.6, 0.0, ln * 0.42), col.darkened(0.12))
+        hs.rotation.y = float(sd) * 0.5
+    if jt == 2 or jt == 3:
+        for sd2 in [-1.0, 1.0]:
+            var cn := _box(mdl, Vector3(span * 0.2, 0.05, 0.5), Vector3(float(sd2) * 0.45, 0.1, -ln * 0.16), col)
+            cn.rotation.y = float(sd2) * 0.4
+    if jt < 4:
+        var fin := _box(mdl, Vector3(0.07, 0.95, 0.95), Vector3(0.0, 0.62, ln * 0.37), col.darkened(0.05))
+        fin.rotation.x = 0.35
+    else:
+        for sd3 in [-1.0, 1.0]:
+            var fin2 := _box(mdl, Vector3(0.07, 0.85, 0.9), Vector3(float(sd3) * 0.42, 0.5, ln * 0.37), col.darkened(0.05))
+            fin2.rotation.z = float(sd3) * -0.38
+            fin2.rotation.x = 0.3
+    if jt == 0 or jt == 1 or jt == 2:
+        _box(mdl, Vector3(0.55, 0.32, 0.8), Vector3(0.0, -0.34, -ln * 0.1), col.darkened(0.2))
+    else:
+        for sd4 in [-1.0, 1.0]:
+            _box(mdl, Vector3(0.3, 0.35, 0.8), Vector3(float(sd4) * 0.4, 0.02, -ln * 0.1), col.darkened(0.2))
+    var nz := 2 if jt == 4 else 1
+    for k in range(nz):
+        var xo := 0.0 if nz == 1 else (float(k) - 0.5) * 0.5
+        var ex := _cyl(mdl, 0.2, 0.26, 0.3, Vector3(xo, 0.0, ln * 0.5), Color(0.1, 0.1, 0.12))
+        ex.rotation.x = PI / 2.0
+        var fl := _sphere(mdl, 0.14, Vector3(xo, 0.0, ln * 0.56), Color(1.0, 0.6, 0.2))
+        fl.material_override = _glow_mat(Color(1.0, 0.6, 0.25))
+    _merge_model(mdl, [])
+    return root
+
+
+func _stand_world(i: int, slot: int) -> Vector3:
+    var sp := _stand_pos(slot)
+    return _isl(i).to_global(Vector3(sp.x, 1.0, sp.y))
+
+
+func _jets_ready(i: int, jt: int) -> int:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    var n := 0
+    for jv in jets:
+        var j: Dictionary = jv
+        if int(j["t"]) == jt and str(j["state"]) == "parked":
+            n += 1
+    return n
+
+
+func _jets_owned(i: int, jt: int) -> int:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    var n := 0
+    for jv in jets:
+        var j: Dictionary = jv
+        if jt < 0 or int(j["t"]) == jt:
+            n += 1
+    return n
+
+
+func _free_stand(i: int) -> int:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    var used := {}
+    for jv in jets:
+        var j: Dictionary = jv
+        used[int(j["slot"])] = true
+    for slot in range(MAX_JETS):
+        if not used.has(slot):
+            return slot
+    return -1
+
+
+func _park_node(i: int, j: Dictionary) -> void:
+    var nn = j["node"]
+    if nn == null or not is_instance_valid(nn):
+        var node := _jet_model(int(j["t"]), _team(i))
+        node.scale = Vector3.ONE * 2.4
+        level_root.add_child(node)
+        j["node"] = node
+        nn = node
+    var n3: Node3D = nn
+    n3.position = _stand_world(i, int(j["slot"]))
+    n3.rotation = Vector3(0.0, _isl(i).rotation.y, 0.0)
+    var mdl: Node3D = n3.get_meta("mdl")
+    mdl.rotation = Vector3.ZERO
+
+
+func _sync_jets(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    for jv in jets:
+        var j: Dictionary = jv
+        var st: String = j["state"]
+        if st == "away":
+            continue
+        var nn = j["node"]
+        if nn == null or not is_instance_valid(nn):
+            _park_node(i, j)
+
+
+func _do_buy_jet(i: int, jt: int) -> int:
+    var e: Dictionary = emp[i]
+    if not _unlocked("j", jt):
+        return 4
+    if _jets_owned(i, -1) >= MAX_JETS:
+        return 2
+    var price: int = JETS[jt]["price"]
+    if int(e["money"]) < price:
+        return 1
+    var slot := _free_stand(i)
+    if slot < 0:
+        return 2
+    e["money"] = int(e["money"]) - price
+    var jets: Array = e["jets"]
+    var j := {"t": jt, "state": "parked", "slot": slot, "node": null, "timer": 0.0}
+    jets.append(j)
+    _park_node(i, j)
+    if i == 0:
+        _play_ui("hammer", -2.0)
+    return 0
+
+
+func _clear_jets(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    for jv in jets:
+        var j: Dictionary = jv
+        var nn = j["node"]
+        if nn != null and is_instance_valid(nn) and str(j["state"]) != "away":
+            var n3: Node3D = nn
+            n3.queue_free()
+        j["node"] = null
+    jets.clear()
+
+
+func _process_jets(delta: float) -> void:
+    for i in range(island_count):
+        var e: Dictionary = emp[i]
+        var jets: Array = e["jets"]
+        for jv in jets:
+            var j: Dictionary = jv
+            if str(j["state"]) == "rearm":
+                j["timer"] = float(j["timer"]) - delta
+                if float(j["timer"]) <= 0.0:
+                    j["state"] = "parked"
+
+
+# queue a sortie (fee is paid now). Returns false when it cannot start.
+func _queue_sortie(a: int, tg: int, j: Dictionary, aim: Vector2, delay: float) -> bool:
+    var e: Dictionary = emp[a]
+    var jt: int = j["t"]
+    var fee: int = JETS[jt]["fee"]
+    if str(j["state"]) != "parked" or int(e["money"]) < fee:
+        return false
+    e["money"] = int(e["money"]) - fee
+    j["state"] = "queued"
+    launch_queue.append({"a": a, "tg": tg, "t": NM + jt, "aim": aim, "delay": delay, "jet": j})
+    return true
+
+
+func _sortie_curve_points(a: int, tg: int, j: Dictionary, aim: Vector2) -> Dictionary:
+    var isl := _isl(a)
+    var sp := _stand_pos(int(j["slot"]))
+    var home: Vector3 = island_pos[a]
+    var aimw := _isl(tg).to_global(Vector3(aim.x, 1.4, aim.y))
+    var pts: Array = []
+    pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y)))
+    pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y + 8.0)))
+    pts.append(isl.to_global(Vector3(54.0, 1.0, sp.y + 10.0)))
+    pts.append(isl.to_global(Vector3(54.0, 1.0, 56.0)))
+    var rw0 := isl.to_global(Vector3(RW_X, 1.0, 64.0))
+    pts.append(rw0)
+    pts.append(isl.to_global(Vector3(RW_X, 1.1, 40.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 1.5, -10.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 8.0, -52.0)))
+    var p8 := isl.to_global(Vector3(RW_X, 24.0, -100.0))
+    pts.append(p8)
+    var d := Vector3(aimw.x - p8.x, 0.0, aimw.z - p8.z)
+    if d.length() < 1.0:
+        d = Vector3(0.0, 0.0, -1.0)
+    d = d.normalized()
+    var perp := Vector3(-d.z, 0.0, d.x)
+    var hv := Vector3(home.x - aimw.x, 0.0, home.z - aimw.z)
+    if hv.dot(perp) < 0.0:
+        perp = -perp
+    pts.append(aimw - d * 75.0 + Vector3(0.0, 40.0 - aimw.y, 0.0))
+    var rel := aimw - d * 50.0 + Vector3(0.0, 38.0 - aimw.y, 0.0)
+    pts.append(rel)
+    pts.append(aimw + d * 25.0 + Vector3(0.0, 36.0 - aimw.y, 0.0))
+    pts.append(aimw + d * 50.0 + perp * 42.0 + Vector3(0.0, 36.0 - aimw.y, 0.0))
+    pts.append(aimw + d * 5.0 + perp * 88.0 + Vector3(0.0, 34.0 - aimw.y, 0.0))
+    pts.append(aimw - d * 60.0 + perp * 95.0 + Vector3(0.0, 34.0 - aimw.y, 0.0))
+    pts.append(isl.to_global(Vector3(RW_X, 34.0, RW_Z1 - 130.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 14.0, RW_Z1 - 45.0)))
+    var td := isl.to_global(Vector3(RW_X, 1.3, RW_Z1 + 12.0))
+    pts.append(td)
+    var roll := isl.to_global(Vector3(RW_X, 1.2, 12.0))
+    pts.append(roll)
+    pts.append(isl.to_global(Vector3(54.0, 1.0, 28.0)))
+    pts.append(isl.to_global(Vector3(54.0, 1.0, sp.y + 10.0)))
+    pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y + 8.0)))
+    pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y)))
+    return {"pts": pts, "rw0": rw0, "rel": rel, "td": td, "roll": roll}
+
+
+func _start_sortie(a: int, tg: int, j: Dictionary, aim: Vector2) -> void:
+    var te: Dictionary = emp[tg]
+    var ae: Dictionary = emp[a]
+    if bool(te["dead"]) or bool(ae["dead"]):
+        j["state"] = "parked"
+        ae["money"] = int(ae["money"]) + int(JETS[int(j["t"])]["fee"])
+        return
+    _park_node(a, j)
+    var info := _sortie_curve_points(a, tg, j, aim)
+    var pts: Array = info["pts"]
+    var c := Curve3D.new()
+    c.bake_interval = 0.6
+    for k in range(pts.size()):
+        var p: Vector3 = pts[k]
+        var prev: Vector3 = pts[maxi(k - 1, 0)]
+        var nxt: Vector3 = pts[mini(k + 1, pts.size() - 1)]
+        var seg := minf(p.distance_to(prev), p.distance_to(nxt))
+        var dir := nxt - prev
+        var tang := Vector3.ZERO
+        if dir.length() > 0.001:
+            tang = dir.normalized() * seg * 0.38
+        c.add_point(p, -tang, tang)
+    var jt: int = j["t"]
+    var so := {
+        "a": a, "tg": tg, "j": j, "jt": jt, "node": j["node"], "curve": c, "len": c.get_baked_length(), "off": 0.0,
+        "spd": float(JETS[jt]["speed"]), "strike_off": c.get_closest_offset(info["rel"]),
+        "taxi_end": c.get_closest_offset(info["rw0"]), "td": c.get_closest_offset(info["td"]),
+        "roll_end": c.get_closest_offset(info["roll"]),
+        "fired": false, "aim": aim, "aa_t": 0.5, "tried": {}, "prev_yaw": 0.0, "bank": 0.0,
+    }
+    j["state"] = "away"
+    sorties.append(so)
+    _play3d("drone", pts[0], 3.0, 0.7)
+    if a == 0:
+        _say("%s taking off for Enemy %d!" % [JETS[jt]["short"], tg])
+    elif tg == 0:
+        _say("WARNING! Enemy %d jet (%s) is inbound to your island!" % [a, JETS[jt]["short"]])
+        _play_ui("siren", -3.0)
+
+
+func _sortie_speed(so: Dictionary, off: float) -> float:
+    var base: float = so["spd"]
+    var te: float = so["taxi_end"]
+    var td: float = so["td"]
+    var ro: float = so["roll_end"]
+    if off < te:
+        return 18.0
+    if off < te + 100.0:
+        return lerpf(18.0, base, (off - te) / 100.0)
+    if off > ro:
+        return 16.0
+    if off > td:
+        return lerpf(base * 0.45, 16.0, clampf((off - td) / maxf(ro - td, 1.0), 0.0, 1.0))
+    if off > td - 130.0:
+        return lerpf(base, base * 0.45, clampf((off - (td - 130.0)) / 130.0, 0.0, 1.0))
+    return base
+
+
+func _update_sorties(delta: float) -> void:
+    for k in range(sorties.size() - 1, -1, -1):
+        var so: Dictionary = sorties[k]
+        var nn = so["node"]
+        if nn == null or not is_instance_valid(nn):
+            sorties.remove_at(k)
+            continue
+        var node: Node3D = nn
+        var curve: Curve3D = so["curve"]
+        var total: float = so["len"]
+        var off: float = float(so["off"]) + _sortie_speed(so, float(so["off"])) * delta
+        so["off"] = off
+        if off >= total:
+            sorties.remove_at(k)
+            _sortie_finish(so)
+            continue
+        var pos := curve.sample_baked(off, true)
+        var ahead := curve.sample_baked(minf(off + 5.0, total), true)
+        var dirv := ahead - pos
+        node.position = pos
+        if dirv.length() > 0.05:
+            node.look_at(ahead, Vector3.UP)
+            var yaw := atan2(-dirv.x, -dirv.z)
+            var dyaw := wrapf(yaw - float(so["prev_yaw"]), -PI, PI)
+            so["prev_yaw"] = yaw
+            var want := clampf(dyaw / maxf(delta, 0.001) * 0.7, -0.9, 0.9)
+            so["bank"] = lerpf(float(so["bank"]), want, clampf(delta * 4.0, 0.0, 1.0))
+            var mdl: Node3D = node.get_meta("mdl")
+            mdl.rotation.z = float(so["bank"])
+        if not bool(so["fired"]) and off >= float(so["strike_off"]):
+            so["fired"] = true
+            _jet_fire(so, pos)
+        var aa_t: float = float(so["aa_t"]) - delta
+        so["aa_t"] = aa_t
+        if aa_t <= 0.0:
+            so["aa_t"] = 0.35
+            if off > float(so["taxi_end"]) + 150.0 and off < float(so["td"]) - 150.0:
+                if _jet_aa_check(so, node):
+                    sorties.remove_at(k)
+                    _jet_shot_down(so, node)
+
+
+func _jet_fire(so: Dictionary, from_pos: Vector3) -> void:
+    var info: Dictionary = JETS[int(so["jt"])]
+    var a: int = so["a"]
+    var tg: int = so["tg"]
+    var aim: Vector2 = so["aim"]
+    var isl_t := _isl(tg)
+    var shots: int = info["shots"]
+    for w in range(shots):
+        var lp := aim + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 4.5
+        lp.x = clampf(lp.x, -78.0, 78.0)
+        lp.y = clampf(lp.y, -78.0, 78.0)
+        var to_pos := isl_t.to_global(Vector3(lp.x, 1.4, lp.y))
+        var m := _make_missile_model(a == 0, 0)
+        level_root.add_child(m)
+        m.position = from_pos
+        var dist := from_pos.distance_to(to_pos)
+        projectiles.append({
+            "node": m, "start": from_pos, "end": to_pos, "t": 0.0, "dur": maxf(0.8, dist / 85.0) + 0.18 * float(w), "h": dist * 0.03,
+            "attacker": a, "target": tg, "wt": 0, "lp": lp, "tried": [], "kill": -1.0,
+            "jdmg": float(info["dmg"]), "jrad": float(info["radius"]),
+        })
+    _play3d("launch", from_pos, 3.0, 1.3)
+
+
+func _jet_aa_check(so: Dictionary, node: Node3D) -> bool:
+    var tg: int = so["tg"]
+    var te: Dictionary = emp[tg]
+    if bool(te["dead"]):
+        return false
+    var structs: Array = te["structs"]
+    var tried: Dictionary = so["tried"]
+    var info: Dictionary = JETS[int(so["jt"])]
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
+            continue
+        if int(s["mag"]) <= 0 or float(s["cd"]) > 0.0:
+            continue
+        var sid: int = s["id"]
+        if int(tried.get(sid, 0)) >= 2:
+            continue
+        var dpos := _struct_world(tg, s)
+        var dtype: int = s["sub"]
+        var rng: float = DEFENSES[dtype]["range"]
+        var flat := Vector2(node.position.x - dpos.x, node.position.z - dpos.z)
+        if flat.length() > rng:
+            continue
+        tried[sid] = int(tried.get(sid, 0)) + 1
+        s["mag"] = int(s["mag"]) - 1
+        s["cd"] = float(DEFENSES[dtype]["cd"])
+        var chance: float = float(JET_DEF[dtype]) * (1.0 - float(info["evade"]))
+        var ok := randf() < chance
+        _spawn_interceptor(dpos + Vector3(0.0, 6.0, 0.0), node.position, ok)
+        if ok:
+            return true
+    return false
+
+
+func _jet_shot_down(so: Dictionary, node: Node3D) -> void:
+    var a: int = so["a"]
+    var tg: int = so["tg"]
+    var jt: int = so["jt"]
+    _explode(node.position, Color(1.0, 0.5, 0.1), 7.0)
+    _play3d("boom", node.position, 8.0)
+    node.queue_free()
+    var e: Dictionary = emp[a]
+    var jets: Array = e["jets"]
+    jets.erase(so["j"])
+    if a == 0:
+        _say("Your %s was shot down over Enemy %d!" % [JETS[jt]["short"], tg])
+        _play_ui("alarm", -2.0)
+    elif tg == 0:
+        _say("Your air defense shot down an enemy %s!" % JETS[jt]["short"])
+    _refresh_ui()
+
+
+func _sortie_finish(so: Dictionary) -> void:
+    var a: int = so["a"]
+    var j: Dictionary = so["j"]
+    var e: Dictionary = emp[a]
+    if bool(e["dead"]):
+        var nn = j["node"]
+        if nn != null and is_instance_valid(nn):
+            var n3: Node3D = nn
+            n3.queue_free()
+        j["node"] = null
+        var jets: Array = e["jets"]
+        jets.erase(j)
+        return
+    j["state"] = "rearm"
+    j["timer"] = 14.0
+    _park_node(a, j)
+    if a == 0:
+        _say("%s landed safely and is being rearmed." % JETS[int(j["t"])]["short"])
+
+
+const AI_PAD_ORDER := [5, 4, 0, 1, 6, 2, 3, 7]
+
+
+func _ai_think(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var money_i: int = e["money"]
+    var aggr: float = e["aggr"]
+    var nb: int = e["builders"]
+    var lvl: int = e["blevel"]
+    var defs_all := _count_structs(i, "defense", -1, false)
+
+    # 1. builders first: they raise houses for income by themselves
+    if nb < 1:
+        _do_hire(i, "builder")
+        return
+    if nb < 2 and elapsed > 90.0:
+        if _do_hire(i, "builder") == 0:
+            return
+    # 2. a repair crew once something is broken (or after a while)
+    var hurt := _count_destroyed(i) > 0 or _damaged_count(i) > 0
+    if int(e["brep"]) < 1 and (hurt or elapsed > 320.0):
+        if _do_hire(i, "brep") == 0:
+            return
+    # 3. build a stockpile before the war starts
+    if elapsed > 300.0 and _ammo_total(i) < int(e["salvo"]):
+        var mt0 := _ai_pick_weapon(i)
+        if mt0 >= 0 and _do_buy_missile(i, mt0) == 0:
+            return
+    # 4. air defense grows with time (cautious rivals build earlier)
+    var want_def := mini(MAX_DEFENSES, int((elapsed - 120.0) / 140.0) + (1 if aggr < 0.5 else 0))
+    if defs_all < want_def:
+        var dt := -1
+        for t2 in range(4, -1, -1):
+            if _unlocked("d", t2) and money_i >= int(DEFENSES[t2]["price"]):
+                dt = t2
+                break
+        if dt >= 0:
+            if _do_buy_defense(i, dt) == 0:
+                return
+    if int(e["arep"]) < 1 and defs_all >= 2:
+        if _do_hire(i, "arep") == 0:
+            return
+    # 5. better builders = better houses = more money
+    if lvl < MAX_LEVEL and elapsed > 160.0 * float(lvl):
+        var need := int(float(BUILDER_UPGRADE[lvl - 1]) * 1.2)
+        if money_i >= need:
+            if _do_upgrade_builder(i) == 0:
+                return
+    # 6. more crews as the game goes on
+    var goal_b := mini(MAX_BUILDERS, 2 + int(elapsed / 300.0))
+    if nb < goal_b and money_i >= int(float(_worker_price(i, "builder")) * 1.2):
+        if _do_hire(i, "builder") == 0:
+            return
+    var goal_r := mini(MAX_BREP, 1 + int(elapsed / 600.0))
+    if int(e["brep"]) < goal_r and money_i >= int(float(_worker_price(i, "brep")) * 1.5):
+        if _do_hire(i, "brep") == 0:
+            return
+    # 7. fighter jets once they unlock
+    var goal_j := mini(MAX_JETS, int((elapsed - 600.0) / 500.0))
+    if _jets_owned(i, -1) < goal_j:
+        for jt in range(5, -1, -1):
+            if _unlocked("j", jt) and money_i >= int(float(JETS[jt]["price"]) * 1.2):
+                if _do_buy_jet(i, jt) == 0:
+                    return
+                break
+    # 8. keep stockpiling weapons for the next salvo
+    if _ammo_total(i) < int(e["salvo"]) + 3:
+        var mt := _ai_pick_weapon(i)
+        if mt >= 0:
+            _do_buy_missile(i, mt)
+
+
+func _ai_pick_weapon(i: int) -> int:
+    var e: Dictionary = emp[i]
+    if _ammo_total(i) >= MAX_MISSILES:
+        return -1
+    var options: Array = []
+    for t in AI_PAD_ORDER:
+        if not _unlocked("m", t):
+            continue
+        if int(e["money"]) < int(MISSILES[t]["price"]):
+            continue
+        options.append(t)
+    if options.is_empty():
+        return -1
+    if options.size() > 1 and randf() < 0.65:
+        return int(options[options.size() - 1])
+    return int(options[randi() % options.size()])
+
+
+func _ai_salvo(i: int) -> void:
+    var e: Dictionary = emp[i]
+    var target := _ai_pick_target(i)
+    var ammo: Array = e["ammo"]
+    var primary := {}
+    if target >= 0:
+        primary = _weighted_struct(target)
+    if target < 0 or primary.is_empty():
+        e["rest"] = 20.0
+        return
+    var delay := 0.0
+    var fired := 0
+    for t in range(NM):
+        var n: int = ammo[t]
+        for k in range(n):
+            var aim_s := primary
+            if randf() < 0.3:
+                var alt := _weighted_struct(target)
+                if not alt.is_empty():
+                    aim_s = alt
+            var aim := Vector2(float(aim_s["lx"]), float(aim_s["lz"]))
+            _queue_launch(i, target, t, aim, delay)
+            delay += 0.22
+            fired += 1
+        ammo[t] = 0
+    var jets: Array = e["jets"]
+    var jl: Array = jets.duplicate()
+    for jv in jl:
+        var jj: Dictionary = jv
+        var aim_j := primary
+        if randf() < 0.5:
+            var alt2 := _weighted_struct(target)
+            if not alt2.is_empty():
+                aim_j = alt2
+        var aim2 := Vector2(float(aim_j["lx"]), float(aim_j["lz"]))
+        if _queue_sortie(i, target, jj, aim2, delay + 3.0):
+            delay += 1.5
+            fired += 1
+    var aggr: float = e["aggr"]
+    var base_rest := randf_range(90.0, 150.0) * (1.3 - 0.6 * aggr)
+    e["rest"] = base_rest * maxf(0.55, 1.0 - elapsed / 3000.0)
+    e["salvo"] = randi_range(5, 8) + int(elapsed / 300.0)
+    e["grudge"] = target
+    if target == 0 and fired > 0:
+        _say("WARNING! Enemy %d launched %d missiles/aircraft at you!" % [i, fired])
+        _play_ui("siren", -3.0)
+
+
+func _build_sat_ui() -> void:
+    sat_root = Control.new()
+    sat_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(sat_root)
+    sat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    sat_panels = []
+
+    sat_money = Label.new()
+    _style_text(sat_money, 36, Color(0.25, 1.0, 0.3))
+    sat_money.position = Vector2(14.0, 8.0)
+    sat_root.add_child(sat_money)
+
+    var top := VBoxContainer.new()
+    top.add_theme_constant_override("separation", 8)
+    sat_root.add_child(top)
+    var tp := PanelContainer.new()
+    _style_panel(tp, Color(0.16, 0.19, 0.23, 0.92))
+    top.add_child(tp)
+    sat_title = Label.new()
+    sat_title.text = "SELECT TARGET"
+    sat_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sat_title.custom_minimum_size = Vector2(520.0, 0.0)
+    sat_title.add_theme_font_size_override("font_size", 36)
+    tp.add_child(sat_title)
+    sat_island_box = HBoxContainer.new()
+    sat_island_box.alignment = BoxContainer.ALIGNMENT_CENTER
+    sat_island_box.add_theme_constant_override("separation", 10)
+    top.add_child(sat_island_box)
+    sat_island_btns = []
+    for k in range(1, 4):
+        var b := _make_button("ENEMY %d" % k, Color(0.7, 0.2, 0.2), _sat_pick_island.bind(k))
+        b.custom_minimum_size = Vector2(170.0, 54.0)
+        sat_island_box.add_child(b)
+        sat_island_btns.append(b)
+    top.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 6)
+    top.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    sat_panels.append(top)
+
+    var lp := VBoxContainer.new()
+    lp.add_theme_constant_override("separation", 4)
+    lp.position = Vector2(12.0, 64.0)
+    sat_root.add_child(lp)
+    sat_panels.append(lp)
+    var pg := HBoxContainer.new()
+    pg.add_theme_constant_override("separation", 6)
+    lp.add_child(pg)
+    sat_page_btns = []
+    for pi in range(2):
+        var pb := _make_button("MISSILES" if pi == 0 else "JETS", Color(0.05, 0.05, 0.06), _sat_page.bind(pi))
+        pb.custom_minimum_size = Vector2(152.0, 46.0)
+        pb.add_theme_font_size_override("font_size", 22)
+        pg.add_child(pb)
+        sat_page_btns.append(pb)
+    sat_type_btns = []
+    for t in range(NM + JETS.size()):
+        var tb := Button.new()
+        tb.custom_minimum_size = Vector2(310.0, 56.0)
+        _style_button(tb, Color(0.07, 0.12, 0.2, 0.88))
+        for stn in ["normal", "hover", "pressed", "disabled", "focus"]:
+            var sbx: StyleBoxFlat = tb.get_theme_stylebox(stn)
+            sbx.content_margin_left = 76.0
+            sbx.content_margin_top = 2.0
+            sbx.content_margin_bottom = 2.0
+        tb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        tb.add_theme_font_size_override("font_size", 18)
+        tb.pressed.connect(_play_ui.bind("click", -8.0))
+        tb.pressed.connect(_sat_set_type.bind(t))
+        var ic := MiniIcon.new()
+        ic.kind = 0 if t < NM else 7
+        ic.sub = t if t < NM else t - NM
+        ic.position = Vector2(6.0, 4.0)
+        ic.size = Vector2(56.0, 48.0)
+        tb.add_child(ic)
+        lp.add_child(tb)
+        sat_type_btns.append(tb)
+
+    var rb := VBoxContainer.new()
+    rb.add_theme_constant_override("separation", 14)
+    sat_root.add_child(rb)
+    sat_mult_btns = []
+    for m in [1, 5]:
+        var xb := _make_button("X%d" % m, Color(0.05, 0.05, 0.06), _sat_set_mult.bind(m))
+        xb.custom_minimum_size = Vector2(104.0, 104.0)
+        xb.add_theme_font_size_override("font_size", 36)
+        rb.add_child(xb)
+        sat_mult_btns.append(xb)
+    rb.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, 14)
+    rb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    rb.grow_vertical = Control.GROW_DIRECTION_BOTH
+    sat_panels.append(rb)
+
+    var bot := VBoxContainer.new()
+    bot.alignment = BoxContainer.ALIGNMENT_CENTER
+    bot.add_theme_constant_override("separation", 8)
+    bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    sat_root.add_child(bot)
+    sat_hint = Label.new()
+    sat_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    sat_hint.custom_minimum_size = Vector2(820.0, 0.0)
+    sat_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sat_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(sat_hint, 22, Color(1.0, 0.93, 0.6))
+    bot.add_child(sat_hint)
+    sat_back_btn = _make_button("Back", Color(0.05, 0.1, 0.2), _close_sat)
+    sat_back_btn.custom_minimum_size = Vector2(280.0, 64.0)
+    sat_back_btn.add_theme_font_size_override("font_size", 34)
+    sat_back_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+    sat_back_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.4))
+    sat_back_btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.85, 0.1))
+    bot.add_child(sat_back_btn)
+    bot.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
+    bot.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    bot.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    sat_panels.append(sat_back_btn)
+
+    # placement panel (move a truck / launcher)
+    var pp := VBoxContainer.new()
+    pp.alignment = BoxContainer.ALIGNMENT_CENTER
+    pp.add_theme_constant_override("separation", 8)
+    sat_root.add_child(pp)
+    place_label = Label.new()
+    place_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    place_label.custom_minimum_size = Vector2(820.0, 0.0)
+    place_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    place_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(place_label, 24, Color(0.6, 1.0, 0.7))
+    pp.add_child(place_label)
+    var prow := HBoxContainer.new()
+    prow.alignment = BoxContainer.ALIGNMENT_CENTER
+    prow.add_theme_constant_override("separation", 16)
+    pp.add_child(prow)
+    var okb := _make_button("PLACE HERE", Color(0.1, 0.6, 0.2), _place_confirm)
+    okb.custom_minimum_size = Vector2(300.0, 64.0)
+    okb.add_theme_font_size_override("font_size", 30)
+    prow.add_child(okb)
+    var cb := _make_button("CANCEL", Color(0.6, 0.15, 0.15), _place_cancel)
+    cb.custom_minimum_size = Vector2(240.0, 64.0)
+    cb.add_theme_font_size_override("font_size", 30)
+    prow.add_child(cb)
+    pp.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 8)
+    pp.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    pp.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    place_panel = pp
+    sat_panels.append(pp)
+    pp.visible = false
+    sat_root.visible = false
+
+
+func _sat_page(p: int) -> void:
+    sat_page = p
+    if p == 0 and sat_type >= NM:
+        sat_type = 0
+    elif p == 1 and sat_type < NM:
+        sat_type = NM
+    _update_sat_marker()
+    _refresh_sat()
+
+
+func _open_sat_with(t: int) -> void:
+    _open_sat()
+    if sat_open:
+        sat_type = t
+        sat_page = 1 if t >= NM else 0
+        _refresh_sat()
+
+
+func _sat_blast_radius() -> float:
+    if place_mode:
+        return 5.0
+    if sat_type >= NM:
+        return maxf(4.0, float(JETS[sat_type - NM]["radius"]) + 2.0)
+    var info: Dictionary = MISSILES[sat_type]
+    return maxf(4.0, float(info["radius"]) + float(info["cep"]) * 0.5)
+
+
+func _refresh_sat() -> void:
+    if sat_root == null or emp.is_empty():
+        return
+    var e: Dictionary = emp[0]
+    var ammo: Array = e["ammo"]
+    sat_money.text = "$ %s" % _fmt_money(int(e["money"]))
+    sat_title.text = "SELECT TARGET  -  ENEMY %d" % sat_island
+    for k in range(sat_page_btns.size()):
+        var pb: Button = sat_page_btns[k]
+        var on := k == sat_page
+        _style_button(pb, Color(1.0, 0.85, 0.05) if on else Color(0.05, 0.05, 0.06))
+        var fc := Color(0.05, 0.05, 0.05) if on else Color(1.0, 1.0, 1.0)
+        pb.add_theme_color_override("font_color", fc)
+        pb.add_theme_color_override("font_hover_color", fc)
+        pb.add_theme_color_override("font_pressed_color", fc)
+    for t in range(sat_type_btns.size()):
+        var b: Button = sat_type_btns[t]
+        var is_jet := t >= NM
+        b.visible = (is_jet and sat_page == 1) or ((not is_jet) and sat_page == 0)
+        var have := 0
+        if is_jet:
+            var jinfo: Dictionary = JETS[t - NM]
+            have = _jets_ready(0, t - NM)
+            b.text = "%s\nSTRIKE x%d   READY %d/%d" % [jinfo["short"], int(jinfo["shots"]), have, _jets_owned(0, t - NM)]
+        else:
+            var info: Dictionary = MISSILES[t]
+            have = int(ammo[t])
+            b.text = "%s\nDMG %d      x%d" % [info["short"], int(float(info["dmg"]) * float(info["count"])), have]
+        if t == sat_type:
+            b.modulate = Color(1.0, 1.0, 1.0)
+        elif have > 0:
+            b.modulate = Color(0.72, 0.72, 0.78)
+        else:
+            b.modulate = Color(0.45, 0.45, 0.5)
+    for k2 in range(sat_island_btns.size()):
+        var ib: Button = sat_island_btns[k2]
+        var idx := k2 + 1
+        if idx >= island_count:
+            ib.visible = false
+            continue
+        ib.visible = true
+        var te: Dictionary = emp[idx]
+        ib.disabled = bool(te["dead"])
+        ib.modulate = Color(1.0, 1.0, 1.0) if idx == sat_island else Color(0.7, 0.7, 0.7)
+
+
+func _sat_tap(pos: Vector2) -> void:
+    if place_mode:
+        _place_tap(pos)
+        return
+    if game_state != "playing" or not sat_open or sat_cool > 0.0:
+        return
+    var e: Dictionary = emp[0]
+    sat_local = _sat_screen_to_local(pos)
+    sat_has_point = true
+    _update_sat_marker()
+    if sat_type >= NM:
+        var jt := sat_type - NM
+        var ready := _jets_ready(0, jt)
+        if ready < 1:
+            _play_ui("error")
+            _say("No %s ready at your airport. Buy one in MILITARY > AIRCRAFT, or wait for it to land." % JETS[jt]["short"])
+            _refresh_sat()
+            return
+        var want := mini(sat_mult, ready)
+        var sent := 0
+        var delay := 0.0
+        var jets: Array = e["jets"]
+        for jv in jets:
+            if sent >= want:
+                break
+            var j: Dictionary = jv
+            if int(j["t"]) == jt and str(j["state"]) == "parked":
+                if _queue_sortie(0, sat_island, j, sat_local, delay):
+                    sent += 1
+                    delay += 1.4
+                else:
+                    _play_ui("error")
+                    _say("Not enough money for the %s sortie fee ($%d)." % [JETS[jt]["short"], int(JETS[jt]["fee"])])
+                    break
+        if sent > 0:
+            sat_cool = 0.4
+            _say("%d x %s scrambled towards Enemy %d!" % [sent, JETS[jt]["short"], sat_island])
+            _vibrate(40)
+        _refresh_sat()
+        _refresh_ui()
+        return
+    var ammo: Array = e["ammo"]
+    var have: int = ammo[sat_type]
+    if have < 1:
+        _play_ui("error")
+        _say("No %s left. Buy more in MILITARY, or pick another weapon." % MISSILES[sat_type]["short"])
+        _refresh_sat()
+        return
+    var n := mini(sat_mult, have)
+    var delay2 := 0.0
+    for k in range(n):
+        _queue_launch(0, sat_island, sat_type, sat_local, delay2)
+        delay2 += 0.14
+    ammo[sat_type] = have - n
+    sat_cool = 0.22
+    _say("%d x %s launched at Enemy %d!" % [n, MISSILES[sat_type]["short"], sat_island])
+    _vibrate(40)
+    _refresh_sat()
+    _refresh_ui()
+
+
+# ---------- moving trucks / launchers ----------
+func _begin_move(kind: String, id: int) -> void:
+    if game_state != "playing" or sat_open:
+        return
+    place_kind = kind
+    place_id = id
+    place_ok = false
+    _close_windows()
+    place_mode = true
+    _open_sat()
+    if not sat_open:
+        place_mode = false
+        return
+    sat_island = 0
+    sat_has_point = false
+    _remove_sat_marker()
+    for pv in sat_panels:
+        var pc: Control = pv
+        pc.visible = false
+    place_panel.visible = true
+    sat_hint.visible = false
+    place_label.text = "MOVE: tap a free spot inside the green area, then press PLACE HERE."
+    _update_rings()
+    if place_zone == null or not is_instance_valid(place_zone):
+        place_zone = MeshInstance3D.new()
+        var zm := BoxMesh.new()
+        zm.size = Vector3(MIL_RECT.size.x, 0.05, MIL_RECT.size.y)
+        place_zone.mesh = zm
+        var zmat := StandardMaterial3D.new()
+        zmat.albedo_color = Color(0.2, 1.0, 0.4, 0.28)
+        zmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        zmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+        place_zone.material_override = zmat
+        place_zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        _isl(0).add_child(place_zone)
+        place_zone.position = Vector3(MIL_RECT.position.x + MIL_RECT.size.x * 0.5, 1.0, MIL_RECT.position.y + MIL_RECT.size.y * 0.5)
+
+
+func _end_place() -> void:
+    place_mode = false
+    place_panel.visible = false
+    for pv in sat_panels:
+        var pc: Control = pv
+        pc.visible = true
+    place_panel.visible = false
+    sat_hint.visible = true
+    if place_zone != null and is_instance_valid(place_zone):
+        place_zone.queue_free()
+    place_zone = null
+    _close_sat()
+
+
+func _place_cancel() -> void:
+    if place_mode:
+        _end_place()
+        _say("Move cancelled.")
+
+
+func _place_tap(pos: Vector2) -> void:
+    if sat_island != 0:
+        return
+    sat_local = _sat_screen_to_local(pos)
+    sat_has_point = true
+    _update_sat_marker()
+    place_ok = _spot_free(0, sat_local.x, sat_local.y, place_id)
+    if place_ok:
+        place_label.text = "Spot is free. Press PLACE HERE to move it."
+    else:
+        place_label.text = "Blocked or outside the green area. Tap another spot."
+        _play_ui("error", -8.0)
+
+
+func _place_confirm() -> void:
+    if not place_mode:
+        return
+    if not sat_has_point or not place_ok:
+        _play_ui("error")
+        place_label.text = "First tap a free spot inside the green area."
+        return
+    var code := 0
+    if place_kind == "d":
+        code = _do_move_defense(0, place_id, sat_local.x, sat_local.y)
+    else:
+        code = _do_move_truck(0, place_id, sat_local.x, sat_local.y)
+    if code != 0:
+        _play_ui("error")
+        place_label.text = "Could not place it there."
+        return
+    _end_place()
+    _play_ui("build", -4.0)
+    _say("Moved. Re-open MILITARY > MANAGE to move or sell more.")
+    _save_game()
+
+
+func _evade(t: int) -> int:
+    var sum := 0.0
+    for d in range(DEFENSES.size()):
+        sum += float(DEF_TABLE[d][t])
+    return int(round((1.0 - sum / float(DEFENSES.size())) * 100.0))
+
+
+func _make_list(parent: Control) -> VBoxContainer:
+    var sc := ScrollContainer.new()
+    sc.custom_minimum_size = Vector2(920.0, 430.0)
+    sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    parent.add_child(sc)
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", 8)
+    v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    sc.add_child(v)
+    return v
+
+
+func _build_military_window() -> void:
+    mil_tab_btns = []
+    var w := _make_window(["MISSILE", "ANTI - AIR", "AIRCRAFT", "MANAGE"], _mil_tab, mil_tab_btns)
+    mil_panel = w["panel"]
+    var v: VBoxContainer = w["vbox"]
+    var gm := _make_grid(v)
+    mil_body_missile = gm.get_parent()
+    cards_missile = []
+    for t in range(NM):
+        var m: Dictionary = MISSILES[t]
+        var c := _make_card(0, t, str(m["name"]), ["", "", str(m["cls"])],
+            _ui_buy_missile.bind(t, 1), _ui_buy_missile.bind(t, 5))
+        gm.add_child(c["card"])
+        cards_missile.append(c)
+    var ga := _make_grid(v)
+    mil_body_aa = ga.get_parent()
+    cards_aa = []
+    for t2 in range(DEFENSES.size()):
+        var d: Dictionary = DEFENSES[t2]
+        var c2 := _make_card(1, t2, str(d["name"]), ["", "", str(d["cls"])], _ui_buy_def.bind(t2), Callable())
+        ga.add_child(c2["card"])
+        cards_aa.append(c2)
+    mil_body_aa.hide()
+    var gj := _make_grid(v)
+    mil_body_jet = gj.get_parent()
+    cards_jet = []
+    for t3 in range(JETS.size()):
+        var jd: Dictionary = JETS[t3]
+        var c3 := _make_card(7, t3, str(jd["name"]), ["", "", str(jd["cls"])], _ui_buy_jet.bind(t3), Callable())
+        gj.add_child(c3["card"])
+        cards_jet.append(c3)
+    mil_body_jet.hide()
+    manage_list = _make_list(v)
+    mil_body_manage = manage_list.get_parent()
+    mil_body_manage.hide()
+
+
+func _mil_tab(k: int) -> void:
+    mil_tab = k
+    mil_body_missile.visible = k == 0
+    mil_body_aa.visible = k == 1
+    mil_body_jet.visible = k == 2
+    mil_body_manage.visible = k == 3
+    _tab_style(mil_tab_btns, k)
+    if k == 3:
+        _refresh_manage()
+
+
+func _manage_row(kind: String, id: int, icon_kind: int, icon_sub: int, title: String, info: String, refund: int) -> void:
+    var card := PanelContainer.new()
+    _style_panel(card, Color(0.1, 0.11, 0.14, 0.98))
+    card.custom_minimum_size = Vector2(900.0, 84.0)
+    var h := HBoxContainer.new()
+    h.add_theme_constant_override("separation", 10)
+    card.add_child(h)
+    var ic := MiniIcon.new()
+    ic.kind = icon_kind
+    ic.sub = icon_sub
+    ic.custom_minimum_size = Vector2(70.0, 70.0)
+    h.add_child(ic)
+    var mid := VBoxContainer.new()
+    mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    h.add_child(mid)
+    var t := Label.new()
+    t.text = title
+    t.add_theme_font_size_override("font_size", 23)
+    t.add_theme_color_override("font_color", Color(0.9, 0.92, 0.95))
+    mid.add_child(t)
+    var inf := Label.new()
+    inf.text = info
+    inf.add_theme_font_size_override("font_size", 18)
+    inf.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+    mid.add_child(inf)
+    var mb := _make_button("MOVE", Color(0.1, 0.32, 0.95), _begin_move.bind(kind, id))
+    mb.custom_minimum_size = Vector2(130.0, 52.0)
+    mb.add_theme_font_size_override("font_size", 22)
+    h.add_child(mb)
+    var sb := _make_button("SELL $%s" % _fmt_money(refund), Color(0.7, 0.15, 0.15), _ui_sell.bind(kind, id))
+    sb.custom_minimum_size = Vector2(190.0, 52.0)
+    sb.add_theme_font_size_override("font_size", 22)
+    h.add_child(sb)
+    manage_list.add_child(card)
+
+
+func _refresh_manage() -> void:
+    if manage_list == null:
+        return
+    for ch in manage_list.get_children():
+        ch.queue_free()
+    var e: Dictionary = emp[0]
+    var structs: Array = e["structs"]
+    var count := 0
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) != "defense":
+            continue
+        var sub: int = s["sub"]
+        var st: String = s["state"]
+        var hp := int(round(float(s["hp"]) / float(s["maxhp"]) * 100.0))
+        var refund := int(float(DEFENSES[sub]["price"]) * 0.5) if st == "ok" else 0
+        _manage_row("d", int(s["id"]), 1, sub, str(DEFENSES[sub]["name"]),
+            "Condition %d%%   Shots %d   %s" % [hp, int(s["mag"]), st], refund)
+        count += 1
+    var trucks: Array = e["mnodes"]
+    for tv in trucks:
+        var tr: Dictionary = tv
+        var t: int = tr["t"]
+        var n: int = tr["n"]
+        _manage_row("m", int(tr["id"]), 0, t, "%s truck" % MISSILES[t]["short"],
+            "Loaded %d / %d missiles" % [n, int(tr["cap"])], int(float(MISSILES[t]["price"]) * 0.5 * float(n)))
+        count += 1
+    if count == 0:
+        var l := Label.new()
+        l.text = "Nothing to manage yet. Buy missiles or air defense first."
+        l.add_theme_font_size_override("font_size", 24)
+        manage_list.add_child(l)
+
+
+func _ui_sell(kind: String, id: int) -> void:
+    if game_state != "playing":
+        return
+    var code := 0
+    if kind == "d":
+        code = _do_sell_defense(0, id)
+    else:
+        code = _do_sell_truck(0, id)
+    if code == 0:
+        _play_ui("build", -4.0)
+        _say("Sold. You got half of the price back. Buy a different one in its place.")
+    else:
+        _play_ui("error")
+    _refresh_manage()
+    _after_buy()
+
+
+func _ui_buy_jet(t: int) -> void:
+    var nm: String = JETS[t]["name"]
+    _ui_result(_do_buy_jet(0, t), nm, "%s parked at your airport. Send it from ATTACK > JETS." % nm)
+
+
+func _build_hotbar() -> void:
+    hot_box = HBoxContainer.new()
+    hot_box.add_theme_constant_override("separation", 5)
+    ui_root.add_child(hot_box)
+    var bag := Button.new()
+    bag.custom_minimum_size = Vector2(66.0, 66.0)
+    _style_button(bag, Color(0.14, 0.18, 0.26, 0.9))
+    var bi := MiniIcon.new()
+    bi.kind = 6
+    bag.add_child(bi)
+    bi.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
+    hot_box.add_child(bag)
+    hot_slots = []
+    for k in range(14):
+        var d := _make_slot(k)
+        var sb: Button = d["btn"]
+        hot_box.add_child(sb)
+        hot_slots.append(d)
+    hot_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 6)
+    hot_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    hot_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
+func _on_hot_slot(idx: int) -> void:
+    if game_state != "playing" or idx >= hot_items.size():
+        return
+    var it: Dictionary = hot_items[idx]
+    var k: String = it["k"]
+    if k == "m":
+        _open_sat_with(int(it["t"]))
+    elif k == "j":
+        _open_sat_with(NM + int(it["t"]))
+    else:
+        _say("%s x%d on your island. Air defense shoots incoming missiles and jets by itself." % [DEFENSES[int(it["t"])]["short"], int(it["n"])])
+
+
+func _refresh_hotbar() -> void:
+    var e: Dictionary = emp[0]
+    var ammo: Array = e["ammo"]
+    hot_items = []
+    for t in range(NM):
+        if int(ammo[t]) > 0:
+            hot_items.append({"k": "m", "t": t, "n": int(ammo[t])})
+    for t1 in range(JETS.size()):
+        var jn := _jets_owned(0, t1)
+        if jn > 0:
+            hot_items.append({"k": "j", "t": t1, "n": jn})
+    for t2 in range(DEFENSES.size()):
+        var n := _count_structs(0, "defense", t2, true)
+        if n > 0:
+            hot_items.append({"k": "d", "t": t2, "n": n})
+    for idx in range(hot_slots.size()):
+        var d: Dictionary = hot_slots[idx]
+        var b: Button = d["btn"]
+        var ic: MiniIcon = d["icon"]
+        var lbl: Label = d["lbl"]
+        if idx < hot_items.size():
+            var it: Dictionary = hot_items[idx]
+            b.visible = true
+            ic.visible = true
+            var k: String = it["k"]
+            ic.kind = 0 if k == "m" else (7 if k == "j" else 1)
+            ic.sub = int(it["t"])
+            ic.queue_redraw()
+            lbl.text = "x%d" % int(it["n"])
+        else:
+            ic.visible = false
+            lbl.text = ""
+            b.visible = idx < 8
+
+
+func _refresh_ui() -> void:
+    if money_label == null or emp.is_empty():
+        return
+    var e: Dictionary = emp[0]
+    var money: int = e["money"]
+    var ammo: Array = e["ammo"]
+    var total := _ammo_total(0)
+    stat_missile.text = "Missiles   %d/%d" % [total, MAX_MISSILES]
+    stat_aa.text = "Air defense   %d/%d" % [_count_structs(0, "defense", -1, true), MAX_DEFENSES]
+    stat_jets.text = "Aircraft   %d/%d" % [_jets_owned(0, -1), MAX_JETS]
+    stat_house.text = "Houses   %d/%d" % [_count_structs(0, "house", -1, true), MAX_HOUSES]
+    money_label.text = "$ %s" % _fmt_money(money)
+    income_label.text = "%s/s" % _fmt_money(_income(0))
+    if elapsed < PEACE_TIME:
+        var left := int(PEACE_TIME - elapsed)
+        stats_label.text = "Peace time  %d:%02d" % [int(left / 60), left % 60]
+    else:
+        stats_label.text = "WAR! Rivals can attack"
+
+    # military window
+    for t in range(NM):
+        var c: Dictionary = cards_missile[t]
+        var m: Dictionary = MISSILES[t]
+        var price: int = m["price"]
+        var info: Label = c["info"]
+        var b1: Button = c["b1"]
+        var b5: Button = c["b5"]
+        if not _unlocked("m", t):
+            info.text = "LOCKED\nUnlocks in %s\nDMG %d" % [_unlock_text("m", t), int(float(m["dmg"]) * float(m["count"]))]
+            b1.text = "LOCKED"
+            b5.text = "LOCKED"
+            b1.disabled = true
+            b5.disabled = true
+            continue
+        info.text = "DMG %d\nRadius %d    Evade %d%%\nOwned: %d" % [int(float(m["dmg"]) * float(m["count"])), int(m["radius"]), _evade(t), int(ammo[t])]
+        b1.text = "$%s   X1" % _fmt_money(price)
+        b5.text = "$%s   X5" % _fmt_money(price * 5)
+        b1.disabled = money < price or total >= MAX_MISSILES
+        b5.disabled = money < price * 5 or total + 5 > MAX_MISSILES
+    for t2 in range(DEFENSES.size()):
+        var c2: Dictionary = cards_aa[t2]
+        var d: Dictionary = DEFENSES[t2]
+        var dprice: int = d["price"]
+        var info2: Label = c2["info"]
+        var db: Button = c2["b1"]
+        if not _unlocked("d", t2):
+            info2.text = "LOCKED\nUnlocks in %s\nRange %d" % [_unlock_text("d", t2), int(d["range"])]
+            db.text = "LOCKED"
+            db.disabled = true
+            continue
+        info2.text = "Range %d    Shots %d\nReload %.1fs    Refill $%d\nOwned: %d" % [int(d["range"]), int(d["mag"]), float(d["cd"]), int(d["ref"]), _count_structs(0, "defense", t2, false)]
+        db.text = "$%s   BUY" % _fmt_money(dprice)
+        db.disabled = money < dprice or _count_structs(0, "defense", -1, false) >= MAX_DEFENSES
+    for t3 in range(JETS.size()):
+        var c3: Dictionary = cards_jet[t3]
+        var jd: Dictionary = JETS[t3]
+        var jprice: int = jd["price"]
+        var info3: Label = c3["info"]
+        var jb: Button = c3["b1"]
+        if not _unlocked("j", t3):
+            info3.text = "LOCKED\nUnlocks in %s\nStrike x%d  DMG %d" % [_unlock_text("j", t3), int(jd["shots"]), int(jd["dmg"])]
+            jb.text = "LOCKED"
+            jb.disabled = true
+            continue
+        info3.text = "Strike x%d   DMG %d\nStealth %d%%   Sortie $%d\nOwned: %d" % [int(jd["shots"]), int(jd["dmg"]), int(float(jd["evade"]) * 100.0), int(jd["fee"]), _jets_owned(0, t3)]
+        jb.text = "$%s   BUY" % _fmt_money(jprice)
+        jb.disabled = money < jprice or _jets_owned(0, -1) >= MAX_JETS
+
+    # worker window
+    var kinds := ["builder", "brep", "arep"]
+    var descs := ["Auto-builds and upgrades houses", "Fixes wrecked houses (they pay nothing while broken)", "Repairs wrecked air defense"]
+    for k in range(3):
+        var wc: Dictionary = cards_worker[k]
+        var kind: String = kinds[k]
+        var n := _worker_total(e, kind)
+        var mx := _worker_max(kind)
+        var winfo: Label = wc["info"]
+        winfo.text = "%s\nHired %d / %d" % [descs[k], n, mx]
+        var wb: Button = wc["b1"]
+        var wprice := _worker_price(0, kind)
+        if n >= mx:
+            wb.text = "MAX"
+            wb.disabled = true
+        else:
+            wb.text = "$%s   HIRE" % _fmt_money(wprice)
+            wb.disabled = money < wprice
+    var lvl: int = e["blevel"]
+    var ut: Label = up_card["title"]
+    var ui: Label = up_card["info"]
+    var ub: Button = up_card["b1"]
+    ut.text = "Builder Lv.%d" % lvl
+    if lvl >= MAX_LEVEL:
+        ui.text = "Max level reached.\nEvery house earns +$%d/s" % int(HOUSE_INCOME[MAX_LEVEL - 1])
+        ub.text = "MAX"
+        ub.disabled = true
+    else:
+        var uprice: int = BUILDER_UPGRADE[lvl - 1]
+        ui.text = "Houses Lv%d -> Lv%d\nEarning +$%d -> +$%d per house" % [lvl, lvl + 1, int(HOUSE_INCOME[lvl - 1]), int(HOUSE_INCOME[lvl])]
+        ub.text = "$%s   UPGRADE" % _fmt_money(uprice)
+        ub.disabled = money < uprice or int(e["builders"]) < 1
+    _refresh_hotbar()
+    if sat_open:
+        _refresh_sat()
+
+
+func _selftest() -> void:
+    print("SELFTEST start")
+    await get_tree().process_frame
+    _start_new(3)
+    var me: Dictionary = emp[0]
+    me["money"] = 500000000
+    elapsed = 4000.0
+    print("SELFTEST hire ", _do_hire(0, "builder"), _do_hire(0, "builder"), _do_hire(0, "brep"), _do_hire(0, "arep"))
+    for t in range(NM):
+        print("SELFTEST buy ", t, " ", _do_buy_missile(0, t, 5))
+    for t2 in range(5):
+        print("SELFTEST def ", t2, " ", _do_buy_defense(0, t2), _do_buy_defense(0, t2))
+    for t3 in range(JETS.size()):
+        print("SELFTEST jet ", t3, " ", _do_buy_jet(0, t3), _do_buy_jet(0, t3))
+    print("SELFTEST up ", _do_upgrade_builder(0), _do_upgrade_builder(0))
+    _toggle_mil()
+    for k in range(4):
+        _mil_tab(k)
+    _close_windows()
+    _toggle_work()
+    _work_tab(1)
+    _close_windows()
+    _refresh_ui()
+    # sell and move
+    var structs: Array = me["structs"]
+    var first_def := -1
+    var second_def := -1
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) == "defense":
+            if first_def < 0:
+                first_def = int(s["id"])
+            elif second_def < 0:
+                second_def = int(s["id"])
+    print("SELFTEST move ", _do_move_defense(0, first_def, -40.0, -30.0), " blocked ", _do_move_defense(0, second_def, -40.0, -30.0), " sell ", _do_sell_defense(0, second_def))
+    var trucks: Array = me["mnodes"]
+    var tid := int(trucks[0]["id"])
+    print("SELFTEST truck move ", _do_move_truck(0, tid, -10.0, -62.0), " sell ", _do_sell_truck(0, int(trucks[1]["id"])))
+    for k2 in range(120):
+        _process(0.25)
+    _refresh_ui()
+    _begin_move("d", first_def)
+    for k3 in range(3):
+        await get_tree().process_frame
+    _process(0.1)
+    _place_tap(Vector2(640.0, 300.0))
+    _place_confirm()
+    print("SELFTEST place done, sat_open=", sat_open, " ok=", place_ok)
+    if place_mode:
+        _place_cancel()
+    print("SELFTEST after cancel sat_open=", sat_open, " place_mode=", place_mode)
+    for r in range(1, 3):
+        var re: Dictionary = emp[r]
+        re["rest"] = 99999.0
+    _open_sat()
+    _sat_page(1)
+    _sat_set_type(NM + 1)
+    _sat_set_mult(5)
+    for k4 in range(3):
+        await get_tree().process_frame
+    _sat_tap(Vector2(640.0, 360.0))
+    sat_cool = 0.0
+    _sat_page(0)
+    _sat_set_type(1)
+    _sat_tap(Vector2(500.0, 300.0))
+    _sat_pick_island(2)
+    print("SELFTEST queued ", launch_queue.size())
+    var mx1 := 0
+    for k6 in range(300):
+        _process(0.25)
+        mx1 = maxi(mx1, sorties.size())
+    print("SELFTEST player sorties max ", mx1, " now ", sorties.size(), " my jets ", _jets_owned(0, -1), " proj ", projectiles.size())
+    _close_sat()
+    for t4 in range(1, 3):
+        var ee: Dictionary = emp[t4]
+        ee["money"] = 50000000
+    for r2 in range(1, 3):
+        var re2: Dictionary = emp[r2]
+        re2["rest"] = 0.0
+    me["money"] = 500000000
+    var maxs := 0
+    for k5 in range(2400):
+        _process(0.25)
+        maxs = maxi(maxs, sorties.size())
+    print("SELFTEST max sorties ", maxs, " jets mine ", _jets_owned(0, -1), " e1 ", _jets_owned(1, -1), " e2 ", _jets_owned(2, -1))
+    _refresh_ui()
+    _save_game()
+    print("SELFTEST load ", _load_game())
+    _build_world()
+    _refresh_ui()
+    # phase 2: rivals play by themselves
+    _start_new(3)
+    elapsed = 4000.0
+    var me2: Dictionary = emp[0]
+    me2["money"] = 500000000
+    for t5 in range(5):
+        _do_buy_defense(0, t5)
+        _do_buy_defense(0, t5)
+    for hs in range(1, 50):
+        var hp2 := _house_pos(hs)
+        var nh := _add_struct(0, "house", 0, hp2.x, hp2.y, "ok", hs)
+        nh["lvl"] = 5
+        nh["maxhp"] = 900.0
+        nh["hp"] = 900.0
+        _spawn_struct_node(0, nh, 0.0)
+    for r3 in range(1, 3):
+        var re3: Dictionary = emp[r3]
+        re3["money"] = 80000000
+        re3["rest"] = 0.0
+        _do_buy_jet(r3, 1)
+        _do_buy_jet(r3, 4)
+        _do_buy_jet(r3, 3)
+    var mx2 := 0
+    var shot := 0
+    for k7 in range(2400):
+        _process(0.25)
+        mx2 = maxi(mx2, sorties.size())
+        if k7 % 200 == 0:
+            print("SELFTEST t=", k7, " ", game_state, " e1 money ", emp[1]["money"], " ammo ", _ammo_total(1), " jets ", _jets_owned(1, -1), " defs ", _count_structs(1, "defense", -1, false), " b ", emp[1]["builders"], " myhouses ", _count_structs(0, "house", -1, true), " proj ", projectiles.size())
+    print("SELFTEST phase2 state ", game_state, " max sorties ", mx2, " e1 jets ", _jets_owned(1, -1), " e2 jets ", _jets_owned(2, -1), " e1 ammo ", _ammo_total(1), " me jets ", _jets_owned(0, -1))
+    print("SELFTEST done")
+    get_tree().quit()
+
+
+func _collect_meshes(n: Node, xf: Transform3D, skip: Array, out: Array) -> void:
+    for c in n.get_children():
+        if skip.has(c):
+            continue
+        if c is MeshInstance3D:
+            var mi: MeshInstance3D = c
+            out.append({"mi": mi, "xf": xf * mi.transform})
+        elif c is Node3D:
+            var n3: Node3D = c
+            _collect_meshes(c, xf * n3.transform, skip, out)
+
+
+# merge all simple meshes below root into one mesh per material (far fewer draw calls)
+func _merge_model(root: Node3D, skip: Array) -> void:
+    var items: Array = []
+    _collect_meshes(root, Transform3D.IDENTITY, skip, items)
+    var groups := {}
+    var merged: Array = []
+    for itv in items:
+        var it: Dictionary = itv
+        var mi: MeshInstance3D = it["mi"]
+        var mat = mi.material_override
+        if mat == null or mi.mesh == null:
+            continue
+        var key: int = mat.get_instance_id()
+        if not groups.has(key):
+            var st := SurfaceTool.new()
+            st.begin(Mesh.PRIMITIVE_TRIANGLES)
+            groups[key] = {"mat": mat, "st": st}
+        var g: Dictionary = groups[key]
+        var stt: SurfaceTool = g["st"]
+        stt.append_from(mi.mesh, 0, it["xf"])
+        merged.append(mi)
+    for gk in groups.keys():
+        var gg: Dictionary = groups[gk]
+        var s2: SurfaceTool = gg["st"]
+        var am: ArrayMesh = s2.commit()
+        var nm := MeshInstance3D.new()
+        nm.mesh = am
+        nm.material_override = gg["mat"]
+        root.add_child(nm)
+    for mv in merged:
+        var old: MeshInstance3D = mv
+        old.get_parent().remove_child(old)
+        old.queue_free()
+
