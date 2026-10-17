@@ -5,21 +5,23 @@ extends Node3D
 ## Procedural sound, layered air defense, drones. (Godot 4.x, Compatibility renderer)
 ## Left half of the screen = floating joystick, right half = drag to look around.
 
-const SAVE_PATH := "user://missile_tycoon_v7.json"
+const SAVE_PATH := "user://missile_tycoon_v8.json"
 const SETTINGS_PATH := "user://settings_v1.json"
-const PLOT_HALF := 80.0
-const PLAYER_HALF := 77.0
-const RING := [0.0, 0.0, 150.0, 180.0, 215.0]
-const WALK_SPEED := 20.0
+const PLOT_HALF := 120.0
+const PLAYER_HALF := 117.0
+const RING := [0.0, 0.0, 650.0, 760.0, 900.0]
+const WALK_SPEED := 26.0
 const MAX_HOUSES := 50
 const MAX_DEFENSES := 30
 const MAX_MISSILES := 100
 const MAX_JETS := 12
 const NM := 8
-const RW_X := 62.0
-const RW_Z0 := 66.0
-const RW_Z1 := -70.0
-const MIL_RECT := Rect2(-77.0, -78.0, 96.0, 86.0)
+const RW_X := 100.0
+const RW_Z0 := 104.0
+const RW_Z1 := -104.0
+const TAXI_X := 88.0
+const ISL_LIM := 118.0
+const MIL_RECT := Rect2(-116.0, -116.0, 154.0, 126.0)
 const MAX_BUILDERS := 5
 const MAX_BREP := 5
 const MAX_AREP := 3
@@ -27,7 +29,7 @@ const MAX_LEVEL := 5
 const START_MONEY := 600
 const PEACE_TIME := 600.0
 const SPACING := 7.0
-const SAT_HEIGHT := 190.0
+const SAT_HEIGHT := 300.0
 const BUILDER_PRICES := [600, 1100, 1900, 3000, 4500]
 const BREP_PRICES := [800, 1400, 2300, 3400, 5000]
 const AREP_PRICES := [3500, 7000, 12000]
@@ -53,35 +55,35 @@ const TEAM_COLORS := [
 
 const MISSILES := [
     {"name": "Cruise Missile", "cls": "Tomahawk / Babur class", "short": "Cruise", "price": 450,
-        "dmg": 55.0, "radius": 5.0, "speed": 60.0, "arc": 0.05, "cep": 3.0, "count": 1, "unlock": 0.0, "cap": 4},
+        "dmg": 55.0, "radius": 5.0, "speed": 90.0, "arc": 0.05, "cep": 3.0, "count": 1, "unlock": 0, "cap": 4},
     {"name": "Ballistic Missile", "cls": "Iskander / Fateh class", "short": "Ballistic", "price": 1400,
-        "dmg": 110.0, "radius": 8.0, "speed": 95.0, "arc": 0.45, "cep": 5.0, "count": 1, "unlock": 240.0, "cap": 2},
+        "dmg": 110.0, "radius": 8.0, "speed": 142.5, "arc": 0.45, "cep": 5.0, "count": 1, "unlock": 3000, "cap": 2},
     {"name": "Hypersonic Missile", "cls": "Kinzhal / Fattah class", "short": "Hypersonic", "price": 3500,
-        "dmg": 190.0, "radius": 6.0, "speed": 170.0, "arc": 0.12, "cep": 3.0, "count": 1, "unlock": 900.0, "cap": 2},
+        "dmg": 190.0, "radius": 6.0, "speed": 255.0, "arc": 0.12, "cep": 3.0, "count": 1, "unlock": 15000, "cap": 2},
     {"name": "MIRV Strategic", "cls": "Sarmat / Topol class, 3 warheads", "short": "MIRV", "price": 8000,
-        "dmg": 80.0, "radius": 7.0, "speed": 130.0, "arc": 0.5, "cep": 14.0, "count": 3, "unlock": 1500.0, "cap": 1},
+        "dmg": 80.0, "radius": 7.0, "speed": 195.0, "arc": 0.5, "cep": 14.0, "count": 3, "unlock": 40000, "cap": 1},
     {"name": "Kamikaze Drone", "cls": "Shahed class", "short": "Drone", "price": 200,
-        "dmg": 40.0, "radius": 3.5, "speed": 32.0, "arc": 0.03, "cep": 6.0, "count": 1, "unlock": 0.0, "cap": 6},
+        "dmg": 40.0, "radius": 3.5, "speed": 48.0, "arc": 0.03, "cep": 6.0, "count": 1, "unlock": 0, "cap": 6},
     {"name": "Rocket Barrage", "cls": "Fajr / MLRS class, 2 rockets", "short": "Rockets", "price": 250,
-        "dmg": 30.0, "radius": 4.5, "speed": 70.0, "arc": 0.22, "cep": 7.0, "count": 2, "unlock": 0.0, "cap": 8},
+        "dmg": 30.0, "radius": 4.5, "speed": 105.0, "arc": 0.22, "cep": 7.0, "count": 2, "unlock": 0, "cap": 8},
     {"name": "Stealth Cruise", "cls": "Storm Shadow / JASSM class", "short": "Stealth", "price": 2400,
-        "dmg": 120.0, "radius": 4.0, "speed": 85.0, "arc": 0.04, "cep": 2.0, "count": 1, "unlock": 600.0, "cap": 4},
+        "dmg": 120.0, "radius": 4.0, "speed": 127.5, "arc": 0.04, "cep": 2.0, "count": 1, "unlock": 8000, "cap": 4},
     {"name": "ICBM", "cls": "Minuteman / Agni-V class, huge blast", "short": "ICBM", "price": 20000,
-        "dmg": 420.0, "radius": 16.0, "speed": 150.0, "arc": 0.8, "cep": 6.0, "count": 1, "unlock": 2400.0, "cap": 1},
+        "dmg": 420.0, "radius": 16.0, "speed": 225.0, "arc": 0.8, "cep": 6.0, "count": 1, "unlock": 100000, "cap": 1},
 ]
 
 
 const DEFENSES := [
     {"name": "CIWS Gun", "cls": "Phalanx / Pantsir-gun class", "short": "CIWS", "price": 1200, "range": 26.0,
-        "cd": 1.2, "mag": 40, "ref": 3, "unlock": 0.0},
+        "cd": 1.2, "mag": 40, "ref": 3, "unlock": 0},
     {"name": "Iron Dome", "cls": "Iron Dome / Tor class, short range", "short": "Iron Dome", "price": 4000, "range": 50.0,
-        "cd": 2.0, "mag": 20, "ref": 30, "unlock": 300.0},
+        "cd": 2.0, "mag": 20, "ref": 30, "unlock": 5000},
     {"name": "HQ-9 / Patriot", "cls": "HQ-9 / Patriot class, medium range", "short": "HQ-9", "price": 9500, "range": 80.0,
-        "cd": 3.0, "mag": 12, "ref": 90, "unlock": 720.0},
+        "cd": 3.0, "mag": 12, "ref": 90, "unlock": 15000},
     {"name": "S-400", "cls": "S-400 class, long range", "short": "S-400", "price": 19000, "range": 115.0,
-        "cd": 3.5, "mag": 10, "ref": 165, "unlock": 1300.0},
+        "cd": 3.5, "mag": 10, "ref": 165, "unlock": 35000},
     {"name": "THAAD / S-500", "cls": "THAAD / S-500 class, anti-ballistic", "short": "THAAD", "price": 36000, "range": 135.0,
-        "cd": 4.5, "mag": 8, "ref": 300, "unlock": 2000.0},
+        "cd": 4.5, "mag": 8, "ref": 300, "unlock": 70000},
 ]
 
 
@@ -96,20 +98,21 @@ const DEF_TABLE := [
 
 # chance that each air-defense type hits an (unstealthy) jet
 const JET_DEF := [0.25, 0.35, 0.6, 0.7, 0.15]
+const DEF_SPEED := [110.0, 120.0, 150.0, 180.0, 220.0]
 
 const JETS := [
     {"name": "JF-17 Thunder", "cls": "Pakistan / China light multirole", "short": "JF-17", "price": 9000, "shots": 2,
-        "dmg": 55.0, "radius": 5.0, "speed": 58.0, "evade": 0.05, "fee": 250, "unlock": 600.0},
+        "dmg": 55.0, "radius": 5.0, "speed": 87.0, "evade": 0.05, "fee": 250, "unlock": 25000},
     {"name": "F-16 Fighting Falcon", "cls": "USA multirole fighter", "short": "F-16", "price": 16000, "shots": 3,
-        "dmg": 60.0, "radius": 5.0, "speed": 66.0, "evade": 0.12, "fee": 400, "unlock": 1000.0},
+        "dmg": 60.0, "radius": 5.0, "speed": 99.0, "evade": 0.12, "fee": 400, "unlock": 45000},
     {"name": "J-10C Vigorous Dragon", "cls": "China delta-canard fighter", "short": "J-10C", "price": 22000, "shots": 3,
-        "dmg": 70.0, "radius": 5.5, "speed": 70.0, "evade": 0.2, "fee": 500, "unlock": 1400.0},
+        "dmg": 70.0, "radius": 5.5, "speed": 105.0, "evade": 0.2, "fee": 500, "unlock": 70000},
     {"name": "Rafale", "cls": "France omnirole fighter", "short": "Rafale", "price": 34000, "shots": 4,
-        "dmg": 80.0, "radius": 5.5, "speed": 72.0, "evade": 0.28, "fee": 700, "unlock": 1900.0},
+        "dmg": 80.0, "radius": 5.5, "speed": 108.0, "evade": 0.28, "fee": 700, "unlock": 110000},
     {"name": "F-22 Raptor", "cls": "USA stealth air-superiority", "short": "F-22", "price": 65000, "shots": 4,
-        "dmg": 100.0, "radius": 6.0, "speed": 84.0, "evade": 0.65, "fee": 1000, "unlock": 2600.0},
+        "dmg": 100.0, "radius": 6.0, "speed": 126.0, "evade": 0.65, "fee": 1000, "unlock": 180000},
     {"name": "F-35 Lightning II", "cls": "USA stealth strike fighter", "short": "F-35", "price": 82000, "shots": 6,
-        "dmg": 85.0, "radius": 6.0, "speed": 76.0, "evade": 0.55, "fee": 1200, "unlock": 3200.0},
+        "dmg": 85.0, "radius": 6.0, "speed": 114.0, "evade": 0.55, "fee": 1200, "unlock": 250000},
 ]
 
 
@@ -186,6 +189,22 @@ var island_pos: Array = []
 var clouds: Array = []
 var projectiles: Array = []
 var sorties: Array = []
+var route_mode := 0
+var route_wps: Array = []
+var route_marks: Array = []
+var route_row: Control
+var route_edit: Control
+var route_btns: Array = []
+var jetcam_on := false
+var jetcam_id := 0
+var jetcam_shot := 0
+var jetcam_t := 0.0
+var jetcam_fixed := Vector3.ZERO
+var jetcam_layer: Control
+var jetcam_info: Label
+var jetcam_live: Label
+var jetcam_btn: Button
+var jetcam_panels: Array = []
 var player: Node3D
 var player_off := Vector3(0.0, 0.0, 5.0)
 var walk_amount := 0.0
@@ -655,7 +674,7 @@ func _build_environment() -> void:
 # =====================================================================
 func _new_empire(aggr: float) -> Dictionary:
     return {
-        "money": START_MONEY, "builders": 0, "brep": 0, "arep": 0, "blevel": 1,
+        "money": START_MONEY, "peak": START_MONEY, "builders": 0, "brep": 0, "arep": 0, "blevel": 1,
         "structs": [], "jobs": [],
         "ammo": [0, 0, 0, 0, 0, 0, 0, 0], "jets": [], "aggr": aggr, "grudge": -1, "phase": "build",
         "salvo": randi_range(5, 7), "rest": 0.0, "think": randf_range(2.0, 4.0),
@@ -1315,7 +1334,7 @@ func _process_launch_queue(delta: float) -> void:
             continue
         launch_queue.remove_at(k)
         if q.has("jet"):
-            _start_sortie(int(q["a"]), int(q["tg"]), q["jet"], q["aim"])
+            _start_sortie(int(q["a"]), int(q["tg"]), q["jet"], q["aim"], q.get("route", {}), int(q.get("payload", 0)))
         else:
             _spawn_missile(int(q["a"]), int(q["tg"]), int(q["t"]), q["aim"])
 
@@ -1383,8 +1402,8 @@ func _spawn_missile(attacker: int, target: int, t: int, aim_local: Vector2) -> v
     var isl_t := _isl(target)
     for w in range(warheads):
         var lp := aim_local + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * cep
-        lp.x = clampf(lp.x, -78.0, 78.0)
-        lp.y = clampf(lp.y, -78.0, 78.0)
+        lp.x = clampf(lp.x, -118.0, 118.0)
+        lp.y = clampf(lp.y, -118.0, 118.0)
         var to_pos := isl_t.to_global(Vector3(lp.x, 1.4, lp.y))
         var m := _make_missile_model(attacker == 0, t)
         level_root.add_child(m)
@@ -1449,42 +1468,9 @@ func _update_projectiles(delta: float) -> void:
                 elif int(d["attacker"]) == 0:
                     _say("Enemy air defense shot down your %s." % MISSILES[int(d["wt"])]["short"])
             continue
-        if dur * (1.0 - t) < 0.5:
+        if dur * (1.0 - t) < 0.8:
             continue
         _try_intercept(d, node, t, dur, p0, p1, h)
-
-
-func _try_intercept(d: Dictionary, node: Node3D, t: float, dur: float, p0: Vector3, p1: Vector3, h: float) -> void:
-    var target: int = d["target"]
-    var wt: int = d["wt"]
-    var te: Dictionary = emp[target]
-    var structs: Array = te["structs"]
-    var tried: Array = d["tried"]
-    for sv in structs:
-        var s: Dictionary = sv
-        if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
-            continue
-        var sid: int = s["id"]
-        if tried.has(sid):
-            continue
-        if int(s["mag"]) <= 0 or float(s["cd"]) > 0.0:
-            continue
-        var dpos := _struct_world(target, s)
-        var dtype: int = s["sub"]
-        var rng: float = DEFENSES[dtype]["range"]
-        var flat := Vector2(node.position.x - dpos.x, node.position.z - dpos.z)
-        if flat.length() > rng:
-            continue
-        tried.append(sid)
-        s["mag"] = int(s["mag"]) - 1
-        s["cd"] = float(DEFENSES[dtype]["cd"])
-        var chance: float = DEF_TABLE[dtype][wt]
-        var ok := randf() < chance
-        var meet := _arc(p0, p1, minf(t + 0.3 / dur, 1.0), h)
-        _spawn_interceptor(dpos + Vector3(0.0, 5.0, 0.0), meet, ok)
-        if ok:
-            d["kill"] = 0.3
-            return
 
 
 func _on_impact(d: Dictionary) -> void:
@@ -1644,24 +1630,6 @@ func _arc(s: Vector3, e: Vector3, t: float, h: float) -> Vector3:
     return p
 
 
-func _spawn_interceptor(from_pos: Vector3, to_pos: Vector3, success: bool) -> void:
-    var n := MeshInstance3D.new()
-    var sm := SphereMesh.new()
-    sm.radius = 0.8
-    sm.height = 1.6
-    n.mesh = sm
-    n.material_override = _glow_mat(Color(0.5, 0.95, 1.0))
-    n.position = from_pos
-    level_root.add_child(n)
-    _add_trail(n, 0.7)
-    _play3d("blip", from_pos, 0.0)
-    var tw := create_tween()
-    tw.tween_property(n, "position", to_pos, 0.35)
-    if not success:
-        tw.tween_callback(_explode.bind(to_pos, Color(0.9, 0.9, 0.9), 1.2))
-    tw.tween_callback(n.queue_free)
-
-
 func _make_shock(color: Color) -> MeshInstance3D:
     var m := MeshInstance3D.new()
     var t := TorusMesh.new()
@@ -1792,6 +1760,7 @@ func _process(delta: float) -> void:
             _ai_tick(i, delta)
         _update_projectiles(delta)
         _update_sorties(delta)
+        _jetcam_ui_tick()
         _process_jets(delta)
         sat_cool = maxf(0.0, sat_cool - delta)
         ui_timer += delta
@@ -1808,6 +1777,7 @@ func _pay_income() -> void:
         var e: Dictionary = emp[i]
         if not bool(e["dead"]):
             e["money"] = int(e["money"]) + _income(i)
+            e["peak"] = maxi(int(e.get("peak", 0)), int(e["money"]))
 
 
 func _animate_world(delta: float) -> void:
@@ -1894,6 +1864,9 @@ func _look_at_target(smooth: bool) -> void:
 # Camera (walking view and satellite view)
 # =====================================================================
 func _update_camera(delta: float) -> void:
+    if jetcam_on:
+        _jetcam_update(delta)
+        return
     if sat_open:
         var ip: Vector3 = island_pos[sat_island]
         var isl := _isl(sat_island)
@@ -1924,6 +1897,8 @@ func _open_sat() -> void:
         return
     if _alive_enemy_count() < 1:
         return
+    if jetcam_on:
+        _jetcam_exit()
     _close_windows()
     _ensure_target()
     sat_open = true
@@ -1951,6 +1926,8 @@ func _close_sat() -> void:
         return
     sat_open = false
     place_mode = false
+    route_wps.clear()
+    _clear_route_marks()
     for cl2 in clouds:
         var cn2: Node3D = cl2
         cn2.visible = true
@@ -1974,6 +1951,8 @@ func _sat_pick_island(i: int) -> void:
     sat_island = i
     selected_enemy = i
     sat_has_point = false
+    route_wps.clear()
+    _clear_route_marks()
     _remove_sat_marker()
     _update_rings()
     _refresh_sat()
@@ -1995,7 +1974,7 @@ func _sat_screen_to_local(pos: Vector2) -> Vector2:
     var tt := (plane_y - o.y) / dir.y
     var hit := o + dir * tt
     var local := _isl(sat_island).to_local(hit)
-    return Vector2(clampf(local.x, -78.0, 78.0), clampf(local.z, -78.0, 78.0))
+    return Vector2(clampf(local.x, -118.0, 118.0), clampf(local.z, -118.0, 118.0))
 
 
 func _sat_set_point(pos: Vector2) -> void:
@@ -2064,12 +2043,12 @@ func _save_game() -> void:
             var tt: Dictionary = tv
             tl.append({"t": tt["t"], "n": tt["n"], "lx": tt["lx"], "lz": tt["lz"]})
         arr.append({
-            "money": e["money"], "builders": e["builders"], "brep": e["brep"], "arep": e["arep"],
+            "money": e["money"], "peak": e.get("peak", 0), "builders": e["builders"], "brep": e["brep"], "arep": e["arep"],
             "blevel": e["blevel"], "ammo": e["ammo"], "aggr": e["aggr"], "grudge": e["grudge"],
             "salvo": e["salvo"], "rest": e["rest"], "dead": e["dead"], "structs": sl, "jets": jl, "mtrucks": tl,
         })
     var data := {
-        "v": 7, "island_count": island_count, "emp": arr,
+        "v": 8, "island_count": island_count, "emp": arr,
         "selected": selected_enemy, "elapsed": elapsed,
     }
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -2086,7 +2065,7 @@ func _load_game() -> bool:
     var parsed = JSON.parse_string(f.get_as_text())
     if typeof(parsed) != TYPE_DICTIONARY:
         return false
-    if int(parsed.get("v", 0)) != 7:
+    if int(parsed.get("v", 0)) != 8:
         return false
     var count := clampi(int(parsed.get("island_count", 2)), 2, 4)
     var emp_raw = parsed.get("emp", [])
@@ -2098,6 +2077,7 @@ func _load_game() -> bool:
         var e: Dictionary = emp[i]
         e["structs"] = []
         e["money"] = int(src.get("money", START_MONEY))
+        e["peak"] = maxi(int(src.get("peak", 0)), int(e["money"]))
         e["builders"] = clampi(int(src.get("builders", 0)), 0, MAX_BUILDERS)
         e["brep"] = clampi(int(src.get("brep", 0)), 0, MAX_BREP)
         e["arep"] = clampi(int(src.get("arep", 0)), 0, MAX_AREP)
@@ -2250,6 +2230,7 @@ func _build_ui() -> void:
     _build_military_window()
     _build_worker_window()
     _build_sat_ui()
+    _build_jetcam_ui()
 
     joy_base = Panel.new()
     joy_base.size = Vector2(180.0, 180.0)
@@ -2398,7 +2379,7 @@ func _sat_ui_show(on: bool) -> void:
 
 
 func _over_ui(pos: Vector2) -> bool:
-    for c in [stats_panel, tabs_box, hot_box, menu_btn, mil_panel, work_panel, overlay]:
+    for c in [stats_panel, tabs_box, hot_box, menu_btn, jetcam_btn, mil_panel, work_panel, overlay]:
         var ctl: Control = c
         if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
             return true
@@ -2481,6 +2462,8 @@ func _sat_input(event: InputEvent) -> void:
 
 func _input(event: InputEvent) -> void:
     if game_state != "playing":
+        return
+    if jetcam_on:
         return
     if sat_open:
         _sat_input(event)
@@ -3193,6 +3176,10 @@ func _mtruck_cfg(t: int) -> Dictionary:
 
 
 func _missile_truck_model(t: int) -> Node3D:
+    if t == 3 or t == 7:
+        return _silo_model(t)
+    if t == 6:
+        return _bunker_model()
     var cfg: Dictionary = _mtruck_cfg(t)
     var root := Node3D.new()
     var len: float = cfg["len"]
@@ -3373,28 +3360,102 @@ func _model_hq9(n: Node3D) -> void:
     _box(n, Vector3(0.7, 0.6, 0.6), Vector3(0.2, deck + 0.35, 1.0), olive.darkened(0.15))
 
 
+# underground silo: strategic missiles (MIRV, ICBM) really sit in silos
+func _silo_model(t: int) -> Node3D:
+    var cfg: Dictionary = _mtruck_cfg(t)
+    var root := Node3D.new()
+    var conc := Color(0.55, 0.57, 0.6)
+    var dark := Color(0.12, 0.12, 0.14)
+    var big := t == 7
+    var r := 3.6 if big else 3.0
+    var ln: float = cfg["ln"]
+    var rad: float = cfg["rad"]
+    _box(root, Vector3(r * 2.7, 0.18, r * 2.7), Vector3(0.0, 0.1, 0.0), Color(0.42, 0.44, 0.47))
+    _cyl(root, r, r + 0.35, 0.7, Vector3(0.0, 0.45, 0.0), conc)
+    _cyl(root, r - 0.5, r - 0.5, 0.74, Vector3(0.0, 0.47, 0.0), dark)
+    for k in range(8):
+        var a := float(k) * TAU / 8.0
+        _box(root, Vector3(0.7, 0.2, 0.7), Vector3(cos(a) * (r + 0.3), 0.85, sin(a) * (r + 0.3)),
+            Color(0.95, 0.8, 0.1) if k % 2 == 0 else Color(0.1, 0.1, 0.1))
+    # blast door, slid open
+    var door := _box(root, Vector3(r * 1.1, 0.35, r * 1.6), Vector3(r + 1.2, 0.9, 0.0), conc.darkened(0.15))
+    door.rotation.z = deg_to_rad(-18.0)
+    # service gantry
+    _box(root, Vector3(0.3, 4.0, 0.3), Vector3(-r - 1.0, 2.0, 1.6), Color(0.8, 0.45, 0.1))
+    _box(root, Vector3(0.3, 0.3, 3.2), Vector3(-r - 1.0, 4.0, 0.0), Color(0.8, 0.45, 0.1))
+    var lamp := _sphere(root, 0.25, Vector3(-r - 1.0, 4.3, 0.0), Color(1.0, 0.2, 0.2))
+    lamp.material_override = _glow_mat(Color(1.0, 0.25, 0.2))
+    var ms: Array = []
+    var tips: Array = []
+    var m := _msl_mesh(root, cfg["mb"], cfg["mt"], ln, rad, false)
+    var base_y := -ln * 0.42
+    m.position = Vector3(0.0, base_y, 0.0)
+    ms.append(m)
+    tips.append(Vector3(0.0, base_y + ln, 0.0))
+    root.set_meta("ms", ms)
+    root.set_meta("tips", tips)
+    _merge_model(m, [])
+    _merge_model(root, ms)
+    return root
+
+
+# hardened bunker with air-launched stealth cruise missiles on trolleys
+func _bunker_model() -> Node3D:
+    var cfg: Dictionary = _mtruck_cfg(6)
+    var root := Node3D.new()
+    var conc := Color(0.5, 0.52, 0.52)
+    _box(root, Vector3(9.0, 0.16, 6.6), Vector3(0.0, 0.1, 0.0), Color(0.4, 0.42, 0.44))
+    var arch := _cyl(root, 2.5, 2.5, 5.2, Vector3(-1.8, 0.6, 0.0), conc)
+    arch.rotation.x = PI / 2.0
+    arch.scale = Vector3(1.0, 1.0, 0.8)
+    _box(root, Vector3(4.2, 1.2, 5.2), Vector3(-1.8, 0.25, 0.0), conc)
+    _box(root, Vector3(0.3, 2.0, 3.2), Vector3(0.45, 1.0, 0.0), Color(0.18, 0.2, 0.24))
+    _box(root, Vector3(0.12, 0.5, 3.2), Vector3(0.58, 2.1, 0.0), Color(0.9, 0.75, 0.1))
+    for k in range(5):
+        _box(root, Vector3(0.9, 0.12, 0.5), Vector3(-3.6 + float(k) * 0.85, 2.6, 2.6), Color(0.3, 0.34, 0.3))
+    var ms: Array = []
+    var tips: Array = []
+    var ln: float = cfg["ln"]
+    var rad: float = cfg["rad"]
+    for k2 in range(4):
+        var tray := Node3D.new()
+        tray.position = Vector3(2.4, 0.3 + float(k2 % 2) * 0.55, -1.0 + float(int(k2 / 2)) * 2.0)
+        tray.rotation.z = deg_to_rad(-90.0)
+        root.add_child(tray)
+        var m := _msl_mesh(tray, cfg["mb"], cfg["mt"], ln, rad, true)
+        ms.append(m)
+        tips.append(tray.transform * Vector3(0.0, ln, 0.0))
+        _box(root, Vector3(2.8, 0.1, 0.5), Vector3(3.2, 0.06 + float(k2 % 2) * 0.55, -1.0 + float(int(k2 / 2)) * 2.0), Color(0.2, 0.2, 0.22))
+    root.set_meta("ms", ms)
+    root.set_meta("tips", tips)
+    for mn in ms:
+        _merge_model(mn, [])
+    _merge_model(root, ms)
+    return root
+
+
 func _house_pos(slot: int) -> Vector2:
-    var col := slot % 10
-    var row := int(slot / 10)
-    return Vector2(-74.0 + float(col) * 6.5, 16.0 + float(row) * 7.0)
+    var col := slot % 16
+    var row := int(slot / 16)
+    return Vector2(-113.0 + float(col) * 7.0, 28.0 + float(row) * 8.0)
 
 
 func _def_pos(slot: int) -> Vector2:
-    var col := slot % 7
-    var row := int(slot / 7)
-    return Vector2(-70.0 + float(col) * 12.0, -12.0 - float(row) * 8.0)
+    var col := slot % 11
+    var row := int(slot / 11)
+    return Vector2(-108.0 + float(col) * 13.5, -16.0 - float(row) * 9.0)
 
 
 func _missile_pos(slot: int) -> Vector2:
-    var col := slot % 8
-    var row := int(slot / 8)
-    return Vector2(-68.0 + float(col) * 12.0, -50.0 - float(row) * 5.6)
+    var col := slot % 11
+    var row := int(slot / 11)
+    return Vector2(-108.0 + float(col) * 13.5, -52.0 - float(row) * 10.5)
 
 
 func _stand_pos(slot: int) -> Vector2:
     var col := slot % 2
     var row := int(slot / 2)
-    return Vector2(34.0 + float(col) * 12.0, -52.0 + float(row) * 16.0)
+    return Vector2(62.0 + float(col) * 14.0, -96.0 + float(row) * 17.0)
 
 
 func _make_island(i: int, p: Vector3) -> Node3D:
@@ -3413,7 +3474,7 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     top.material_override = _checker_mat(i)
     root.add_child(top)
     # concrete military apron
-    _box(root, Vector3(98.0, 0.06, 88.0), Vector3(-29.0, 0.63, -36.0), Color(0.36, 0.38, 0.42))
+    _box(root, Vector3(154.0, 0.06, 126.0), Vector3(-39.0, 0.63, -53.0), Color(0.3, 0.32, 0.35))
     var holder := Node3D.new()
     root.add_child(holder)
     _island_props(holder)
@@ -3428,42 +3489,46 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     lab.render_priority = 3
     lab.outline_size = 16
     lab.modulate = team.lightened(0.3)
-    lab.position = Vector3(0.0, 40.0, 0.0)
+    lab.position = Vector3(0.0, 60.0, 0.0)
     root.add_child(lab)
     return root
 
 
 func _island_props(root: Node3D) -> void:
-    var white := Color(0.92, 0.92, 0.95)
+    var white := Color(0.92, 0.95, 0.95)
     # road between the military apron and the houses
-    _box(root, Vector3(100.0, 0.07, 6.0), Vector3(-29.0, 0.66, 11.0), Color(0.15, 0.16, 0.19))
-    _box(root, Vector3(100.0, 0.09, 0.25), Vector3(-29.0, 0.68, 8.2), white)
-    _box(root, Vector3(100.0, 0.09, 0.25), Vector3(-29.0, 0.68, 13.8), white)
-    for k in range(14):
-        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-76.0 + float(k) * 7.5, 0.68, 11.0), Color(0.95, 0.82, 0.2))
-    for k2 in range(9):
-        var lx := -76.0 + float(k2) * 12.0
-        _cyl(root, 0.12, 0.16, 4.2, Vector3(lx, 2.7, 14.7), Color(0.3, 0.3, 0.34))
-        var bulb := _sphere(root, 0.4, Vector3(lx, 4.9, 14.7), Color.WHITE)
+    _box(root, Vector3(156.0, 0.07, 6.0), Vector3(-38.0, 0.66, 17.0), Color(0.15, 0.16, 0.19))
+    _box(root, Vector3(156.0, 0.09, 0.25), Vector3(-38.0, 0.68, 14.2), white)
+    _box(root, Vector3(156.0, 0.09, 0.25), Vector3(-38.0, 0.68, 19.8), white)
+    for k in range(20):
+        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-114.0 + float(k) * 7.8, 0.68, 17.0), Color(0.95, 0.82, 0.2))
+    for k2 in range(13):
+        var lx := -114.0 + float(k2) * 12.5
+        _cyl(root, 0.12, 0.16, 4.2, Vector3(lx, 2.7, 20.7), Color(0.3, 0.3, 0.34))
+        var bulb := _sphere(root, 0.4, Vector3(lx, 4.9, 20.7), Color.WHITE)
         bulb.material_override = _glow_mat(Color(1.0, 0.93, 0.65))
     var rng := RandomNumberGenerator.new()
     rng.seed = 12345
-    for k3 in range(22):
-        var tx := rng.randf_range(-76.0, 18.0)
-        var tz := rng.randf_range(56.0, 77.0)
-        if k3 >= 14:
-            tx = -78.0 + rng.randf_range(0.0, 2.0)
-            tz = rng.randf_range(20.0, 54.0)
+    for k3 in range(46):
+        var tx := rng.randf_range(-116.0, 40.0)
+        var tz := rng.randf_range(84.0, 116.0)
+        if k3 >= 28:
+            tx = -118.0 + rng.randf_range(0.0, 2.0)
+            tz = rng.randf_range(26.0, 80.0)
         var th := rng.randf_range(0.9, 1.4)
         _cyl(root, 0.22 * th, 0.32 * th, 1.8 * th, Vector3(tx, 1.5, tz), Color(0.4, 0.26, 0.14))
         _sphere(root, 1.5 * th, Vector3(tx, 3.4 * th, tz), Color(0.1, 0.42, 0.17))
         _sphere(root, 1.0 * th, Vector3(tx + 0.5, 4.5 * th, tz - 0.3), Color(0.14, 0.5, 0.2))
     # fuel depot at the back
-    for k4 in range(3):
-        var tx2 := -50.0 + float(k4) * 22.0
-        _cyl(root, 2.8, 2.8, 5.0, Vector3(tx2, 3.2, 70.0), Color(0.85, 0.87, 0.9))
-        _cyl(root, 2.9, 2.9, 0.5, Vector3(tx2, 5.9, 70.0), Color(0.5, 0.52, 0.56))
-    _box(root, Vector3(50.0, 0.5, 0.5), Vector3(-39.0, 2.0, 66.0), Color(0.6, 0.14, 0.14))
+    for k4 in range(4):
+        var tx2 := -90.0 + float(k4) * 24.0
+        _cyl(root, 2.8, 2.8, 5.0, Vector3(tx2, 3.2, 104.0), Color(0.85, 0.87, 0.9))
+        _cyl(root, 2.9, 2.9, 0.5, Vector3(tx2, 5.9, 104.0), Color(0.5, 0.52, 0.56))
+    _box(root, Vector3(76.0, 0.5, 0.5), Vector3(-54.0, 2.0, 99.0), Color(0.6, 0.14, 0.14))
+    # fence around the military zone
+    for fz in [-116.5, 10.5]:
+        _box(root, Vector3(154.0, 1.0, 0.15), Vector3(-39.0, 1.1, float(fz)), Color(0.45, 0.47, 0.5))
+    _box(root, Vector3(0.15, 1.0, 126.0), Vector3(-116.5, 1.1, -53.0), Color(0.45, 0.47, 0.5))
 
 
 func _airport(root: Node3D) -> void:
@@ -3471,62 +3536,65 @@ func _airport(root: Node3D) -> void:
     var conc := Color(0.5, 0.52, 0.55)
     var white := Color(0.95, 0.95, 0.97)
     # apron and taxiway
-    _box(root, Vector3(26.0, 0.07, 124.0), Vector3(40.0, 0.64, -12.0), conc)
-    _box(root, Vector3(6.0, 0.08, 150.0), Vector3(54.0, 0.65, -4.0), Color(0.22, 0.23, 0.26))
+    _box(root, Vector3(34.0, 0.07, 104.0), Vector3(69.0, 0.64, -58.0), conc)
+    _box(root, Vector3(6.0, 0.08, 216.0), Vector3(TAXI_X, 0.65, -2.0), Color(0.22, 0.23, 0.26))
+    _box(root, Vector3(40.0, 0.08, 6.0), Vector3(TAXI_X - 14.0, 0.65, 96.0), Color(0.22, 0.23, 0.26))
     # runway
-    _box(root, Vector3(13.0, 0.09, 150.0), Vector3(RW_X, 0.66, -2.0), asphalt)
-    for k in range(16):
-        _box(root, Vector3(0.5, 0.1, 5.0), Vector3(RW_X, 0.7, -68.0 + float(k) * 9.0), white)
-    _box(root, Vector3(0.35, 0.1, 150.0), Vector3(RW_X - 6.0, 0.7, -2.0), white)
-    _box(root, Vector3(0.35, 0.1, 150.0), Vector3(RW_X + 6.0, 0.7, -2.0), white)
-    for end_z in [-70.0, 66.0]:
+    _box(root, Vector3(13.0, 0.09, 216.0), Vector3(RW_X, 0.66, 0.0), asphalt)
+    for k in range(23):
+        _box(root, Vector3(0.5, 0.1, 5.0), Vector3(RW_X, 0.7, -100.0 + float(k) * 9.0), white)
+    _box(root, Vector3(0.35, 0.1, 216.0), Vector3(RW_X - 6.0, 0.7, 0.0), white)
+    _box(root, Vector3(0.35, 0.1, 216.0), Vector3(RW_X + 6.0, 0.7, 0.0), white)
+    for end_z in [RW_Z1, RW_Z0]:
         for k2 in range(6):
             _box(root, Vector3(0.7, 0.1, 5.0), Vector3(RW_X - 4.5 + float(k2) * 1.8, 0.7, float(end_z) + (4.0 if end_z < 0.0 else -4.0)), white)
+    # runway edge lights
+    for k5 in range(12):
+        for sx in [-7.2, 7.2]:
+            var lb := _sphere(root, 0.3, Vector3(RW_X + float(sx), 0.9, -100.0 + float(k5) * 18.0), Color.WHITE)
+            lb.material_override = _glow_mat(Color(1.0, 0.95, 0.7))
     # parking stand markers
     for sl in range(MAX_JETS):
         var sp := _stand_pos(sl)
-        _box(root, Vector3(8.0, 0.09, 0.25), Vector3(sp.x, 0.7, sp.y + 7.0), Color(0.95, 0.8, 0.15))
+        _box(root, Vector3(9.0, 0.09, 0.25), Vector3(sp.x, 0.7, sp.y + 7.0), Color(0.95, 0.8, 0.15))
     # terminal, tower and hangars on the west side of the apron
-    _box(root, Vector3(7.0, 3.5, 44.0), Vector3(23.5, 2.2, 8.0), Color(0.82, 0.84, 0.88))
-    _box(root, Vector3(7.2, 0.5, 44.5), Vector3(23.5, 4.2, 8.0), Color(0.25, 0.3, 0.4))
+    _box(root, Vector3(7.0, 3.5, 44.0), Vector3(47.0, 2.2, -16.0), Color(0.82, 0.84, 0.88))
+    _box(root, Vector3(7.2, 0.5, 44.5), Vector3(47.0, 4.2, -16.0), Color(0.25, 0.3, 0.4))
     for k3 in range(10):
-        var gw := _box(root, Vector3(0.1, 1.0, 2.6), Vector3(27.1, 2.4, -10.0 + float(k3) * 4.4), Color.WHITE)
+        var gw := _box(root, Vector3(0.1, 1.0, 2.6), Vector3(50.6, 2.4, -34.0 + float(k3) * 4.4), Color.WHITE)
         gw.material_override = _glow_mat(Color(0.5, 0.85, 1.0))
-    _cyl(root, 1.1, 1.4, 11.0, Vector3(23.5, 6.2, 34.0), Color(0.85, 0.86, 0.9))
-    _cyl(root, 2.4, 1.5, 2.2, Vector3(23.5, 12.9, 34.0), Color(0.3, 0.55, 0.7))
-    _cyl(root, 2.6, 2.6, 0.3, Vector3(23.5, 14.2, 34.0), Color(0.3, 0.32, 0.36))
-    for hz in [-60.0, -44.0]:
-        _box(root, Vector3(10.0, 5.0, 14.0), Vector3(23.0, 3.2, float(hz)), Color(0.6, 0.64, 0.7))
-        var arch := _cyl(root, 7.0, 7.0, 10.0, Vector3(23.0, 5.7, float(hz)), Color(0.55, 0.6, 0.66))
+    _cyl(root, 1.1, 1.4, 11.0, Vector3(47.0, 6.2, 12.0), Color(0.85, 0.86, 0.9))
+    _cyl(root, 2.4, 1.5, 2.2, Vector3(47.0, 12.9, 12.0), Color(0.3, 0.55, 0.7))
+    _cyl(root, 2.6, 2.6, 0.3, Vector3(47.0, 14.2, 12.0), Color(0.3, 0.32, 0.36))
+    for hz in [-100.0, -82.0]:
+        _box(root, Vector3(10.0, 5.0, 14.0), Vector3(47.0, 3.2, float(hz)), Color(0.6, 0.64, 0.7))
+        var arch := _cyl(root, 7.0, 7.0, 10.0, Vector3(47.0, 5.7, float(hz)), Color(0.55, 0.6, 0.66))
         arch.rotation.z = PI / 2.0
         arch.scale = Vector3(0.45, 1.0, 1.0)
-        _box(root, Vector3(0.2, 4.0, 10.0), Vector3(28.1, 2.8, float(hz)), Color(0.2, 0.22, 0.26))
+        _box(root, Vector3(0.2, 4.0, 10.0), Vector3(52.1, 2.8, float(hz)), Color(0.2, 0.22, 0.26))
     # windsock
-    _cyl(root, 0.1, 0.1, 5.0, Vector3(74.0, 3.1, 40.0), Color(0.8, 0.8, 0.85))
-    _box(root, Vector3(1.8, 0.5, 0.5), Vector3(74.0, 5.4, 40.8), Color(1.0, 0.45, 0.1))
+    _cyl(root, 0.1, 0.1, 5.0, Vector3(112.0, 3.1, 60.0), Color(0.8, 0.8, 0.85))
+    _box(root, Vector3(1.8, 0.5, 0.5), Vector3(112.0, 5.4, 60.8), Color(1.0, 0.45, 0.1))
 
 
-func _unlocked(kind: String, t: int) -> bool:
-    var need := 0.0
+func _unlock_need(kind: String, t: int) -> int:
     if kind == "m":
-        need = float(MISSILES[t]["unlock"])
-    elif kind == "d":
-        need = float(DEFENSES[t]["unlock"])
-    else:
-        need = float(JETS[t]["unlock"])
-    return elapsed >= need
+        return int(MISSILES[t]["unlock"])
+    if kind == "d":
+        return int(DEFENSES[t]["unlock"])
+    return int(JETS[t]["unlock"])
+
+
+# unlocks depend on the most money this empire has ever held
+func _unlocked(i: int, kind: String, t: int) -> bool:
+    var e: Dictionary = emp[i]
+    var pk: int = maxi(int(e.get("peak", 0)), int(e["money"]))
+    e["peak"] = pk
+    return pk >= _unlock_need(kind, t)
 
 
 func _unlock_text(kind: String, t: int) -> String:
-    var need := 0.0
-    if kind == "m":
-        need = float(MISSILES[t]["unlock"])
-    elif kind == "d":
-        need = float(DEFENSES[t]["unlock"])
-    else:
-        need = float(JETS[t]["unlock"])
-    var left := int(maxf(0.0, need - elapsed))
-    return "%d:%02d" % [int(left / 60), left % 60]
+    return "$%s" % _fmt_money(_unlock_need(kind, t))
 
 
 func _spot_free(i: int, x: float, z: float, ignore_id: int) -> bool:
@@ -3551,16 +3619,16 @@ func _spot_free(i: int, x: float, z: float, ignore_id: int) -> bool:
 
 
 func _pick_spot(i: int, kind: String) -> Vector2:
-    var n := 35 if kind == "d" else 48
+    var n := 33 if kind == "d" else 66
     for slot in range(n):
         var p := _def_pos(slot) if kind == "d" else _missile_pos(slot)
         if _spot_free(i, p.x, p.y, -1):
             return p
     for k in range(80):
-        var rp := Vector2(randf_range(-75.0, 17.0), randf_range(-76.0, 6.0))
+        var rp := Vector2(randf_range(-113.0, 35.0), randf_range(-113.0, 8.0))
         if _spot_free(i, rp.x, rp.y, -1):
             return rp
-    return Vector2(randf_range(-60.0, 0.0), randf_range(-70.0, -20.0))
+    return Vector2(randf_range(-100.0, 0.0), randf_range(-110.0, -20.0))
 
 
 func _spawn_mtruck(i: int, t: int, pos: Vector2, n: int, anim: bool) -> Dictionary:
@@ -3664,7 +3732,7 @@ func _take_missile_pos(i: int, t: int) -> Vector3:
         else:
             _truck_apply(tr)
         return wp
-    return _isl(i).to_global(Vector3(-30.0, 6.0, -40.0))
+    return _isl(i).to_global(Vector3(-40.0, 6.0, -60.0))
 
 
 func _find_struct(i: int, sid: int) -> Dictionary:
@@ -3770,7 +3838,7 @@ func _do_move_truck(i: int, tid: int, x: float, z: float) -> int:
 
 func _do_buy_missile(i: int, t: int, n: int = 1) -> int:
     var e: Dictionary = emp[i]
-    if not _unlocked("m", t):
+    if not _unlocked(i, "m", t):
         return 4
     var room := MAX_MISSILES - _ammo_total(i)
     if room < 1:
@@ -3788,7 +3856,7 @@ func _do_buy_missile(i: int, t: int, n: int = 1) -> int:
 
 func _do_buy_defense(i: int, t: int) -> int:
     var e: Dictionary = emp[i]
-    if not _unlocked("d", t):
+    if not _unlocked(i, "d", t):
         return 4
     if _count_structs(i, "defense", -1, false) >= MAX_DEFENSES:
         return 2
@@ -3933,7 +4001,7 @@ func _sync_jets(i: int) -> void:
 
 func _do_buy_jet(i: int, jt: int) -> int:
     var e: Dictionary = emp[i]
-    if not _unlocked("j", jt):
+    if not _unlocked(i, "j", jt):
         return 4
     if _jets_owned(i, -1) >= MAX_JETS:
         return 2
@@ -3979,7 +4047,8 @@ func _process_jets(delta: float) -> void:
 
 
 # queue a sortie (fee is paid now). Returns false when it cannot start.
-func _queue_sortie(a: int, tg: int, j: Dictionary, aim: Vector2, delay: float) -> bool:
+# route: {"mode": 0 straight / 1 from behind / 2 flank / 3 custom, "wps": [Vector2 ...]}
+func _queue_sortie(a: int, tg: int, j: Dictionary, aim: Vector2, delay: float, route: Dictionary = {}, payload: int = 0) -> bool:
     var e: Dictionary = emp[a]
     var jt: int = j["t"]
     var fee: int = JETS[jt]["fee"]
@@ -3987,67 +4056,159 @@ func _queue_sortie(a: int, tg: int, j: Dictionary, aim: Vector2, delay: float) -
         return false
     e["money"] = int(e["money"]) - fee
     j["state"] = "queued"
-    launch_queue.append({"a": a, "tg": tg, "t": NM + jt, "aim": aim, "delay": delay, "jet": j})
+    launch_queue.append({"a": a, "tg": tg, "t": NM + jt, "aim": aim, "delay": delay, "jet": j, "route": route, "payload": payload})
     return true
 
 
-func _sortie_curve_points(a: int, tg: int, j: Dictionary, aim: Vector2) -> Dictionary:
+func _flat_dir(from_p: Vector3, to_p: Vector3) -> Vector3:
+    var d := Vector3(to_p.x - from_p.x, 0.0, to_p.z - from_p.z)
+    if d.length() < 0.5:
+        return Vector3(0.0, 0.0, -1.0)
+    return d.normalized()
+
+
+func _sortie_curve_points(a: int, tg: int, j: Dictionary, aim: Vector2, route: Dictionary) -> Dictionary:
     var isl := _isl(a)
+    var tisl := _isl(tg)
     var sp := _stand_pos(int(j["slot"]))
     var home: Vector3 = island_pos[a]
-    var aimw := _isl(tg).to_global(Vector3(aim.x, 1.4, aim.y))
+    var cr := 40.0
+    var aimw := tisl.to_global(Vector3(aim.x, 1.4, aim.y))
+    var mode := int(route.get("mode", 0))
     var pts: Array = []
     pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y)))
     pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y + 8.0)))
-    pts.append(isl.to_global(Vector3(54.0, 1.0, sp.y + 10.0)))
-    pts.append(isl.to_global(Vector3(54.0, 1.0, 56.0)))
-    var rw0 := isl.to_global(Vector3(RW_X, 1.0, 64.0))
+    pts.append(isl.to_global(Vector3(TAXI_X, 1.0, sp.y + 12.0)))
+    pts.append(isl.to_global(Vector3(TAXI_X, 1.0, RW_Z0 - 14.0)))
+    pts.append(isl.to_global(Vector3(TAXI_X + 8.0, 1.0, RW_Z0 - 3.0)))
+    var rw0 := isl.to_global(Vector3(RW_X - 1.0, 1.0, RW_Z0 - 4.0))
     pts.append(rw0)
-    pts.append(isl.to_global(Vector3(RW_X, 1.1, 40.0)))
-    pts.append(isl.to_global(Vector3(RW_X, 1.5, -10.0)))
-    pts.append(isl.to_global(Vector3(RW_X, 8.0, -52.0)))
-    var p8 := isl.to_global(Vector3(RW_X, 24.0, -100.0))
+    pts.append(isl.to_global(Vector3(RW_X, 1.0, RW_Z0 - 18.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 1.2, 40.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 1.7, -40.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 8.0, -92.0)))
+    var p8 := isl.to_global(Vector3(RW_X, 26.0, RW_Z1 - 90.0))
     pts.append(p8)
-    var d := Vector3(aimw.x - p8.x, 0.0, aimw.z - p8.z)
-    if d.length() < 1.0:
-        d = Vector3(0.0, 0.0, -1.0)
-    d = d.normalized()
+    var fwd: Vector3 = isl.global_transform.basis * Vector3(0.0, 0.0, -1.0)
+    fwd.y = 0.0
+    fwd = fwd.normalized()
+    var rgt := Vector3(-fwd.z, 0.0, fwd.x) * -1.0
+    var d := _flat_dir(p8, aimw)
     var perp := Vector3(-d.z, 0.0, d.x)
     var hv := Vector3(home.x - aimw.x, 0.0, home.z - aimw.z)
     if hv.dot(perp) < 0.0:
         perp = -perp
-    pts.append(aimw - d * 75.0 + Vector3(0.0, 40.0 - aimw.y, 0.0))
-    var rel := aimw - d * 50.0 + Vector3(0.0, 38.0 - aimw.y, 0.0)
-    pts.append(rel)
-    pts.append(aimw + d * 25.0 + Vector3(0.0, 36.0 - aimw.y, 0.0))
-    pts.append(aimw + d * 50.0 + perp * 42.0 + Vector3(0.0, 36.0 - aimw.y, 0.0))
-    pts.append(aimw + d * 5.0 + perp * 88.0 + Vector3(0.0, 34.0 - aimw.y, 0.0))
-    pts.append(aimw - d * 60.0 + perp * 95.0 + Vector3(0.0, 34.0 - aimw.y, 0.0))
-    pts.append(isl.to_global(Vector3(RW_X, 34.0, RW_Z1 - 130.0)))
-    pts.append(isl.to_global(Vector3(RW_X, 14.0, RW_Z1 - 45.0)))
+    # a wide climbing turn when the target is not straight ahead
+    var first := aimw
+    if mode == 3 and route.has("wps"):
+        var wl0: Array = route["wps"]
+        if wl0.size() > 1:
+            var w0: Vector2 = wl0[0]
+            first = tisl.to_global(Vector3(w0.x, cr, w0.y))
+    var td0 := _flat_dir(p8, first)
+    if td0.dot(fwd) < 0.45:
+        var sd := 1.0 if td0.dot(rgt) >= 0.0 else -1.0
+        pts.append(p8 + fwd * 70.0 + rgt * sd * 110.0 + Vector3(0.0, 8.0, 0.0))
+        pts.append(p8 + fwd * 10.0 + rgt * sd * 230.0 + Vector3(0.0, 12.0, 0.0))
+    var ad := d
+    var pay := aimw
+    var rel := aimw
+    var over := aimw
+    var oy := Vector3(0.0, cr - aimw.y, 0.0)
+    if mode == 0:
+        pts.append(aimw - d * 230.0 + oy)
+        pay = aimw - d * 130.0 + oy
+        rel = aimw - d * 55.0 + oy
+        pts.append(pay)
+        pts.append(rel)
+        over = aimw + d * 30.0 + oy
+        pts.append(over)
+        pts.append(aimw + d * 90.0 + perp * 35.0 + oy)
+        pts.append(aimw + d * 50.0 + perp * 120.0 + oy)
+        pts.append(aimw - d * 60.0 + perp * 160.0 + oy)
+    elif mode == 1:
+        ad = -d
+        pts.append(aimw - d * 150.0 + perp * 200.0 + oy)
+        pts.append(aimw + d * 100.0 + perp * 225.0 + oy)
+        pts.append(aimw + d * 240.0 + perp * 130.0 + oy)
+        pts.append(aimw + d * 270.0 + perp * 35.0 + oy)
+        pay = aimw + d * 130.0 + oy
+        rel = aimw + d * 55.0 + oy
+        pts.append(aimw + d * 200.0 + oy)
+        pts.append(pay)
+        pts.append(rel)
+        over = aimw - d * 30.0 + oy
+        pts.append(over)
+        pts.append(aimw - d * 110.0 + perp * 25.0 + oy)
+    elif mode == 2:
+        ad = -perp
+        pts.append(aimw - d * 160.0 + perp * 200.0 + oy)
+        pts.append(aimw - d * 70.0 + perp * 235.0 + oy)
+        pts.append(aimw + d * 10.0 + perp * 200.0 + oy)
+        pay = aimw + perp * 130.0 + oy
+        rel = aimw + perp * 55.0 + oy
+        pts.append(pay)
+        pts.append(rel)
+        over = aimw - perp * 35.0 + oy
+        pts.append(over)
+        pts.append(aimw - perp * 100.0 - d * 50.0 + oy)
+        pts.append(aimw - perp * 150.0 - d * 140.0 + oy)
+    else:
+        var wl: Array = route.get("wps", [])
+        var prev := p8
+        for wi in range(wl.size() - 1):
+            var wv: Vector2 = wl[wi]
+            var wp := tisl.to_global(Vector3(wv.x, cr, wv.y))
+            pts.append(wp)
+            prev = wp
+        ad = _flat_dir(prev, aimw)
+        var dist := Vector2(aimw.x - prev.x, aimw.z - prev.z).length()
+        pay = aimw - ad * minf(130.0, dist * 0.8) + oy
+        rel = aimw - ad * minf(55.0, dist * 0.4) + oy
+        if dist > 60.0:
+            pts.append(pay)
+        pts.append(rel)
+        over = aimw + ad * 30.0 + oy
+        pts.append(over)
+        var pp := Vector3(-ad.z, 0.0, ad.x)
+        if (home - aimw).dot(pp) < 0.0:
+            pp = -pp
+        pts.append(aimw + ad * 95.0 + pp * 40.0 + oy)
+        pts.append(aimw + ad * 55.0 + pp * 125.0 + oy)
+        pts.append(aimw - ad * 50.0 + pp * 165.0 + oy)
+    # home: long final approach, touchdown, roll-out and taxi to the stand
+    pts.append(isl.to_global(Vector3(RW_X, 40.0, RW_Z1 - 340.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 24.0, RW_Z1 - 215.0)))
+    pts.append(isl.to_global(Vector3(RW_X, 10.0, RW_Z1 - 130.0)))
     var td := isl.to_global(Vector3(RW_X, 1.3, RW_Z1 + 12.0))
     pts.append(td)
-    var roll := isl.to_global(Vector3(RW_X, 1.2, 12.0))
+    var roll := isl.to_global(Vector3(RW_X, 1.2, 26.0))
     pts.append(roll)
-    pts.append(isl.to_global(Vector3(54.0, 1.0, 28.0)))
-    pts.append(isl.to_global(Vector3(54.0, 1.0, sp.y + 10.0)))
+    pts.append(isl.to_global(Vector3(RW_X - 6.0, 1.0, 36.0)))
+    pts.append(isl.to_global(Vector3(TAXI_X + 1.0, 1.0, 30.0)))
+    pts.append(isl.to_global(Vector3(TAXI_X, 1.0, 10.0)))
+    pts.append(isl.to_global(Vector3(TAXI_X, 1.0, sp.y + 12.0)))
     pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y + 8.0)))
     pts.append(isl.to_global(Vector3(sp.x, 1.0, sp.y)))
-    return {"pts": pts, "rw0": rw0, "rel": rel, "td": td, "roll": roll}
+    return {"pts": pts, "rw0": rw0, "rel": rel, "pay": pay, "over": over, "td": td, "roll": roll, "aimw": aimw}
 
 
-func _start_sortie(a: int, tg: int, j: Dictionary, aim: Vector2) -> void:
+func _start_sortie(a: int, tg: int, j: Dictionary, aim: Vector2, route: Dictionary = {}, payload: int = 0) -> void:
     var te: Dictionary = emp[tg]
     var ae: Dictionary = emp[a]
     if bool(te["dead"]) or bool(ae["dead"]):
         j["state"] = "parked"
         ae["money"] = int(ae["money"]) + int(JETS[int(j["t"])]["fee"])
+        if payload > 0:
+            var am: Array = ae["ammo"]
+            am[6] = int(am[6]) + payload
+            _sync_missiles(a)
         return
     _park_node(a, j)
-    var info := _sortie_curve_points(a, tg, j, aim)
+    var info := _sortie_curve_points(a, tg, j, aim, route)
     var pts: Array = info["pts"]
     var c := Curve3D.new()
-    c.bake_interval = 0.6
+    c.bake_interval = 0.8
     for k in range(pts.size()):
         var p: Vector3 = pts[k]
         var prev: Vector3 = pts[maxi(k - 1, 0)]
@@ -4062,10 +4223,13 @@ func _start_sortie(a: int, tg: int, j: Dictionary, aim: Vector2) -> void:
     var so := {
         "a": a, "tg": tg, "j": j, "jt": jt, "node": j["node"], "curve": c, "len": c.get_baked_length(), "off": 0.0,
         "spd": float(JETS[jt]["speed"]), "strike_off": c.get_closest_offset(info["rel"]),
+        "pay_off": c.get_closest_offset(info["pay"]), "payload": payload, "paid": false,
         "taxi_end": c.get_closest_offset(info["rw0"]), "td": c.get_closest_offset(info["td"]),
-        "roll_end": c.get_closest_offset(info["roll"]),
+        "roll_end": c.get_closest_offset(info["roll"]), "doom": -1.0, "id": 0,
         "fired": false, "aim": aim, "aa_t": 0.5, "tried": {}, "prev_yaw": 0.0, "bank": 0.0,
     }
+    uid_counter += 1
+    so["id"] = uid_counter
     j["state"] = "away"
     sorties.append(so)
     _play3d("drone", pts[0], 3.0, 0.7)
@@ -4082,15 +4246,15 @@ func _sortie_speed(so: Dictionary, off: float) -> float:
     var td: float = so["td"]
     var ro: float = so["roll_end"]
     if off < te:
-        return 18.0
-    if off < te + 100.0:
-        return lerpf(18.0, base, (off - te) / 100.0)
+        return 20.0
+    if off < te + 120.0:
+        return lerpf(20.0, base, (off - te) / 120.0)
     if off > ro:
-        return 16.0
+        return 18.0
     if off > td:
-        return lerpf(base * 0.45, 16.0, clampf((off - td) / maxf(ro - td, 1.0), 0.0, 1.0))
-    if off > td - 130.0:
-        return lerpf(base, base * 0.45, clampf((off - (td - 130.0)) / 130.0, 0.0, 1.0))
+        return lerpf(base * 0.45, 18.0, clampf((off - td) / maxf(ro - td, 1.0), 0.0, 1.0))
+    if off > td - 150.0:
+        return lerpf(base, base * 0.45, clampf((off - (td - 150.0)) / 150.0, 0.0, 1.0))
     return base
 
 
@@ -4111,7 +4275,7 @@ func _update_sorties(delta: float) -> void:
             _sortie_finish(so)
             continue
         var pos := curve.sample_baked(off, true)
-        var ahead := curve.sample_baked(minf(off + 5.0, total), true)
+        var ahead := curve.sample_baked(minf(off + 6.0, total), true)
         var dirv := ahead - pos
         node.position = pos
         if dirv.length() > 0.05:
@@ -4123,17 +4287,52 @@ func _update_sorties(delta: float) -> void:
             so["bank"] = lerpf(float(so["bank"]), want, clampf(delta * 4.0, 0.0, 1.0))
             var mdl: Node3D = node.get_meta("mdl")
             mdl.rotation.z = float(so["bank"])
+        if int(so["payload"]) > 0 and not bool(so["paid"]) and off >= float(so["pay_off"]):
+            so["paid"] = true
+            _jet_launch_payload(so, pos)
         if not bool(so["fired"]) and off >= float(so["strike_off"]):
             so["fired"] = true
             _jet_fire(so, pos)
+        var doom: float = float(so["doom"])
+        if doom >= 0.0:
+            doom -= delta
+            so["doom"] = doom
+            if doom <= 0.0:
+                sorties.remove_at(k)
+                _jet_shot_down(so, node)
+            continue
         var aa_t: float = float(so["aa_t"]) - delta
         so["aa_t"] = aa_t
         if aa_t <= 0.0:
-            so["aa_t"] = 0.35
+            so["aa_t"] = 0.3
             if off > float(so["taxi_end"]) + 150.0 and off < float(so["td"]) - 150.0:
-                if _jet_aa_check(so, node):
-                    sorties.remove_at(k)
-                    _jet_shot_down(so, node)
+                _jet_aa_check(so, node)
+
+
+func _jet_launch_payload(so: Dictionary, from_pos: Vector3) -> void:
+    var a: int = so["a"]
+    var tg: int = so["tg"]
+    var aim: Vector2 = so["aim"]
+    var isl_t := _isl(tg)
+    var n: int = so["payload"]
+    var info: Dictionary = MISSILES[6]
+    for w in range(n):
+        var lp := aim + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * float(info["cep"]) * (1.0 + float(w))
+        lp.x = clampf(lp.x, -118.0, 118.0)
+        lp.y = clampf(lp.y, -118.0, 118.0)
+        var to_pos := isl_t.to_global(Vector3(lp.x, 1.4, lp.y))
+        var m := _make_missile_model(a == 0, 6)
+        level_root.add_child(m)
+        var sp0 := from_pos + Vector3(0.0, -1.2, 0.0) + Vector3(float(w) * 2.0 - 1.0, 0.0, 0.0)
+        m.position = sp0
+        var dist := sp0.distance_to(to_pos)
+        projectiles.append({
+            "node": m, "start": sp0, "end": to_pos, "t": 0.0, "dur": maxf(0.8, dist / float(info["speed"])) + 0.3 * float(w),
+            "h": dist * float(info["arc"]), "attacker": a, "target": tg, "wt": 6, "lp": lp, "tried": [], "kill": -1.0,
+        })
+    _play3d("launch", from_pos, 3.0, 1.1)
+    if a == 0:
+        _say("Stealth cruise missiles released from your jet!")
 
 
 func _jet_fire(so: Dictionary, from_pos: Vector3) -> void:
@@ -4145,29 +4344,34 @@ func _jet_fire(so: Dictionary, from_pos: Vector3) -> void:
     var shots: int = info["shots"]
     for w in range(shots):
         var lp := aim + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 4.5
-        lp.x = clampf(lp.x, -78.0, 78.0)
-        lp.y = clampf(lp.y, -78.0, 78.0)
+        lp.x = clampf(lp.x, -118.0, 118.0)
+        lp.y = clampf(lp.y, -118.0, 118.0)
         var to_pos := isl_t.to_global(Vector3(lp.x, 1.4, lp.y))
         var m := _make_missile_model(a == 0, 0)
         level_root.add_child(m)
         m.position = from_pos
         var dist := from_pos.distance_to(to_pos)
         projectiles.append({
-            "node": m, "start": from_pos, "end": to_pos, "t": 0.0, "dur": maxf(0.8, dist / 85.0) + 0.18 * float(w), "h": dist * 0.03,
+            "node": m, "start": from_pos, "end": to_pos, "t": 0.0, "dur": maxf(0.8, dist / 120.0) + 0.18 * float(w), "h": dist * 0.03,
             "attacker": a, "target": tg, "wt": 0, "lp": lp, "tried": [], "kill": -1.0,
             "jdmg": float(info["dmg"]), "jrad": float(info["radius"]),
         })
     _play3d("launch", from_pos, 3.0, 1.3)
 
 
-func _jet_aa_check(so: Dictionary, node: Node3D) -> bool:
+# air defense versus a jet: predicts where the jet will be and flies the interceptor there
+func _jet_aa_check(so: Dictionary, node: Node3D) -> void:
     var tg: int = so["tg"]
     var te: Dictionary = emp[tg]
     if bool(te["dead"]):
-        return false
+        return
     var structs: Array = te["structs"]
     var tried: Dictionary = so["tried"]
     var info: Dictionary = JETS[int(so["jt"])]
+    var curve: Curve3D = so["curve"]
+    var total: float = so["len"]
+    var off: float = so["off"]
+    var spd := _sortie_speed(so, off)
     for sv in structs:
         var s: Dictionary = sv
         if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
@@ -4188,10 +4392,18 @@ func _jet_aa_check(so: Dictionary, node: Node3D) -> bool:
         s["cd"] = float(DEFENSES[dtype]["cd"])
         var chance: float = float(JET_DEF[dtype]) * (1.0 - float(info["evade"]))
         var ok := randf() < chance
-        _spawn_interceptor(dpos + Vector3(0.0, 6.0, 0.0), node.position, ok)
+        var from_p := dpos + Vector3(0.0, 4.0, 0.0)
+        var tm := from_p.distance_to(node.position) / float(DEF_SPEED[dtype])
+        var meet := node.position
+        for it in range(3):
+            meet = curve.sample_baked(minf(off + spd * tm, total), true)
+            tm = from_p.distance_to(meet) / float(DEF_SPEED[dtype])
+        tm = maxf(tm * 1.1, 0.7)
+        meet = curve.sample_baked(minf(off + spd * tm, total), true)
+        _spawn_interceptor(from_p, meet, tm, dtype, ok)
         if ok:
-            return true
-    return false
+            so["doom"] = tm
+            return
 
 
 func _jet_shot_down(so: Dictionary, node: Node3D) -> void:
@@ -4265,7 +4477,7 @@ func _ai_think(i: int) -> void:
     if defs_all < want_def:
         var dt := -1
         for t2 in range(4, -1, -1):
-            if _unlocked("d", t2) and money_i >= int(DEFENSES[t2]["price"]):
+            if _unlocked(i, "d", t2) and money_i >= int(DEFENSES[t2]["price"]):
                 dt = t2
                 break
         if dt >= 0:
@@ -4293,7 +4505,7 @@ func _ai_think(i: int) -> void:
     var goal_j := mini(MAX_JETS, int((elapsed - 600.0) / 500.0))
     if _jets_owned(i, -1) < goal_j:
         for jt in range(5, -1, -1):
-            if _unlocked("j", jt) and money_i >= int(float(JETS[jt]["price"]) * 1.2):
+            if _unlocked(i, "j", jt) and money_i >= int(float(JETS[jt]["price"]) * 1.2):
                 if _do_buy_jet(i, jt) == 0:
                     return
                 break
@@ -4310,7 +4522,9 @@ func _ai_pick_weapon(i: int) -> int:
         return -1
     var options: Array = []
     for t in AI_PAD_ORDER:
-        if not _unlocked("m", t):
+        if not _unlocked(i, "m", t):
+            continue
+        if t == 6 and _jets_owned(i, -1) < 1:
             continue
         if int(e["money"]) < int(MISSILES[t]["price"]):
             continue
@@ -4335,6 +4549,8 @@ func _ai_salvo(i: int) -> void:
     var delay := 0.0
     var fired := 0
     for t in range(NM):
+        if t == 6:
+            continue
         var n: int = ammo[t]
         for k in range(n):
             var aim_s := primary
@@ -4357,7 +4573,12 @@ func _ai_salvo(i: int) -> void:
             if not alt2.is_empty():
                 aim_j = alt2
         var aim2 := Vector2(float(aim_j["lx"]), float(aim_j["lz"]))
-        if _queue_sortie(i, target, jj, aim2, delay + 3.0):
+        var pay := mini(2, int(ammo[6]))
+        var rt := {"mode": randi() % 3}
+        if _queue_sortie(i, target, jj, aim2, delay + 3.0, rt, pay):
+            ammo[6] = int(ammo[6]) - pay
+            if pay > 0:
+                _sync_missiles(i)
             delay += 1.5
             fired += 1
     var aggr: float = e["aggr"]
@@ -4466,6 +4687,36 @@ func _build_sat_ui() -> void:
     bot.add_theme_constant_override("separation", 8)
     bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
     sat_root.add_child(bot)
+    route_row = HBoxContainer.new()
+    route_row.alignment = BoxContainer.ALIGNMENT_CENTER
+    route_row.add_theme_constant_override("separation", 8)
+    bot.add_child(route_row)
+    route_btns = []
+    var rnames := ["STRAIGHT", "FROM BEHIND", "FLANK", "DRAW ROUTE"]
+    for ri in range(4):
+        var rbt := _make_button(str(rnames[ri]), Color(0.05, 0.05, 0.06), _route_mode_set.bind(ri))
+        rbt.custom_minimum_size = Vector2(200.0, 54.0)
+        rbt.add_theme_font_size_override("font_size", 22)
+        route_row.add_child(rbt)
+        route_btns.append(rbt)
+    route_edit = HBoxContainer.new()
+    route_edit.alignment = BoxContainer.ALIGNMENT_CENTER
+    route_edit.add_theme_constant_override("separation", 8)
+    bot.add_child(route_edit)
+    var rsend := _make_button("SEND JET", Color(0.1, 0.6, 0.2), _route_send)
+    rsend.custom_minimum_size = Vector2(230.0, 54.0)
+    rsend.add_theme_font_size_override("font_size", 26)
+    route_edit.add_child(rsend)
+    var rundo := _make_button("UNDO", Color(0.35, 0.3, 0.1), _route_undo)
+    rundo.custom_minimum_size = Vector2(150.0, 54.0)
+    rundo.add_theme_font_size_override("font_size", 24)
+    route_edit.add_child(rundo)
+    var rclr := _make_button("CLEAR", Color(0.6, 0.15, 0.15), _route_clear)
+    rclr.custom_minimum_size = Vector2(150.0, 54.0)
+    rclr.add_theme_font_size_override("font_size", 24)
+    route_edit.add_child(rclr)
+    route_row.visible = false
+    route_edit.visible = false
     sat_hint = Label.new()
     sat_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     sat_hint.custom_minimum_size = Vector2(820.0, 0.0)
@@ -4484,6 +4735,8 @@ func _build_sat_ui() -> void:
     bot.grow_horizontal = Control.GROW_DIRECTION_BOTH
     bot.grow_vertical = Control.GROW_DIRECTION_BEGIN
     sat_panels.append(sat_back_btn)
+    sat_panels.append(route_row)
+    sat_panels.append(route_edit)
 
     # placement panel (move a truck / launcher)
     var pp := VBoxContainer.new()
@@ -4573,12 +4826,27 @@ func _refresh_sat() -> void:
             var info: Dictionary = MISSILES[t]
             have = int(ammo[t])
             b.text = "%s\nDMG %d      x%d" % [info["short"], int(float(info["dmg"]) * float(info["count"])), have]
+            if t == 6:
+                b.text = "%s (by jet)\nDMG %d      x%d" % [info["short"], int(float(info["dmg"])), have]
         if t == sat_type:
             b.modulate = Color(1.0, 1.0, 1.0)
         elif have > 0:
             b.modulate = Color(0.72, 0.72, 0.78)
         else:
             b.modulate = Color(0.45, 0.45, 0.5)
+    var routable := sat_type >= NM or sat_type == 6
+    route_row.visible = routable
+    route_edit.visible = routable and route_mode == 3
+    if not routable and not route_wps.is_empty():
+        _route_clear()
+    for rk in range(route_btns.size()):
+        var rb2: Button = route_btns[rk]
+        var ron := rk == route_mode
+        _style_button(rb2, Color(0.2, 0.85, 1.0) if ron else Color(0.05, 0.05, 0.06))
+        var rfc := Color(0.02, 0.05, 0.08) if ron else Color(1.0, 1.0, 1.0)
+        rb2.add_theme_color_override("font_color", rfc)
+        rb2.add_theme_color_override("font_hover_color", rfc)
+        rb2.add_theme_color_override("font_pressed_color", rfc)
     for k2 in range(sat_island_btns.size()):
         var ib: Button = sat_island_btns[k2]
         var idx := k2 + 1
@@ -4601,36 +4869,14 @@ func _sat_tap(pos: Vector2) -> void:
     sat_local = _sat_screen_to_local(pos)
     sat_has_point = true
     _update_sat_marker()
-    if sat_type >= NM:
-        var jt := sat_type - NM
-        var ready := _jets_ready(0, jt)
-        if ready < 1:
-            _play_ui("error")
-            _say("No %s ready at your airport. Buy one in MILITARY > AIRCRAFT, or wait for it to land." % JETS[jt]["short"])
-            _refresh_sat()
+    if sat_type >= NM or sat_type == 6:
+        if route_mode == 3:
+            route_wps.append(sat_local)
+            _rebuild_route_marks()
+            _play_ui("click", -6.0)
+            _say("Route point %d set. Tap more points to steer the jet. The LAST point is where it attacks. Press SEND JET when ready." % route_wps.size())
             return
-        var want := mini(sat_mult, ready)
-        var sent := 0
-        var delay := 0.0
-        var jets: Array = e["jets"]
-        for jv in jets:
-            if sent >= want:
-                break
-            var j: Dictionary = jv
-            if int(j["t"]) == jt and str(j["state"]) == "parked":
-                if _queue_sortie(0, sat_island, j, sat_local, delay):
-                    sent += 1
-                    delay += 1.4
-                else:
-                    _play_ui("error")
-                    _say("Not enough money for the %s sortie fee ($%d)." % [JETS[jt]["short"], int(JETS[jt]["fee"])])
-                    break
-        if sent > 0:
-            sat_cool = 0.4
-            _say("%d x %s scrambled towards Enemy %d!" % [sent, JETS[jt]["short"], sat_island])
-            _vibrate(40)
-        _refresh_sat()
-        _refresh_ui()
+        _sat_commit(sat_local, {"mode": route_mode})
         return
     var ammo: Array = e["ammo"]
     var have: int = ammo[sat_type]
@@ -4672,7 +4918,6 @@ func _begin_move(kind: String, id: int) -> void:
         var pc: Control = pv
         pc.visible = false
     place_panel.visible = true
-    sat_hint.visible = false
     place_label.text = "MOVE: tap a free spot inside the green area, then press PLACE HERE."
     _update_rings()
     if place_zone == null or not is_instance_valid(place_zone):
@@ -4697,7 +4942,6 @@ func _end_place() -> void:
         var pc: Control = pv
         pc.visible = true
     place_panel.visible = false
-    sat_hint.visible = true
     if place_zone != null and is_instance_valid(place_zone):
         place_zone.queue_free()
     place_zone = null
@@ -4744,6 +4988,173 @@ func _place_confirm() -> void:
     _play_ui("build", -4.0)
     _say("Moved. Re-open MILITARY > MANAGE to move or sell more.")
     _save_game()
+
+
+func _route_mode_set(m: int) -> void:
+    route_mode = m
+    if m != 3:
+        _route_clear()
+    var hints := [
+        "STRAIGHT: the jet flies straight at the target, attacks, then loops back home. Tap the enemy island.",
+        "FROM BEHIND: the jet flies around the island and attacks from the far side. Tap the enemy island.",
+        "FLANK: the jet comes in from the side. Tap the enemy island.",
+        "DRAW ROUTE: tap points on the map for the jet to fly through. The LAST point is the attack point. Then press SEND JET.",
+    ]
+    _say(str(hints[m]))
+    _refresh_sat()
+
+
+func _route_undo() -> void:
+    if not route_wps.is_empty():
+        route_wps.remove_at(route_wps.size() - 1)
+    _rebuild_route_marks()
+    if route_wps.is_empty():
+        sat_has_point = false
+        _update_sat_marker()
+    else:
+        sat_local = route_wps[route_wps.size() - 1]
+        _update_sat_marker()
+
+
+func _route_clear() -> void:
+    route_wps.clear()
+    _rebuild_route_marks()
+
+
+func _route_send() -> void:
+    if route_wps.is_empty():
+        _play_ui("error")
+        _say("Tap at least one point on the enemy island first (the last point is the attack point).")
+        return
+    var last: Vector2 = route_wps[route_wps.size() - 1]
+    var r := {"mode": 3, "wps": route_wps.duplicate()}
+    _sat_commit(last, r)
+    _route_clear()
+
+
+func _clear_route_marks() -> void:
+    for mv in route_marks:
+        if is_instance_valid(mv):
+            var mn: Node = mv
+            mn.queue_free()
+    route_marks.clear()
+
+
+func _rebuild_route_marks() -> void:
+    _clear_route_marks()
+    if not sat_open or route_wps.is_empty():
+        return
+    var par := _isl(sat_island)
+    var prev := Vector3.ZERO
+    var have_prev := false
+    for k in range(route_wps.size()):
+        var w: Vector2 = route_wps[k]
+        var last := k == route_wps.size() - 1
+        var col := Color(1.0, 0.25, 0.2) if last else Color(0.2, 0.85, 1.0)
+        var p := Vector3(w.x, 14.0, w.y)
+        var ball := _sphere(par, 3.2 if last else 2.4, p, col)
+        ball.material_override = _glow_mat(col)
+        route_marks.append(ball)
+        var lab := Label3D.new()
+        lab.text = "ATTACK" if last else str(k + 1)
+        lab.font_size = 64
+        lab.pixel_size = 0.12
+        lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+        lab.no_depth_test = true
+        lab.render_priority = 4
+        lab.outline_size = 14
+        lab.modulate = col.lightened(0.3)
+        lab.position = p + Vector3(0.0, 6.0, 0.0)
+        par.add_child(lab)
+        route_marks.append(lab)
+        if have_prev:
+            var dv := p - prev
+            var ln := Vector2(dv.x, dv.z).length()
+            if ln > 0.5:
+                var seg := _box(par, Vector3(ln, 0.5, 0.9), (p + prev) * 0.5, Color(0.2, 0.85, 1.0))
+                seg.rotation.y = atan2(-dv.z, dv.x)
+                seg.material_override = _glow_mat(Color(0.2, 0.85, 1.0))
+                route_marks.append(seg)
+        prev = p
+        have_prev = true
+
+
+# fire jets or air-launched stealth cruise missiles along a chosen route
+func _sat_commit(aim: Vector2, route: Dictionary) -> void:
+    var e: Dictionary = emp[0]
+    var jets: Array = e["jets"]
+    if sat_type == 6:
+        var ammo: Array = e["ammo"]
+        var have6: int = ammo[6]
+        if have6 < 1:
+            _play_ui("error")
+            _say("No Stealth Cruise missiles left. Buy more in MILITARY.")
+            _refresh_sat()
+            return
+        var parked: Array = []
+        for jv in jets:
+            var jj: Dictionary = jv
+            if str(jj["state"]) == "parked":
+                parked.append(jj)
+        if parked.is_empty():
+            _play_ui("error")
+            _say("Stealth Cruise missiles are air-launched. You need a parked fighter jet (MILITARY > AIRCRAFT).")
+            _refresh_sat()
+            return
+        var n6 := mini(sat_mult, have6)
+        var used := 0
+        var sent6 := 0
+        var dl := 0.0
+        for pj in parked:
+            if used >= n6:
+                break
+            var jd: Dictionary = pj
+            var pay := mini(2, n6 - used)
+            if _queue_sortie(0, sat_island, jd, aim, dl, route, pay):
+                used += pay
+                sent6 += 1
+                dl += 1.4
+            else:
+                _play_ui("error")
+                _say("Not enough money for the sortie fee.")
+                break
+        if used > 0:
+            ammo[6] = have6 - used
+            _sync_missiles(0)
+            sat_cool = 0.4
+            _say("%d jet(s) scrambled carrying %d Stealth Cruise missiles!" % [sent6, used])
+            _vibrate(40)
+        _refresh_sat()
+        _refresh_ui()
+        return
+    var jt := sat_type - NM
+    var ready := _jets_ready(0, jt)
+    if ready < 1:
+        _play_ui("error")
+        _say("No %s ready at your airport. Buy one in MILITARY > AIRCRAFT, or wait for it to land." % JETS[jt]["short"])
+        _refresh_sat()
+        return
+    var want := mini(sat_mult, ready)
+    var sent := 0
+    var delay := 0.0
+    for jv2 in jets:
+        if sent >= want:
+            break
+        var j: Dictionary = jv2
+        if int(j["t"]) == jt and str(j["state"]) == "parked":
+            if _queue_sortie(0, sat_island, j, aim, delay, route):
+                sent += 1
+                delay += 1.4
+            else:
+                _play_ui("error")
+                _say("Not enough money for the %s sortie fee ($%d)." % [JETS[jt]["short"], int(JETS[jt]["fee"])])
+                break
+    if sent > 0:
+        sat_cool = 0.4
+        _say("%d x %s scrambled towards Enemy %d!" % [sent, JETS[jt]["short"], sat_island])
+        _vibrate(40)
+    _refresh_sat()
+    _refresh_ui()
 
 
 func _evade(t: int) -> int:
@@ -5003,8 +5414,8 @@ func _refresh_ui() -> void:
         var info: Label = c["info"]
         var b1: Button = c["b1"]
         var b5: Button = c["b5"]
-        if not _unlocked("m", t):
-            info.text = "LOCKED\nUnlocks in %s\nDMG %d" % [_unlock_text("m", t), int(float(m["dmg"]) * float(m["count"]))]
+        if not _unlocked(0, "m", t):
+            info.text = "LOCKED\nUnlocks when you reach %s\nDMG %d" % [_unlock_text("m", t), int(float(m["dmg"]) * float(m["count"]))]
             b1.text = "LOCKED"
             b5.text = "LOCKED"
             b1.disabled = true
@@ -5021,8 +5432,8 @@ func _refresh_ui() -> void:
         var dprice: int = d["price"]
         var info2: Label = c2["info"]
         var db: Button = c2["b1"]
-        if not _unlocked("d", t2):
-            info2.text = "LOCKED\nUnlocks in %s\nRange %d" % [_unlock_text("d", t2), int(d["range"])]
+        if not _unlocked(0, "d", t2):
+            info2.text = "LOCKED\nUnlocks when you reach %s\nRange %d" % [_unlock_text("d", t2), int(d["range"])]
             db.text = "LOCKED"
             db.disabled = true
             continue
@@ -5035,8 +5446,8 @@ func _refresh_ui() -> void:
         var jprice: int = jd["price"]
         var info3: Label = c3["info"]
         var jb: Button = c3["b1"]
-        if not _unlocked("j", t3):
-            info3.text = "LOCKED\nUnlocks in %s\nStrike x%d  DMG %d" % [_unlock_text("j", t3), int(jd["shots"]), int(jd["dmg"])]
+        if not _unlocked(0, "j", t3):
+            info3.text = "LOCKED\nUnlocks when you reach %s\nStrike x%d  DMG %d" % [_unlock_text("j", t3), int(jd["shots"]), int(jd["dmg"])]
             jb.text = "LOCKED"
             jb.disabled = true
             continue
@@ -5132,16 +5543,45 @@ func _selftest() -> void:
     if place_mode:
         _place_cancel()
     print("SELFTEST after cancel sat_open=", sat_open, " place_mode=", place_mode)
+    _save_game()
+    print("SELFTEST save/load ", _load_game())
+    _build_world()
+    _refresh_ui()
+    me = emp[0]
     for r in range(1, 3):
         var re: Dictionary = emp[r]
         re["rest"] = 99999.0
     _open_sat()
     _sat_page(1)
-    _sat_set_type(NM + 1)
-    _sat_set_mult(5)
+    _sat_set_mult(1)
     for k4 in range(3):
         await get_tree().process_frame
+    _sat_set_type(NM + 0)
+    _route_mode_set(0)
     _sat_tap(Vector2(640.0, 360.0))
+    sat_cool = 0.0
+    _sat_set_type(NM + 1)
+    _route_mode_set(1)
+    _sat_tap(Vector2(700.0, 330.0))
+    sat_cool = 0.0
+    _sat_set_type(NM + 2)
+    _route_mode_set(2)
+    _sat_tap(Vector2(600.0, 380.0))
+    sat_cool = 0.0
+    _sat_set_type(NM + 3)
+    _route_mode_set(3)
+    _sat_tap(Vector2(500.0, 250.0))
+    _sat_tap(Vector2(760.0, 300.0))
+    _sat_tap(Vector2(640.0, 420.0))
+    print("SELFTEST route wps ", route_wps.size(), " marks ", route_marks.size())
+    await get_tree().process_frame
+    _route_send()
+    sat_cool = 0.0
+    _sat_set_type(6)
+    _route_mode_set(0)
+    _sat_set_mult(5)
+    _sat_tap(Vector2(640.0, 340.0))
+    print("SELFTEST stealth ammo left ", emp[0]["ammo"][6])
     sat_cool = 0.0
     _sat_page(0)
     _sat_set_type(1)
@@ -5149,9 +5589,23 @@ func _selftest() -> void:
     _sat_pick_island(2)
     print("SELFTEST queued ", launch_queue.size())
     var mx1 := 0
+    var cam_ok := 0
     for k6 in range(300):
         _process(0.25)
         mx1 = maxi(mx1, sorties.size())
+        if cam_ok == 0 and sorties.size() > 0 and k6 > 20:
+            _close_sat()
+            _jetcam_enter()
+            for kc in range(120):
+                _process(0.1)
+                _update_camera(0.1)
+                if kc % 40 == 0:
+                    _jetcam_next()
+            cam_ok = 1 if jetcam_on else 0
+            _jetcam_exit()
+            _open_sat()
+            print("SELFTEST jetcam ", cam_ok)
+    print("SELFTEST peak ", emp[0]["peak"], " unlocked ICBM ", _unlocked(0, "m", 7))
     print("SELFTEST player sorties max ", mx1, " now ", sorties.size(), " my jets ", _jets_owned(0, -1), " proj ", projectiles.size())
     _close_sat()
     for t4 in range(1, 3):
@@ -5250,4 +5704,435 @@ func _merge_model(root: Node3D, skip: Array) -> void:
         var old: MeshInstance3D = mv
         old.get_parent().remove_child(old)
         old.queue_free()
+
+
+func _interceptor_model(dtype: int) -> Node3D:
+    var root := Node3D.new()
+    var sc: float = [1.0, 0.85, 1.05, 1.25, 1.5][dtype]
+    var m := Node3D.new()
+    m.scale = Vector3.ONE * sc
+    root.add_child(m)
+    var body := Color(0.92, 0.93, 0.95)
+    var accent := Color(0.95, 0.75, 0.15) if dtype < 3 else Color(0.3, 0.55, 0.9)
+    var fus := _cyl(m, 0.2, 0.2, 2.6, Vector3.ZERO, body)
+    fus.rotation.x = PI / 2.0
+    var nose := _cyl(m, 0.0, 0.2, 0.8, Vector3(0.0, 0.0, -1.6), accent)
+    nose.rotation.x = -PI / 2.0
+    _box(m, Vector3(1.0, 0.05, 0.5), Vector3(0.0, 0.0, 0.9), body.darkened(0.15))
+    _box(m, Vector3(0.05, 1.0, 0.5), Vector3(0.0, 0.0, 0.9), body.darkened(0.15))
+    _box(m, Vector3(0.7, 0.04, 0.35), Vector3(0.0, 0.0, -0.5), accent)
+    var fl := _sphere(m, 0.3, Vector3(0.0, 0.0, 1.5), Color(1.0, 0.7, 0.25))
+    fl.scale = Vector3(1.0, 1.0, 2.2)
+    fl.material_override = _glow_mat(Color(1.0, 0.65, 0.2))
+    _merge_model(m, [])
+    return root
+
+
+func _smoke_puff(pos: Vector3, size: float, life: float) -> void:
+    var p := MeshInstance3D.new()
+    var sm := SphereMesh.new()
+    sm.radius = 1.0
+    sm.height = 2.0
+    sm.radial_segments = 8
+    sm.rings = 4
+    p.mesh = sm
+    var key := "puff"
+    var mat: StandardMaterial3D
+    if mat_cache.has(key):
+        mat = mat_cache[key]
+    else:
+        mat = StandardMaterial3D.new()
+        mat.albedo_color = Color(0.93, 0.93, 0.95, 0.75)
+        mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+        mat_cache[key] = mat
+    p.material_override = mat
+    p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    p.position = pos
+    p.scale = Vector3.ONE * size * 0.4
+    level_root.add_child(p)
+    var tw := p.create_tween()
+    tw.set_parallel(true)
+    tw.tween_property(p, "scale", Vector3.ONE * size, life)
+    tw.tween_property(p, "position:y", pos.y + size * 0.6, life)
+    tw.chain().tween_callback(p.queue_free)
+
+
+func _spawn_interceptor(from_pos: Vector3, meet: Vector3, tm: float, dtype: int, success: bool) -> void:
+    if dtype == 0:
+        _ciws_burst(from_pos, meet, success)
+        return
+    var n := _interceptor_model(dtype)
+    level_root.add_child(n)
+    n.position = from_pos
+    var aim_pt := meet
+    if not success:
+        aim_pt = meet + Vector3(randf_range(-1.0, 1.0), randf_range(-0.5, 1.0), randf_range(-1.0, 1.0)).normalized() * randf_range(7.0, 12.0)
+    var dist := from_pos.distance_to(aim_pt)
+    var ctrl := from_pos + Vector3(0.0, 8.0 + dist * 0.35, 0.0) + (aim_pt - from_pos) * 0.12
+    # launch flash and a thick cloud of smoke at the launcher
+    _explode(from_pos + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.75, 0.35), 2.2)
+    for k in range(5):
+        _smoke_puff(from_pos + Vector3(randf_range(-1.5, 1.5), 0.5 + float(k) * 0.4, randf_range(-1.5, 1.5)), randf_range(2.0, 3.4), randf_range(1.4, 2.2))
+    _play3d("launch", from_pos, 2.0, 1.5 + float(dtype) * 0.05)
+    var tw := create_tween()
+    tw.tween_method(_icp_step.bind(n, from_pos, ctrl, aim_pt), 0.0, 1.0, tm)
+    tw.tween_callback(_icp_end.bind(n, aim_pt, success))
+
+
+func _icp_step(t: float, n, p0: Vector3, c: Vector3, p2: Vector3) -> void:
+    if n == null or not is_instance_valid(n):
+        return
+    var u := 1.0 - t
+    var pos := u * u * p0 + 2.0 * u * t * c + t * t * p2
+    var vel := 2.0 * u * (c - p0) + 2.0 * t * (p2 - c)
+    n.position = pos
+    if vel.length() > 0.01:
+        var up := Vector3.UP
+        if absf(vel.normalized().y) > 0.98:
+            up = Vector3.RIGHT
+        n.look_at(pos + vel, up)
+    if randf() < 0.55:
+        _smoke_puff(pos - vel.normalized() * 1.6, randf_range(0.9, 1.5), randf_range(0.9, 1.5))
+
+
+func _icp_end(n, pos: Vector3, success: bool) -> void:
+    if n != null and is_instance_valid(n):
+        n.queue_free()
+    if success:
+        _explode(pos, Color(1.0, 0.85, 0.5), 3.4)
+        _play3d("pop", pos, 6.0)
+    else:
+        _explode(pos, Color(0.9, 0.9, 0.9), 1.6)
+
+
+func _ciws_burst(from_pos: Vector3, to_pos: Vector3, success: bool) -> void:
+    # rapid-fire gun: a stream of glowing tracer rounds
+    var dirv := (to_pos - from_pos)
+    var dist := dirv.length()
+    var dn := dirv.normalized()
+    var tracer_col := Color(1.0, 0.85, 0.3)
+    var tmat := _glow_mat(tracer_col)
+    _play3d("launch", from_pos, 1.0, 2.4)
+    for k in range(14):
+        var tr := MeshInstance3D.new()
+        var bm := BoxMesh.new()
+        bm.size = Vector3(0.12, 0.12, 2.2)
+        tr.mesh = bm
+        tr.material_override = tmat
+        tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        level_root.add_child(tr)
+        tr.position = from_pos
+        tr.visible = false
+        var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * (0.8 if success else 5.0)
+        var tgt := to_pos + spread
+        var tw := tr.create_tween()
+        tw.tween_interval(0.035 * float(k))
+        tw.tween_callback(func(): tr.visible = true)
+        tw.tween_property(tr, "position", tgt, maxf(0.12, dist / 420.0))
+        tw.tween_callback(tr.queue_free)
+        tr.look_at_from_position(from_pos, tgt, Vector3.UP)
+    # muzzle flash
+    _explode(from_pos + dn * 2.0, Color(1.0, 0.8, 0.3), 1.2)
+    if success:
+        var tw2 := create_tween()
+        tw2.tween_interval(0.035 * 14.0 + dist / 420.0)
+        tw2.tween_callback(_explode.bind(to_pos, Color(1.0, 0.85, 0.5), 3.0))
+
+
+func _build_jetcam_ui() -> void:
+    jetcam_btn = _make_button("JET CAM", Color(0.75, 0.15, 0.15), _jetcam_toggle)
+    jetcam_btn.custom_minimum_size = Vector2(190.0, 52.0)
+    jetcam_btn.add_theme_font_size_override("font_size", 26)
+    ui_root.add_child(jetcam_btn)
+    jetcam_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+    jetcam_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    jetcam_btn.offset_top += 64.0
+    jetcam_btn.offset_bottom += 64.0
+    jetcam_btn.visible = false
+
+    jetcam_layer = Control.new()
+    jetcam_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(jetcam_layer)
+    jetcam_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    for top_bar in [true, false]:
+        var bar := ColorRect.new()
+        bar.color = Color(0.0, 0.0, 0.0, 0.9)
+        bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        jetcam_layer.add_child(bar)
+        if top_bar:
+            bar.anchor_left = 0.0
+            bar.anchor_right = 1.0
+            bar.anchor_top = 0.0
+            bar.anchor_bottom = 0.0
+            bar.offset_left = 0.0
+            bar.offset_right = 0.0
+            bar.offset_top = 0.0
+            bar.offset_bottom = 56.0
+        else:
+            bar.anchor_left = 0.0
+            bar.anchor_right = 1.0
+            bar.anchor_top = 1.0
+            bar.anchor_bottom = 1.0
+            bar.offset_left = 0.0
+            bar.offset_right = 0.0
+            bar.offset_top = -150.0
+            bar.offset_bottom = 0.0
+    var live := PanelContainer.new()
+    _style_panel(live, Color(0.85, 0.08, 0.08, 0.95))
+    live.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    jetcam_layer.add_child(live)
+    live.position = Vector2(18.0, 64.0)
+    jetcam_live = Label.new()
+    jetcam_live.text = "LIVE"
+    _style_text(jetcam_live, 30, Color(1.0, 1.0, 1.0))
+    live.add_child(jetcam_live)
+    var chan := Label.new()
+    chan.text = "AIR CAM"
+    _style_text(chan, 22, Color(0.8, 0.9, 1.0))
+    chan.position = Vector2(130.0, 74.0)
+    jetcam_layer.add_child(chan)
+    jetcam_info = Label.new()
+    jetcam_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    jetcam_info.custom_minimum_size = Vector2(900.0, 0.0)
+    jetcam_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(jetcam_info, 30, Color(1.0, 1.0, 1.0))
+    jetcam_layer.add_child(jetcam_info)
+    jetcam_info.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 22)
+    jetcam_info.offset_top -= 56.0
+    jetcam_info.offset_bottom -= 56.0
+    var nb := _make_button("NEXT JET", Color(0.1, 0.32, 0.95), _jetcam_next)
+    nb.custom_minimum_size = Vector2(190.0, 56.0)
+    nb.add_theme_font_size_override("font_size", 26)
+    jetcam_layer.add_child(nb)
+    nb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 14)
+    nb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    nb.offset_left -= 210.0
+    nb.offset_right -= 210.0
+    var xb := _make_button("EXIT CAM", Color(0.6, 0.15, 0.15), _jetcam_exit)
+    xb.custom_minimum_size = Vector2(190.0, 56.0)
+    xb.add_theme_font_size_override("font_size", 26)
+    jetcam_layer.add_child(xb)
+    xb.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 14)
+    xb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    jetcam_panels = [jetcam_btn, nb, xb]
+    jetcam_layer.visible = false
+
+
+func _sortie_by_id(id: int) -> Dictionary:
+    for sv in sorties:
+        var so: Dictionary = sv
+        if int(so["id"]) == id:
+            return so
+    return {}
+
+
+func _jetcam_pick(after_id: int) -> int:
+    if sorties.is_empty():
+        return 0
+    var ids: Array = []
+    for sv in sorties:
+        var so: Dictionary = sv
+        if so["node"] != null and is_instance_valid(so["node"]):
+            ids.append(int(so["id"]))
+    if ids.is_empty():
+        return 0
+    var idx := ids.find(after_id)
+    return int(ids[(idx + 1) % ids.size()])
+
+
+func _jetcam_toggle() -> void:
+    if jetcam_on:
+        _jetcam_exit()
+    else:
+        _jetcam_enter()
+
+
+func _jetcam_enter() -> void:
+    if game_state != "playing" or sat_open or sorties.is_empty():
+        return
+    var id := _jetcam_pick(0)
+    if id == 0:
+        return
+    _close_windows()
+    jetcam_on = true
+    jetcam_id = id
+    jetcam_shot = 0
+    jetcam_t = 0.0
+    jetcam_fixed = Vector3.ZERO
+    joy_id = -1
+    look_id = -1
+    joy_vec = Vector2.ZERO
+    _reset_joystick()
+    tabs_box.visible = false
+    hot_box.visible = false
+    stats_panel.visible = false
+    joy_base.visible = false
+    joy_knob.visible = false
+    jetcam_layer.visible = true
+    jetcam_btn.visible = false
+    _play_ui("sat", -4.0)
+
+
+func _jetcam_exit() -> void:
+    if not jetcam_on:
+        return
+    jetcam_on = false
+    camera.fov = 70.0
+    jetcam_layer.visible = false
+    if not sat_open:
+        tabs_box.visible = true
+        hot_box.visible = true
+        stats_panel.visible = true
+        joy_base.visible = true
+        joy_knob.visible = true
+    camera.position = _player_world() + Vector3(0.0, 6.0, 12.0)
+
+
+func _jetcam_next() -> void:
+    var id := _jetcam_pick(jetcam_id)
+    if id != 0:
+        jetcam_id = id
+        jetcam_shot = 0
+        jetcam_t = 0.0
+        jetcam_fixed = Vector3.ZERO
+
+
+func _jetcam_phase(so: Dictionary) -> String:
+    var off: float = so["off"]
+    if float(so["doom"]) >= 0.0:
+        return "WARNING: SAM LOCK!"
+    if off < float(so["taxi_end"]):
+        return "TAXIING"
+    if off < float(so["taxi_end"]) + 170.0:
+        return "TAKE-OFF"
+    if off < float(so["strike_off"]) - 110.0:
+        return "TRANSIT TO TARGET"
+    if off < float(so["strike_off"]) + 70.0:
+        return "ATTACK RUN"
+    if off < float(so["td"]) - 220.0:
+        return "RETURNING HOME"
+    if off < float(so["td"]):
+        return "FINAL APPROACH"
+    return "LANDING"
+
+
+func _jetcam_update(delta: float) -> void:
+    var so := _sortie_by_id(jetcam_id)
+    if so.is_empty():
+        var nid := _jetcam_pick(0)
+        if nid == 0:
+            _jetcam_exit()
+            return
+        jetcam_id = nid
+        jetcam_t = 0.0
+        jetcam_fixed = Vector3.ZERO
+        so = _sortie_by_id(nid)
+    var node: Node3D = so["node"]
+    var pos := node.position
+    var fwd := -node.global_transform.basis.z
+    fwd.y = 0.0
+    if fwd.length() < 0.01:
+        fwd = Vector3(0.0, 0.0, -1.0)
+    fwd = fwd.normalized()
+    var rgt := Vector3(-fwd.z, 0.0, fwd.x) * -1.0
+    jetcam_t += delta
+    if jetcam_t > 5.0:
+        jetcam_t = 0.0
+        jetcam_shot = (jetcam_shot + 1) % 4
+        jetcam_fixed = Vector3.ZERO
+    var want := camera.position
+    var look := pos
+    var fov := 62.0
+    if jetcam_shot == 0:
+        want = pos - fwd * 15.0 + Vector3(0.0, 5.0, 0.0) + rgt * 3.0
+        look = pos + fwd * 14.0
+        want = camera.position.lerp(want, clampf(delta * 7.0, 0.0, 1.0))
+    elif jetcam_shot == 1:
+        if jetcam_fixed == Vector3.ZERO:
+            jetcam_fixed = pos + fwd * 90.0 + rgt * 38.0
+            jetcam_fixed.y = maxf(2.5, minf(pos.y - 10.0, 14.0))
+        want = jetcam_fixed
+        fov = 32.0
+    elif jetcam_shot == 2:
+        want = pos + fwd * 4.4 + Vector3(0.0, 1.5, 0.0)
+        look = pos + fwd * 70.0
+        fov = 82.0
+    else:
+        var ang := jetcam_t * 0.7
+        want = pos + Vector3(cos(ang) * 26.0, 8.0, sin(ang) * 26.0)
+        look = pos
+        fov = 55.0
+    want.y = maxf(want.y, 1.8)
+    camera.position = want
+    camera.fov = lerpf(camera.fov, fov, clampf(delta * 4.0, 0.0, 1.0))
+    var upv := Vector3.UP
+    camera.look_at(look, upv)
+    var jt: int = so["jt"]
+    var a: int = so["a"]
+    var tg: int = so["tg"]
+    var who := "YOUR" if a == 0 else "ENEMY %d" % a
+    var dest := "TARGET: ENEMY %d" % tg if tg != 0 else "INBOUND TO YOUR ISLAND"
+    var spd_kmh := int(_sortie_speed(so, float(so["off"])) * 9.0)
+    var alt_m := int(maxf(0.0, pos.y - 1.0) * 40.0)
+    jetcam_info.text = "%s  %s    %s\n%s   |   ALT %d m   |   SPEED %d km/h" % [who, JETS[jt]["name"], dest, _jetcam_phase(so), alt_m, spd_kmh]
+    jetcam_live.modulate.a = 1.0 if int(jetcam_t * 2.0) % 2 == 0 else 0.55
+
+
+func _jetcam_ui_tick() -> void:
+    if jetcam_btn == null:
+        return
+    var any := false
+    for sv in sorties:
+        var so: Dictionary = sv
+        if so["node"] != null and is_instance_valid(so["node"]):
+            any = true
+            break
+    jetcam_btn.visible = any and not jetcam_on and not sat_open and game_state == "playing"
+    if jetcam_on and not any:
+        _jetcam_exit()
+
+
+func _try_intercept(d: Dictionary, node: Node3D, t: float, dur: float, p0: Vector3, p1: Vector3, h: float) -> void:
+    var target: int = d["target"]
+    var wt: int = d["wt"]
+    var te: Dictionary = emp[target]
+    var structs: Array = te["structs"]
+    var tried: Array = d["tried"]
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
+            continue
+        var sid: int = s["id"]
+        if tried.has(sid):
+            continue
+        if int(s["mag"]) <= 0 or float(s["cd"]) > 0.0:
+            continue
+        var dpos := _struct_world(target, s)
+        var dtype: int = s["sub"]
+        var rng: float = DEFENSES[dtype]["range"]
+        var flat := Vector2(node.position.x - dpos.x, node.position.z - dpos.z)
+        if flat.length() > rng:
+            continue
+        tried.append(sid)
+        s["mag"] = int(s["mag"]) - 1
+        s["cd"] = float(DEFENSES[dtype]["cd"])
+        var chance: float = DEF_TABLE[dtype][wt]
+        var ok := randf() < chance
+        # predict where the incoming missile will be and fly the interceptor there
+        var from_p := dpos + Vector3(0.0, 4.0, 0.0)
+        var vi: float = DEF_SPEED[dtype]
+        var tm := from_p.distance_to(node.position) / vi
+        for it in range(3):
+            var ft := minf(t + tm / dur, 0.97)
+            tm = from_p.distance_to(_arc(p0, p1, ft, h)) / vi
+        var left := dur * (1.0 - t)
+        tm = clampf(tm * 1.15, 0.7, maxf(0.7, left * 0.92))
+        var meet := _arc(p0, p1, minf(t + tm / dur, 1.0), h)
+        if dtype == 0:
+            s["node"].rotation.y = atan2(-(meet.x - dpos.x), -(meet.z - dpos.z))
+        _spawn_interceptor(from_p, meet, tm, dtype, ok)
+        if ok:
+            d["kill"] = tm
+            return
 
