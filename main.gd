@@ -118,27 +118,19 @@ const JETS := [
 
 const WATER_SHADER := """
 shader_type spatial;
-uniform vec3 deep_color : source_color = vec3(0.02, 0.2, 0.42);
-uniform vec3 shallow_color : source_color = vec3(0.12, 0.58, 0.82);
+uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.42);
+uniform vec3 shallow_color : source_color = vec3(0.14, 0.62, 0.76);
 varying vec3 wpos;
-float wave(vec2 p, float t) {
-    return sin(p.x * 0.35 + t * 1.1) * 0.5 + sin(p.y * 0.27 - t * 0.9) * 0.5 + sin((p.x + p.y) * 0.18 + t * 0.6) * 0.5;
-}
 void vertex() {
     wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 void fragment() {
     vec2 p = wpos.xz;
-    float e = 0.6;
-    float h = wave(p, TIME);
-    float hx = wave(p + vec2(e, 0.0), TIME);
-    float hz = wave(p + vec2(0.0, e), TIME);
-    vec3 n = normalize(vec3((h - hx) * 0.8, e, (h - hz) * 0.8));
-    NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
-    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 2.5);
-    ALBEDO = mix(deep_color, shallow_color, fres);
-    ROUGHNESS = 0.1;
-    SPECULAR = 0.8;
+    float w = sin(p.x * 0.11 + TIME * 0.7) * 0.5 + sin(p.y * 0.09 - TIME * 0.55) * 0.5 + sin((p.x - p.y) * 0.21 + TIME) * 0.25;
+    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
+    ALBEDO = mix(deep_color, shallow_color, clamp(0.06 + 0.18 * w + fres * 0.3, 0.0, 1.0));
+    ROUGHNESS = 0.2;
+    SPECULAR = 0.5;
 }
 """
 
@@ -189,6 +181,12 @@ var island_pos: Array = []
 var clouds: Array = []
 var projectiles: Array = []
 var sorties: Array = []
+var money_chip: Control
+var unlock_card: Control
+var unlock_name: Label
+var unlock_bar: ProgressBar
+var strike_btn: Button
+var air_btn: Button
 var route_mode := 0
 var route_wps: Array = []
 var route_marks: Array = []
@@ -606,7 +604,7 @@ func _build_environment() -> void:
     env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
     env.fog_enabled = true
     env.fog_light_color = Color(0.74, 0.88, 0.98)
-    env.fog_density = 0.0008
+    env.fog_density = 0.0004
     var we := WorldEnvironment.new()
     we.environment = env
     add_child(we)
@@ -635,7 +633,7 @@ func _build_environment() -> void:
     var cloud_mat := StandardMaterial3D.new()
     cloud_mat.albedo_color = Color(1.0, 1.0, 1.0)
     cloud_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    for k in range(22):
+    for k in range(11):
         var c := Node3D.new()
         c.position = Vector3(randf_range(-600.0, 600.0), randf_range(90.0, 140.0), randf_range(-600.0, 600.0))
         for j in range(4):
@@ -654,7 +652,9 @@ func _build_environment() -> void:
         add_child(c)
         clouds.append(c)
 
-    get_viewport().msaa_3d = Viewport.MSAA_4X
+    get_viewport().msaa_3d = Viewport.MSAA_2X
+    get_viewport().scaling_3d_scale = 0.85
+    RenderingServer.directional_shadow_atlas_set_size(1536, false)
     camera = Camera3D.new()
     camera.fov = 70.0
     camera.far = 3000.0
@@ -2160,35 +2160,6 @@ func _update_sens_text() -> void:
         btn_sens.text = "LOOK SENSITIVITY: %s  (tap to change)" % SENS_NAMES[look_sens_idx]
 
 
-func _style_panel(c: Control, col: Color = Color(0.05, 0.1, 0.18, 0.72)) -> void:
-    var sb := StyleBoxFlat.new()
-    sb.bg_color = col
-    sb.set_corner_radius_all(18)
-    sb.content_margin_left = 16.0
-    sb.content_margin_right = 16.0
-    sb.content_margin_top = 10.0
-    sb.content_margin_bottom = 10.0
-    c.add_theme_stylebox_override("panel", sb)
-
-
-func _style_button(b: Button, col: Color) -> void:
-    for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-        var sb := StyleBoxFlat.new()
-        sb.bg_color = col
-        if state == "pressed":
-            sb.bg_color = col.darkened(0.3)
-        elif state == "hover":
-            sb.bg_color = col.lightened(0.1)
-        elif state == "disabled":
-            sb.bg_color = Color(0.3, 0.3, 0.34, 0.85)
-        sb.set_corner_radius_all(16)
-        sb.content_margin_left = 18.0
-        sb.content_margin_right = 18.0
-        sb.content_margin_top = 8.0
-        sb.content_margin_bottom = 8.0
-        b.add_theme_stylebox_override(state, sb)
-
-
 func _make_button(text: String, col: Color, cb: Callable) -> Button:
     var b := Button.new()
     b.text = text
@@ -2225,6 +2196,7 @@ func _build_ui() -> void:
     ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
     _build_hud()
+    _build_hud_extras()
     _build_tabs()
     _build_hotbar()
     _build_military_window()
@@ -2287,7 +2259,7 @@ func _build_hud() -> void:
     ui_root.add_child(mc)
     status_label = Label.new()
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    status_label.custom_minimum_size = Vector2(760.0, 0.0)
+    status_label.custom_minimum_size = Vector2(680.0, 0.0)
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _style_text(status_label, 24, Color(1.0, 0.93, 0.6))
@@ -2368,6 +2340,7 @@ func _ui_hire(kind: String) -> void:
 func _sat_ui_show(on: bool) -> void:
     sat_root.visible = on
     tabs_box.visible = not on
+    _hud_show(not on)
     hot_box.visible = not on
     stats_panel.visible = not on
     status_box.visible = not on
@@ -2379,7 +2352,7 @@ func _sat_ui_show(on: bool) -> void:
 
 
 func _over_ui(pos: Vector2) -> bool:
-    for c in [stats_panel, tabs_box, hot_box, menu_btn, jetcam_btn, mil_panel, work_panel, overlay]:
+    for c in [stats_panel, tabs_box, hot_box, menu_btn, jetcam_btn, strike_btn, air_btn, money_chip, unlock_card, mil_panel, work_panel, overlay]:
         var ctl: Control = c
         if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
             return true
@@ -2710,7 +2683,6 @@ func _build_tabs() -> void:
     tabs_box.add_theme_constant_override("separation", 10)
     ui_root.add_child(tabs_box)
     tabs_box.add_child(_tab_button("MILITARY", Color(0.3, 0.95, 0.95), _toggle_mil))
-    tabs_box.add_child(_tab_button("ATTACK", Color(1.0, 0.82, 0.1), _open_sat))
     tabs_box.add_child(_tab_button("WORKER", Color(0.3, 0.95, 0.95), _toggle_work))
     tabs_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 8)
     tabs_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -2718,12 +2690,12 @@ func _build_tabs() -> void:
 
 func _make_slot(idx: int) -> Dictionary:
     var b := Button.new()
-    b.custom_minimum_size = Vector2(74.0, 74.0)
+    b.custom_minimum_size = Vector2(62.0, 62.0)
     _style_button(b, Color(0.1, 0.12, 0.17, 0.9))
     b.pressed.connect(_play_ui.bind("click", -8.0))
     b.pressed.connect(_on_hot_slot.bind(idx))
     var ic := MiniIcon.new()
-    ic.custom_minimum_size = Vector2(62.0, 62.0)
+    ic.custom_minimum_size = Vector2(50.0, 50.0)
     b.add_child(ic)
     ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
     var lbl := Label.new()
@@ -3465,19 +3437,22 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     root.rotation.y = _yaw_to(-p)
     var team := _team(i)
     var side := PLOT_HALF * 2.0
-    _box(root, Vector3(side + 5.0, 1.4, side + 5.0), Vector3(0.0, -0.35, 0.0), team.darkened(0.25))
+    _sea_slab(root, side + 46.0, -0.38, Color(0.12, 0.5, 0.58, 0.5))
+    _sea_slab(root, side + 16.0, -0.33, Color(0.75, 0.82, 0.88, 0.4))
+    _box(root, Vector3(side + 5.0, 1.4, side + 5.0), Vector3(0.0, -0.35, 0.0), Color(0.48, 0.41, 0.27))
     var top := MeshInstance3D.new()
     var bm := BoxMesh.new()
     bm.size = Vector3(side, 0.3, side)
     top.mesh = bm
     top.position = Vector3(0.0, 0.45, 0.0)
-    top.material_override = _checker_mat(i)
+    top.material_override = _ground_mat(i)
     root.add_child(top)
     # concrete military apron
-    _box(root, Vector3(154.0, 0.06, 126.0), Vector3(-39.0, 0.63, -53.0), Color(0.3, 0.32, 0.35))
+    _box(root, Vector3(154.0, 0.06, 126.0), Vector3(-39.0, 0.67, -53.0), Color(0.3, 0.32, 0.35))
     var holder := Node3D.new()
     root.add_child(holder)
     _island_props(holder)
+    _island_scenery(holder)
     _airport(holder)
     _merge_model(holder, [])
     var lab := Label3D.new()
@@ -5967,6 +5942,7 @@ func _jetcam_enter() -> void:
     tabs_box.visible = false
     hot_box.visible = false
     stats_panel.visible = false
+    _hud_show(false)
     joy_base.visible = false
     joy_knob.visible = false
     jetcam_layer.visible = true
@@ -5984,6 +5960,7 @@ func _jetcam_exit() -> void:
         tabs_box.visible = true
         hot_box.visible = true
         stats_panel.visible = true
+        _hud_show(true)
         joy_base.visible = true
         joy_knob.visible = true
     camera.position = _player_world() + Vector3(0.0, 6.0, 12.0)
@@ -6082,6 +6059,8 @@ func _jetcam_update(delta: float) -> void:
 func _jetcam_ui_tick() -> void:
     if jetcam_btn == null:
         return
+    if Engine.get_process_frames() % 20 == 0:
+        _update_unlock_card()
     var any := false
     for sv in sorties:
         var so: Dictionary = sv
@@ -6135,4 +6114,365 @@ func _try_intercept(d: Dictionary, node: Node3D, t: float, dur: float, p0: Vecto
         if ok:
             d["kill"] = tm
             return
+
+
+func _style_panel(c: Control, col: Color = Color(0.04, 0.09, 0.16, 0.9)) -> void:
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = Color(col.r * 0.8 + 0.01, col.g * 0.9 + 0.03, col.b * 0.9 + 0.08, maxf(col.a, 0.6))
+    sb.set_corner_radius_all(14)
+    sb.set_border_width_all(2)
+    sb.border_color = Color(0.22, 0.58, 0.92, 0.9)
+    sb.shadow_color = Color(0.0, 0.0, 0.0, 0.4)
+    sb.shadow_size = 6
+    sb.content_margin_left = 16.0
+    sb.content_margin_right = 16.0
+    sb.content_margin_top = 10.0
+    sb.content_margin_bottom = 10.0
+    c.add_theme_stylebox_override("panel", sb)
+
+
+func _style_button(b: Button, col: Color) -> void:
+    var lum := col.r * 0.3 + col.g * 0.59 + col.b * 0.11
+    var base := col
+    var border := col.lightened(0.5)
+    border.a = 0.95
+    if lum < 0.2 and col.a > 0.5:
+        base = Color(0.06, 0.13, 0.24, 0.95)
+        border = Color(0.25, 0.62, 0.95, 0.95)
+    for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = base
+        sb.border_color = border
+        if state == "pressed":
+            sb.bg_color = base.darkened(0.3)
+        elif state == "hover":
+            sb.bg_color = base.lightened(0.1)
+        elif state == "disabled":
+            sb.bg_color = Color(0.14, 0.17, 0.22, 0.85)
+            sb.border_color = Color(0.3, 0.35, 0.42, 0.8)
+        sb.set_corner_radius_all(12)
+        sb.set_border_width_all(2)
+        sb.shadow_color = Color(0.0, 0.0, 0.0, 0.35)
+        sb.shadow_size = 4
+        sb.shadow_offset = Vector2(0.0, 2.0)
+        sb.content_margin_left = 18.0
+        sb.content_margin_right = 18.0
+        sb.content_margin_top = 8.0
+        sb.content_margin_bottom = 8.0
+        b.add_theme_stylebox_override(state, sb)
+
+
+func _circle_style(col: Color, border: Color, bw: int, radius: int) -> StyleBoxFlat:
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = col
+    sb.border_color = border
+    sb.set_border_width_all(bw)
+    sb.set_corner_radius_all(radius)
+    sb.shadow_color = Color(0.0, 0.0, 0.0, 0.45)
+    sb.shadow_size = 8
+    return sb
+
+
+func _round_btn(size: float, col: Color, border: Color, bw: int, cb: Callable) -> Button:
+    var b := Button.new()
+    b.custom_minimum_size = Vector2(size, size)
+    var r := int(size * 0.5)
+    b.add_theme_stylebox_override("normal", _circle_style(col, border, bw, r))
+    b.add_theme_stylebox_override("hover", _circle_style(col.lightened(0.1), border, bw, r))
+    b.add_theme_stylebox_override("pressed", _circle_style(col.darkened(0.3), border, bw, r))
+    b.add_theme_stylebox_override("focus", _circle_style(col, border, bw, r))
+    b.add_theme_stylebox_override("disabled", _circle_style(col.darkened(0.5), border, bw, r))
+    b.pressed.connect(_play_ui.bind("click", -8.0))
+    b.pressed.connect(cb)
+    return b
+
+
+func _air_strike() -> void:
+    _open_sat_with(NM)
+
+
+func _build_hud_extras() -> void:
+    # money chip (top left)
+    money_chip = PanelContainer.new()
+    _style_panel(money_chip)
+    money_chip.position = Vector2(12.0, 10.0)
+    money_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(money_chip)
+    var hb := HBoxContainer.new()
+    hb.add_theme_constant_override("separation", 12)
+    money_chip.add_child(hb)
+    var coin := Panel.new()
+    coin.custom_minimum_size = Vector2(50.0, 50.0)
+    coin.add_theme_stylebox_override("panel", _circle_style(Color(1.0, 0.8, 0.15), Color(1.0, 0.95, 0.55), 3, 25))
+    coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hb.add_child(coin)
+    var cl := Label.new()
+    cl.text = "$"
+    cl.add_theme_font_size_override("font_size", 32)
+    cl.add_theme_color_override("font_color", Color(0.45, 0.28, 0.0))
+    coin.add_child(cl)
+    cl.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+    var vb := VBoxContainer.new()
+    vb.add_theme_constant_override("separation", -4)
+    hb.add_child(vb)
+    money_label.reparent(vb)
+    income_label.reparent(vb)
+    money_label.add_theme_font_size_override("font_size", 34)
+    income_label.add_theme_font_size_override("font_size", 22)
+    # next unlock card
+    unlock_card = PanelContainer.new()
+    _style_panel(unlock_card)
+    unlock_card.position = Vector2(12.0, 104.0)
+    unlock_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(unlock_card)
+    var uv := VBoxContainer.new()
+    uv.add_theme_constant_override("separation", 3)
+    unlock_card.add_child(uv)
+    var ut := Label.new()
+    ut.text = "NEXT UNLOCK"
+    _style_text(ut, 17, Color(0.4, 0.85, 1.0))
+    uv.add_child(ut)
+    unlock_name = Label.new()
+    _style_text(unlock_name, 21, Color(1.0, 1.0, 1.0))
+    uv.add_child(unlock_name)
+    unlock_bar = ProgressBar.new()
+    unlock_bar.min_value = 0.0
+    unlock_bar.max_value = 100.0
+    unlock_bar.show_percentage = false
+    unlock_bar.custom_minimum_size = Vector2(250.0, 12.0)
+    var bg := StyleBoxFlat.new()
+    bg.bg_color = Color(0.02, 0.05, 0.1, 0.9)
+    bg.set_corner_radius_all(6)
+    var fl := StyleBoxFlat.new()
+    fl.bg_color = Color(0.2, 0.75, 1.0)
+    fl.set_corner_radius_all(6)
+    unlock_bar.add_theme_stylebox_override("background", bg)
+    unlock_bar.add_theme_stylebox_override("fill", fl)
+    uv.add_child(unlock_bar)
+    stats_panel.position = Vector2(12.0, 214.0)
+    # strike buttons (bottom right)
+    strike_btn = _round_btn(150.0, Color(0.72, 0.08, 0.06), Color(1.0, 0.55, 0.2), 6, _open_sat)
+    ui_root.add_child(strike_btn)
+    strike_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+    strike_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    strike_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    var sic := MiniIcon.new()
+    sic.kind = 0
+    sic.sub = 1
+    sic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    strike_btn.add_child(sic)
+    sic.position = Vector2(45.0, 12.0)
+    sic.size = Vector2(60.0, 70.0)
+    var sl := Label.new()
+    sl.text = "MISSILE\nSTRIKE"
+    sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(sl, 21, Color(1.0, 1.0, 1.0))
+    strike_btn.add_child(sl)
+    sl.position = Vector2(20.0, 86.0)
+    sl.size = Vector2(110.0, 54.0)
+    air_btn = _round_btn(112.0, Color(0.06, 0.14, 0.26), Color(0.3, 0.7, 1.0), 4, _air_strike)
+    ui_root.add_child(air_btn)
+    air_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+    air_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    air_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    air_btn.offset_top -= 160.0
+    air_btn.offset_bottom -= 160.0
+    var aic := MiniIcon.new()
+    aic.kind = 7
+    aic.sub = 1
+    aic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    air_btn.add_child(aic)
+    aic.position = Vector2(26.0, 6.0)
+    aic.size = Vector2(60.0, 50.0)
+    var al := Label.new()
+    al.text = "AIR\nSTRIKE"
+    al.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    al.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(al, 18, Color(1.0, 1.0, 1.0))
+    air_btn.add_child(al)
+    al.position = Vector2(6.0, 56.0)
+    al.size = Vector2(100.0, 48.0)
+
+
+func _hud_show(on: bool) -> void:
+    for c in [strike_btn, air_btn, money_chip, unlock_card]:
+        if c != null:
+            var ctl: Control = c
+            ctl.visible = on
+
+
+func _update_unlock_card() -> void:
+    if unlock_name == null or emp.is_empty():
+        return
+    var e: Dictionary = emp[0]
+    var pk: int = maxi(int(e.get("peak", 0)), int(e["money"]))
+    var best := 2000000000
+    var nm := ""
+    for t in range(NM):
+        var nd: int = MISSILES[t]["unlock"]
+        if nd > pk and nd < best:
+            best = nd
+            nm = str(MISSILES[t]["name"])
+    for t2 in range(DEFENSES.size()):
+        var nd2: int = DEFENSES[t2]["unlock"]
+        if nd2 > pk and nd2 < best:
+            best = nd2
+            nm = str(DEFENSES[t2]["name"])
+    for t3 in range(JETS.size()):
+        var nd3: int = JETS[t3]["unlock"]
+        if nd3 > pk and nd3 < best:
+            best = nd3
+            nm = str(JETS[t3]["name"])
+    if nm == "":
+        unlock_name.text = "Everything unlocked!"
+        unlock_bar.value = 100.0
+    else:
+        unlock_name.text = "%s  $%s" % [nm, _fmt_money(best)]
+        unlock_bar.value = clampf(float(pk) / float(best) * 100.0, 0.0, 100.0)
+
+
+const ISLAND_SHADER := """
+shader_type spatial;
+uniform vec3 g1 : source_color = vec3(0.14, 0.36, 0.15);
+uniform vec3 g2 : source_color = vec3(0.1, 0.29, 0.12);
+uniform vec3 sand : source_color = vec3(0.5, 0.43, 0.28);
+uniform float half_size = 120.0;
+varying vec3 lp;
+void vertex() {
+    lp = VERTEX;
+}
+float hs(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float vn(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void fragment() {
+    float n = vn(lp.xz * 0.05) * 0.6 + vn(lp.xz * 0.22) * 0.4;
+    vec3 c = mix(g1, g2, n);
+    float e = max(abs(lp.x), abs(lp.z));
+    float edge = smoothstep(half_size - 9.0, half_size - 3.5, e);
+    c = mix(c, sand, edge);
+    ALBEDO = c;
+    ROUGHNESS = 0.95;
+    SPECULAR = 0.02;
+}
+"""
+
+
+func _ground_mat(i: int) -> ShaderMaterial:
+    var shader := Shader.new()
+    shader.code = ISLAND_SHADER
+    var m := ShaderMaterial.new()
+    m.shader = shader
+    var team := _team(i)
+    m.set_shader_parameter("g1", Color(0.15, 0.38, 0.15).lerp(team, 0.04))
+    m.set_shader_parameter("g2", Color(0.1, 0.3, 0.12).lerp(team, 0.04))
+    m.set_shader_parameter("half_size", PLOT_HALF)
+    return m
+
+
+func _sea_slab(root: Node3D, size: float, y: float, col: Color) -> void:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = Vector3(size, 0.05, size)
+    mi.mesh = bm
+    var mat := StandardMaterial3D.new()
+    mat.albedo_color = col
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mi.material_override = mat
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    mi.position = Vector3(0.0, y, 0.0)
+    root.add_child(mi)
+
+
+# decoration that makes the island look like a real city: roads, towers, park, harbour, rocks
+func _island_scenery(root: Node3D) -> void:
+    var road := Color(0.15, 0.16, 0.19)
+    var white := Color(0.92, 0.95, 0.95)
+    # road grid
+    _box(root, Vector3(162.0, 0.07, 6.0), Vector3(-34.0, 0.66, 62.0), road)
+    _box(root, Vector3(6.0, 0.07, 100.0), Vector3(6.0, 0.66, 66.0), road)
+    _box(root, Vector3(6.0, 0.07, 100.0), Vector3(-62.0, 0.66, 66.0), road)
+    for k in range(20):
+        _box(root, Vector3(3.0, 0.09, 0.3), Vector3(-112.0 + float(k) * 8.0, 0.7, 62.0), Color(0.95, 0.82, 0.2))
+    for k2 in range(12):
+        _box(root, Vector3(0.3, 0.09, 3.0), Vector3(6.0, 0.7, 20.0 + float(k2) * 8.0), Color(0.95, 0.82, 0.2))
+        _box(root, Vector3(0.3, 0.09, 3.0), Vector3(-62.0, 0.7, 20.0 + float(k2) * 8.0), Color(0.95, 0.82, 0.2))
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 777
+    # downtown towers east of the houses
+    var wcol := Color(0.55, 0.85, 1.0)
+    for gx in range(4):
+        for gz in range(5):
+            var bx := 15.0 + float(gx) * 9.5 + rng.randf_range(-1.0, 1.0)
+            var bz := 70.0 + float(gz) * 8.6 + rng.randf_range(-1.0, 1.0)
+            if gz == 0 and gx < 4:
+                bz = 30.0 + float(gx) * 7.0
+                bx = 15.0 + float(gx) * 8.5
+            var hh := rng.randf_range(8.0, 30.0) * (1.0 if gz > 0 else 0.5)
+            var wd := rng.randf_range(4.2, 6.2)
+            var shade := rng.randf_range(0.55, 0.85)
+            var bc := Color(shade, shade + 0.03, shade + 0.08)
+            _box(root, Vector3(wd, hh, wd), Vector3(bx, 0.6 + hh * 0.5, bz), bc)
+            _box(root, Vector3(wd + 0.3, 0.4, wd + 0.3), Vector3(bx, 0.6 + hh, bz), bc.darkened(0.3))
+            var rows := int(hh / 3.2)
+            for r in range(rows):
+                var wy := 2.4 + float(r) * 3.2
+                var gl := _box(root, Vector3(wd + 0.08, 0.7, wd * 0.6), Vector3(bx, wy, bz), Color.WHITE)
+                gl.material_override = _glow_mat(wcol)
+    # park with pond and trees
+    _cyl(root, 9.0, 9.0, 0.08, Vector3(-36.0, 0.64, 84.0), Color(0.18, 0.5, 0.72))
+    for k3 in range(34):
+        var tx := rng.randf_range(-58.0, -10.0)
+        var tz := rng.randf_range(68.0, 98.0)
+        if Vector2(tx + 36.0, tz - 84.0).length() < 11.0:
+            continue
+        var th := rng.randf_range(0.9, 1.5)
+        _cyl(root, 0.22 * th, 0.3 * th, 1.8 * th, Vector3(tx, 1.5, tz), Color(0.4, 0.26, 0.14))
+        _sphere(root, 1.5 * th, Vector3(tx, 3.4 * th, tz), Color(0.1, 0.45, 0.18))
+    # container harbour at the back
+    var ccols := [Color(0.75, 0.2, 0.15), Color(0.15, 0.4, 0.7), Color(0.9, 0.6, 0.1), Color(0.2, 0.55, 0.3)]
+    for cx in range(7):
+        for cz in range(2):
+            var st := rng.randi_range(1, 3)
+            for sk in range(st):
+                _box(root, Vector3(5.6, 1.4, 2.4), Vector3(-12.0 + float(cx) * 6.2, 1.3 + float(sk) * 1.45, 106.0 + float(cz) * 3.2), ccols[rng.randi() % 4])
+    _box(root, Vector3(0.6, 11.0, 0.6), Vector3(-14.0, 6.0, 111.0), Color(0.9, 0.75, 0.1))
+    _box(root, Vector3(0.6, 11.0, 0.6), Vector3(26.0, 6.0, 111.0), Color(0.9, 0.75, 0.1))
+    _box(root, Vector3(41.0, 0.7, 0.8), Vector3(6.0, 11.5, 111.0), Color(0.9, 0.75, 0.1))
+    # rocks and palms around the shore
+    for k4 in range(40):
+        var side := rng.randi() % 4
+        var u := rng.randf_range(-116.0, 116.0)
+        var px := u
+        var pz := u
+        if side == 0:
+            pz = -118.0
+        elif side == 1:
+            pz = 118.0
+        elif side == 2:
+            px = -118.0
+        else:
+            px = 118.0
+        if k4 % 3 == 0:
+            var rs := rng.randf_range(1.5, 3.4)
+            var rk := _sphere(root, rs, Vector3(px, 0.6, pz), Color(0.46, 0.45, 0.43))
+            rk.scale = Vector3(1.0, 0.7, 1.2)
+        elif side != 0 and px < 100.0:
+            _cyl(root, 0.15, 0.22, 4.0, Vector3(px, 2.4, pz), Color(0.5, 0.36, 0.2))
+            for pl in range(5):
+                var pa := float(pl) * TAU / 5.0
+                var leaf := _box(root, Vector3(3.2, 0.1, 0.8), Vector3(px + cos(pa) * 1.4, 4.3, pz + sin(pa) * 1.4), Color(0.12, 0.5, 0.2))
+                leaf.rotation.y = -pa
+    # watch towers on the military fence corners
+    for cxz in [Vector2(-116.0, -116.0), Vector2(38.0, -116.0), Vector2(-116.0, 10.0), Vector2(38.0, 10.0)]:
+        _box(root, Vector3(0.5, 6.0, 0.5), Vector3(cxz.x, 3.4, cxz.y), Color(0.4, 0.42, 0.45))
+        _box(root, Vector3(2.4, 1.4, 2.4), Vector3(cxz.x, 6.8, cxz.y), Color(0.35, 0.38, 0.34))
+        _box(root, Vector3(2.9, 0.25, 2.9), Vector3(cxz.x, 7.7, cxz.y), Color(0.25, 0.27, 0.25))
 
