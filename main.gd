@@ -5,11 +5,11 @@ extends Node3D
 ## Procedural sound, layered air defense, drones. (Godot 4.x, Compatibility renderer)
 ## Left half of the screen = floating joystick, right half = drag to look around.
 
-const SAVE_PATH := "user://missile_tycoon_v8.json"
+const SAVE_PATH := "user://missile_tycoon_v9.json"
 const SETTINGS_PATH := "user://settings_v1.json"
 const PLOT_HALF := 120.0
 const PLAYER_HALF := 117.0
-const RING := [0.0, 0.0, 650.0, 760.0, 900.0]
+const RING := [0.0, 0.0, 800.0, 900.0, 1100.0]
 const WALK_SPEED := 26.0
 const MAX_HOUSES := 50
 const MAX_DEFENSES := 30
@@ -21,7 +21,7 @@ const RW_Z0 := 104.0
 const RW_Z1 := -104.0
 const TAXI_X := 88.0
 const ISL_LIM := 118.0
-const MIL_RECT := Rect2(-116.0, -116.0, 154.0, 126.0)
+const MIL_RECT := Rect2(-88.0, -116.0, 126.0, 126.0)
 const MAX_BUILDERS := 5
 const MAX_BREP := 5
 const MAX_AREP := 3
@@ -118,22 +118,32 @@ const JETS := [
 
 const WATER_SHADER := """
 shader_type spatial;
-uniform vec3 deep_color : source_color = vec3(0.02, 0.24, 0.42);
-uniform vec3 shallow_color : source_color = vec3(0.14, 0.62, 0.76);
+uniform vec3 deep_color : source_color = vec3(0.01, 0.2, 0.38);
+uniform vec3 shallow_color : source_color = vec3(0.1, 0.58, 0.72);
+uniform vec3 sky_color : source_color = vec3(0.62, 0.8, 0.95);
 varying vec3 wpos;
 void vertex() {
     wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
+float hgt(vec2 p) {
+    return sin(p.x * 0.11 + TIME * 0.7) * 0.5 + sin(p.y * 0.09 - TIME * 0.55) * 0.5 + sin((p.x - p.y) * 0.21 + TIME) * 0.25
+        + sin(p.x * 0.43 + p.y * 0.37 + TIME * 1.7) * 0.12 + sin(p.x * 0.8 - p.y * 0.6 - TIME * 2.2) * 0.06;
+}
 void fragment() {
     vec2 p = wpos.xz;
-    float w = sin(p.x * 0.11 + TIME * 0.7) * 0.5 + sin(p.y * 0.09 - TIME * 0.55) * 0.5 + sin((p.x - p.y) * 0.21 + TIME) * 0.25;
-    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-    ALBEDO = mix(deep_color, shallow_color, clamp(0.06 + 0.18 * w + fres * 0.3, 0.0, 1.0));
-    ROUGHNESS = 0.2;
-    SPECULAR = 0.5;
+    float e = 0.35;
+    float h = hgt(p);
+    float hx = hgt(p + vec2(e, 0.0));
+    float hz = hgt(p + vec2(0.0, e));
+    vec3 n = normalize(vec3((h - hx) * 0.9, 1.0, (h - hz) * 0.9));
+    NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
+    float fres = pow(1.0 - clamp(dot(NORMAL, normalize(VIEW)), 0.0, 1.0), 3.0);
+    vec3 col = mix(deep_color, shallow_color, clamp(0.08 + 0.2 * h + 0.1 * sin(h * 3.0), 0.0, 1.0));
+    ALBEDO = mix(col, sky_color, fres * 0.45);
+    ROUGHNESS = 0.08;
+    SPECULAR = 0.8;
 }
 """
-
 const CHECKER_SHADER := """
 shader_type spatial;
 uniform vec3 c1 : source_color = vec3(0.3, 0.62, 0.25);
@@ -303,7 +313,7 @@ func _ready() -> void:
     _build_world()
     get_viewport().size_changed.connect(_reset_joystick)
     _update_sens_text()
-    _show_overlay("MISSILE TYCOON", "Hire builders (WORKER), buy missiles and air defense (MILITARY), then attack from the satellite (ATTACK). Rivals start from the same place as you!")
+    _show_overlay("MISSILE TYCOON", "Hire builders (WORKER) to grow your city. Buy missiles, air defense, jets and a NAVY (MILITARY). Tap MISSILE STRIKE to attack, FLEET to command ships and carriers. The enemy is far across the sea!")
     _refresh_ui()
     if OS.get_cmdline_user_args().has("--selftest"):
         call_deferred("_selftest")
@@ -601,12 +611,17 @@ func _build_environment() -> void:
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
     env.ambient_light_color = Color(0.82, 0.9, 1.0)
     env.ambient_light_energy = 0.42
-    env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.tonemap_white = 6.0
+    env.adjustment_enabled = true
+    env.adjustment_saturation = 1.12
+    env.adjustment_contrast = 1.06
     env.fog_enabled = true
     env.fog_light_color = Color(0.74, 0.88, 0.98)
     env.fog_density = 0.0004
     var we := WorldEnvironment.new()
     we.environment = env
+    world_env = env
     add_child(we)
 
     var sun := DirectionalLight3D.new()
@@ -614,7 +629,7 @@ func _build_environment() -> void:
     sun.light_energy = 1.15
     sun.light_color = Color(1.0, 0.96, 0.88)
     sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 140.0
+    sun.directional_shadow_max_distance = 260.0
     add_child(sun)
 
     var water := MeshInstance3D.new()
@@ -629,11 +644,12 @@ func _build_environment() -> void:
     water.material_override = wm
     water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(water)
+    water_node = water
 
     var cloud_mat := StandardMaterial3D.new()
     cloud_mat.albedo_color = Color(1.0, 1.0, 1.0)
     cloud_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    for k in range(11):
+    for k in range(22):
         var c := Node3D.new()
         c.position = Vector3(randf_range(-600.0, 600.0), randf_range(90.0, 140.0), randf_range(-600.0, 600.0))
         for j in range(4):
@@ -652,9 +668,9 @@ func _build_environment() -> void:
         add_child(c)
         clouds.append(c)
 
-    get_viewport().msaa_3d = Viewport.MSAA_2X
-    get_viewport().scaling_3d_scale = 0.85
-    RenderingServer.directional_shadow_atlas_set_size(1536, false)
+    get_viewport().msaa_3d = Viewport.MSAA_4X
+    get_viewport().scaling_3d_scale = 1.0
+    RenderingServer.directional_shadow_atlas_set_size(4096, true)
     camera = Camera3D.new()
     camera.fov = 70.0
     camera.far = 3000.0
@@ -691,6 +707,7 @@ func _reset_state(count: int) -> void:
         emp.append(e)
         var hp := _house_pos(0)
         _add_struct(i, "house", 0, hp.x, hp.y, "ok", 0)
+    _navy_reset()
     selected_enemy = 1
     sat_island = 1
     elapsed = 0.0
@@ -719,6 +736,8 @@ func _build_world() -> void:
     island_nodes.clear()
     island_pos.clear()
     projectiles.clear()
+    shots.clear()
+    air.clear()
     sorties.clear()
     launch_queue.clear()
     sat_marker = null
@@ -769,6 +788,7 @@ func _build_world() -> void:
             var dead: Node3D = island_nodes[i]
             dead.position.y = -8.0
 
+    _navy_rebuild()
     _ensure_target()
     _update_rings()
     _look_at_target(false)
@@ -1557,6 +1577,7 @@ func _island_collapsed(i: int, by: int) -> void:
     var e: Dictionary = emp[i]
     e["dead"] = true
     _clear_jets(i)
+    _clear_ships(i)
     var jobs: Array = e["jobs"]
     jobs.clear()
     if i == 0:
@@ -1762,6 +1783,7 @@ func _process(delta: float) -> void:
         _update_sorties(delta)
         _jetcam_ui_tick()
         _process_jets(delta)
+        _navy_tick(delta)
         sat_cool = maxf(0.0, sat_cool - delta)
         ui_timer += delta
         if ui_timer >= 0.5:
@@ -1866,6 +1888,9 @@ func _look_at_target(smooth: bool) -> void:
 func _update_camera(delta: float) -> void:
     if jetcam_on:
         _jetcam_update(delta)
+        return
+    if fleet_open:
+        _fleet_camera()
         return
     if sat_open:
         var ip: Vector3 = island_pos[sat_island]
@@ -2048,7 +2073,7 @@ func _save_game() -> void:
             "salvo": e["salvo"], "rest": e["rest"], "dead": e["dead"], "structs": sl, "jets": jl, "mtrucks": tl,
         })
     var data := {
-        "v": 8, "island_count": island_count, "emp": arr,
+        "v": 9, "island_count": island_count, "emp": arr, "ships": _ships_save(),
         "selected": selected_enemy, "elapsed": elapsed,
     }
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -2065,7 +2090,7 @@ func _load_game() -> bool:
     var parsed = JSON.parse_string(f.get_as_text())
     if typeof(parsed) != TYPE_DICTIONARY:
         return false
-    if int(parsed.get("v", 0)) != 8:
+    if int(parsed.get("v", 0)) != 9:
         return false
     var count := clampi(int(parsed.get("island_count", 2)), 2, 4)
     var emp_raw = parsed.get("emp", [])
@@ -2124,6 +2149,7 @@ func _load_game() -> bool:
                 s["hp"] = 0.0
             if kind == "defense":
                 s["mag"] = clampi(int(r.get("mag", DEFENSES[sub]["mag"])), 0, int(DEFENSES[sub]["mag"]))
+    _ships_load(parsed.get("ships", []))
     selected_enemy = int(parsed.get("selected", 1))
     elapsed = float(parsed.get("elapsed", 0.0))
     var pe: Dictionary = emp[0]
@@ -2352,7 +2378,7 @@ func _sat_ui_show(on: bool) -> void:
 
 
 func _over_ui(pos: Vector2) -> bool:
-    for c in [stats_panel, tabs_box, hot_box, menu_btn, jetcam_btn, strike_btn, air_btn, money_chip, unlock_card, mil_panel, work_panel, overlay]:
+    for c in [stats_panel, tabs_box, hot_box, menu_btn, jetcam_btn, strike_btn, air_btn, money_chip, unlock_card, fleet_btn, mini_ctl, alert_panel, mil_panel, work_panel, overlay]:
         var ctl: Control = c
         if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
             return true
@@ -2441,9 +2467,14 @@ func _input(event: InputEvent) -> void:
     if sat_open:
         _sat_input(event)
         return
+    if fleet_open:
+        _fleet_input(event)
+        return
     if event is InputEventScreenTouch:
         var te := event as InputEventScreenTouch
         if te.pressed:
+            if _fleet_ui_press(te.position):
+                return
             if _over_ui(te.position):
                 return
             var vp := get_viewport().get_visible_rect().size
@@ -2932,6 +2963,8 @@ class MiniIcon extends Control:
             _draw_bag(w, h)
         elif kind == 7:
             _draw_jet(w, h)
+        elif kind == 8:
+            _draw_ship(w, h)
         else:
             _draw_worker(w, h)
 
@@ -3063,6 +3096,38 @@ class MiniIcon extends Control:
         draw_rect(Rect2(cx - w * 0.17, h * 0.2, w * 0.34, h * 0.12), Color(1.0, 0.5, 0.1) if kind == 2 else Color(0.2, 0.2, 0.25))
         draw_line(Vector2(cx + w * 0.26, h * 0.82), Vector2(cx + w * 0.38, h * 0.48), Color(0.55, 0.42, 0.3), 4.0)
         draw_rect(Rect2(cx + w * 0.3, h * 0.42, w * 0.16, h * 0.09), Color(0.6, 0.6, 0.65))
+
+    func _draw_ship(w: float, h: float) -> void:
+        var sea := Color(0.1, 0.3, 0.5)
+        draw_rect(Rect2(0.0, h * 0.72, w, h * 0.28), sea)
+        var gray := Color(0.6, 0.64, 0.7)
+        var dark := Color(0.4, 0.43, 0.48)
+        if sub == 3:
+            draw_colored_polygon(PackedVector2Array([Vector2(w * 0.08, h * 0.74), Vector2(w * 0.2, h * 0.6), Vector2(w * 0.8, h * 0.6), Vector2(w * 0.94, h * 0.74), Vector2(w * 0.8, h * 0.82), Vector2(w * 0.2, h * 0.82)]), Color(0.2, 0.22, 0.27))
+            draw_rect(Rect2(w * 0.42, h * 0.42, w * 0.16, h * 0.2), Color(0.25, 0.27, 0.32))
+            draw_line(Vector2(w * 0.52, h * 0.42), Vector2(w * 0.52, h * 0.3), Color(0.7, 0.7, 0.75), 2.0)
+            return
+        draw_colored_polygon(PackedVector2Array([Vector2(w * 0.05, h * 0.55), Vector2(w * 0.95, h * 0.55), Vector2(w * 0.82, h * 0.78), Vector2(w * 0.14, h * 0.78)]), gray)
+        draw_rect(Rect2(w * 0.1, h * 0.7, w * 0.76, h * 0.06), Color(0.45, 0.17, 0.15))
+        if sub == 4:
+            draw_rect(Rect2(w * 0.03, h * 0.5, w * 0.94, h * 0.07), Color(0.28, 0.3, 0.34))
+            draw_rect(Rect2(w * 0.62, h * 0.28, w * 0.12, h * 0.23), dark)
+            draw_rect(Rect2(w * 0.6, h * 0.22, w * 0.16, h * 0.08), gray)
+            draw_line(Vector2(w * 0.68, h * 0.22), Vector2(w * 0.68, h * 0.1), Color(0.8, 0.8, 0.85), 2.0)
+        elif sub == 2:
+            draw_rect(Rect2(w * 0.4, h * 0.36, w * 0.2, h * 0.2), dark)
+            draw_rect(Rect2(w * 0.44, h * 0.26, w * 0.12, h * 0.12), gray)
+            draw_line(Vector2(w * 0.5, h * 0.26), Vector2(w * 0.5, h * 0.1), Color(0.8, 0.8, 0.85), 2.0)
+            draw_rect(Rect2(w * 0.2, h * 0.47, w * 0.14, h * 0.08), Color(0.25, 0.28, 0.32))
+            draw_line(Vector2(w * 0.2, h * 0.46), Vector2(w * 0.1, h * 0.4), Color(0.25, 0.28, 0.32), 3.0)
+        elif sub == 1:
+            draw_rect(Rect2(w * 0.42, h * 0.38, w * 0.18, h * 0.17), dark)
+            draw_line(Vector2(w * 0.5, h * 0.38), Vector2(w * 0.5, h * 0.14), Color(0.8, 0.8, 0.85), 2.0)
+            draw_line(Vector2(w * 0.2, h * 0.46), Vector2(w * 0.1, h * 0.4), Color(0.25, 0.28, 0.32), 3.0)
+        else:
+            draw_rect(Rect2(w * 0.46, h * 0.42, w * 0.16, h * 0.13), dark)
+            draw_line(Vector2(w * 0.54, h * 0.42), Vector2(w * 0.54, h * 0.28), Color(0.8, 0.8, 0.85), 2.0)
+            draw_line(Vector2(w * 0.25, h * 0.5), Vector2(w * 0.14, h * 0.46), Color(0.25, 0.28, 0.32), 3.0)
 
 
 func _wheel(parent: Node3D, x: float, z: float, r: float) -> void:
@@ -3413,15 +3478,15 @@ func _house_pos(slot: int) -> Vector2:
 
 
 func _def_pos(slot: int) -> Vector2:
-    var col := slot % 11
-    var row := int(slot / 11)
-    return Vector2(-108.0 + float(col) * 13.5, -16.0 - float(row) * 9.0)
+    var col := slot % 9
+    var row := int(slot / 9)
+    return Vector2(-80.0 + float(col) * 13.5, -16.0 - float(row) * 9.0)
 
 
 func _missile_pos(slot: int) -> Vector2:
-    var col := slot % 11
-    var row := int(slot / 11)
-    return Vector2(-108.0 + float(col) * 13.5, -52.0 - float(row) * 10.5)
+    var col := slot % 9
+    var row := int(slot / 9)
+    return Vector2(-80.0 + float(col) * 13.5, -52.0 - float(row) * 10.5)
 
 
 func _stand_pos(slot: int) -> Vector2:
@@ -3448,13 +3513,26 @@ func _make_island(i: int, p: Vector3) -> Node3D:
     top.material_override = _ground_mat(i)
     root.add_child(top)
     # concrete military apron
-    _box(root, Vector3(154.0, 0.06, 126.0), Vector3(-39.0, 0.67, -53.0), Color(0.3, 0.32, 0.35))
+    _box(root, Vector3(126.0, 0.06, 126.0), Vector3(-25.0, 0.67, -53.0), Color(0.3, 0.32, 0.35))
     var holder := Node3D.new()
     root.add_child(holder)
     _island_props(holder)
     _island_scenery(holder)
+    _port_scenery(holder)
     _airport(holder)
     _merge_model(holder, [])
+    for zl in [["HOUSING", Vector3(-55.0, 12.0, 40.0)], ["ARMY BASE", Vector3(-25.0, 14.0, -60.0)], ["AIR FORCE BASE", Vector3(78.0, 14.0, -30.0)], ["NAVY PORT", Vector3(-135.0, 14.0, -60.0)], ["CITY CENTER", Vector3(28.0, 36.0, 66.0)]]:
+        var zlab := Label3D.new()
+        zlab.text = str(zl[0])
+        zlab.font_size = 56
+        zlab.pixel_size = 0.1
+        zlab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+        zlab.no_depth_test = true
+        zlab.render_priority = 2
+        zlab.outline_size = 12
+        zlab.modulate = Color(1.0, 1.0, 1.0, 0.85)
+        zlab.position = zl[1]
+        root.add_child(zlab)
     var lab := Label3D.new()
     lab.text = "YOU" if i == 0 else "ENEMY %d" % i
     lab.font_size = 72
@@ -3502,8 +3580,8 @@ func _island_props(root: Node3D) -> void:
     _box(root, Vector3(76.0, 0.5, 0.5), Vector3(-54.0, 2.0, 99.0), Color(0.6, 0.14, 0.14))
     # fence around the military zone
     for fz in [-116.5, 10.5]:
-        _box(root, Vector3(154.0, 1.0, 0.15), Vector3(-39.0, 1.1, float(fz)), Color(0.45, 0.47, 0.5))
-    _box(root, Vector3(0.15, 1.0, 126.0), Vector3(-116.5, 1.1, -53.0), Color(0.45, 0.47, 0.5))
+        _box(root, Vector3(126.0, 1.0, 0.15), Vector3(-25.0, 1.1, float(fz)), Color(0.45, 0.47, 0.5))
+    _box(root, Vector3(0.15, 1.0, 126.0), Vector3(-88.5, 1.1, -53.0), Color(0.45, 0.47, 0.5))
 
 
 func _airport(root: Node3D) -> void:
@@ -3557,6 +3635,8 @@ func _unlock_need(kind: String, t: int) -> int:
         return int(MISSILES[t]["unlock"])
     if kind == "d":
         return int(DEFENSES[t]["unlock"])
+    if kind == "s":
+        return int(NAVY[t]["unlock"])
     return int(JETS[t]["unlock"])
 
 
@@ -3594,16 +3674,16 @@ func _spot_free(i: int, x: float, z: float, ignore_id: int) -> bool:
 
 
 func _pick_spot(i: int, kind: String) -> Vector2:
-    var n := 33 if kind == "d" else 66
+    var n := 36 if kind == "d" else 54
     for slot in range(n):
         var p := _def_pos(slot) if kind == "d" else _missile_pos(slot)
         if _spot_free(i, p.x, p.y, -1):
             return p
     for k in range(80):
-        var rp := Vector2(randf_range(-113.0, 35.0), randf_range(-113.0, 8.0))
+        var rp := Vector2(randf_range(-85.0, 35.0), randf_range(-113.0, 8.0))
         if _spot_free(i, rp.x, rp.y, -1):
             return rp
-    return Vector2(randf_range(-100.0, 0.0), randf_range(-110.0, -20.0))
+    return Vector2(randf_range(-80.0, 0.0), randf_range(-110.0, -20.0))
 
 
 func _spawn_mtruck(i: int, t: int, pos: Vector2, n: int, anim: bool) -> Dictionary:
@@ -4448,7 +4528,7 @@ func _ai_think(i: int) -> void:
         if mt0 >= 0 and _do_buy_missile(i, mt0) == 0:
             return
     # 4. air defense grows with time (cautious rivals build earlier)
-    var want_def := mini(MAX_DEFENSES, int((elapsed - 120.0) / 140.0) + (1 if aggr < 0.5 else 0))
+    var want_def := mini(MAX_DEFENSES, int((elapsed - 120.0) / 105.0) + (1 if aggr < 0.5 else 0))
     if defs_all < want_def:
         var dt := -1
         for t2 in range(4, -1, -1):
@@ -4462,13 +4542,13 @@ func _ai_think(i: int) -> void:
         if _do_hire(i, "arep") == 0:
             return
     # 5. better builders = better houses = more money
-    if lvl < MAX_LEVEL and elapsed > 160.0 * float(lvl):
+    if lvl < MAX_LEVEL and elapsed > 110.0 * float(lvl):
         var need := int(float(BUILDER_UPGRADE[lvl - 1]) * 1.2)
         if money_i >= need:
             if _do_upgrade_builder(i) == 0:
                 return
     # 6. more crews as the game goes on
-    var goal_b := mini(MAX_BUILDERS, 2 + int(elapsed / 300.0))
+    var goal_b := mini(MAX_BUILDERS, 2 + int(elapsed / 220.0))
     if nb < goal_b and money_i >= int(float(_worker_price(i, "builder")) * 1.2):
         if _do_hire(i, "builder") == 0:
             return
@@ -4477,7 +4557,7 @@ func _ai_think(i: int) -> void:
         if _do_hire(i, "brep") == 0:
             return
     # 7. fighter jets once they unlock
-    var goal_j := mini(MAX_JETS, int((elapsed - 600.0) / 500.0))
+    var goal_j := mini(MAX_JETS, int((elapsed - 420.0) / 320.0))
     if _jets_owned(i, -1) < goal_j:
         for jt in range(5, -1, -1):
             if _unlocked(i, "j", jt) and money_i >= int(float(JETS[jt]["price"]) * 1.2):
@@ -4674,6 +4754,10 @@ func _build_sat_ui() -> void:
         rbt.add_theme_font_size_override("font_size", 22)
         route_row.add_child(rbt)
         route_btns.append(rbt)
+    sat_base_btn = _make_button("FROM AIRPORT", Color(0.25, 0.15, 0.5), _sat_base_toggle)
+    sat_base_btn.custom_minimum_size = Vector2(230.0, 54.0)
+    sat_base_btn.add_theme_font_size_override("font_size", 22)
+    route_row.add_child(sat_base_btn)
     route_edit = HBoxContainer.new()
     route_edit.alignment = BoxContainer.ALIGNMENT_CENTER
     route_edit.add_theme_constant_override("separation", 8)
@@ -4811,7 +4895,11 @@ func _refresh_sat() -> void:
             b.modulate = Color(0.45, 0.45, 0.5)
     var routable := sat_type >= NM or sat_type == 6
     route_row.visible = routable
-    route_edit.visible = routable and route_mode == 3
+    route_edit.visible = routable and route_mode == 3 and sat_base == 0
+    if not _player_has_carrier():
+        sat_base = 0
+    sat_base_btn.visible = routable and sat_type >= NM and _player_has_carrier()
+    sat_base_btn.text = "FROM CARRIER" if sat_base == 1 else "FROM AIRPORT"
     if not routable and not route_wps.is_empty():
         _route_clear()
     for rk in range(route_btns.size()):
@@ -5102,6 +5190,9 @@ func _sat_commit(aim: Vector2, route: Dictionary) -> void:
         _refresh_sat()
         _refresh_ui()
         return
+    if sat_base == 1:
+        _sat_commit_carrier(aim)
+        return
     var jt := sat_type - NM
     var ready := _jets_ready(0, jt)
     if ready < 1:
@@ -5153,7 +5244,7 @@ func _make_list(parent: Control) -> VBoxContainer:
 
 func _build_military_window() -> void:
     mil_tab_btns = []
-    var w := _make_window(["MISSILE", "ANTI - AIR", "AIRCRAFT", "MANAGE"], _mil_tab, mil_tab_btns)
+    var w := _make_window(["MISSILE", "ANTI - AIR", "AIRCRAFT", "NAVY", "MANAGE"], _mil_tab, mil_tab_btns)
     mil_panel = w["panel"]
     var v: VBoxContainer = w["vbox"]
     var gm := _make_grid(v)
@@ -5183,9 +5274,13 @@ func _build_military_window() -> void:
         gj.add_child(c3["card"])
         cards_jet.append(c3)
     mil_body_jet.hide()
+    _build_navy_tab(v)
     manage_list = _make_list(v)
     mil_body_manage = manage_list.get_parent()
     mil_body_manage.hide()
+    for tb in mil_tab_btns:
+        var tbb: Button = tb
+        tbb.custom_minimum_size.x = 170.0
 
 
 func _mil_tab(k: int) -> void:
@@ -5193,9 +5288,10 @@ func _mil_tab(k: int) -> void:
     mil_body_missile.visible = k == 0
     mil_body_aa.visible = k == 1
     mil_body_jet.visible = k == 2
-    mil_body_manage.visible = k == 3
+    mil_body_navy.visible = k == 3
+    mil_body_manage.visible = k == 4
     _tab_style(mil_tab_btns, k)
-    if k == 3:
+    if k == 4:
         _refresh_manage()
 
 
@@ -5224,7 +5320,7 @@ func _manage_row(kind: String, id: int, icon_kind: int, icon_sub: int, title: St
     inf.add_theme_font_size_override("font_size", 18)
     inf.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
     mid.add_child(inf)
-    var mb := _make_button("MOVE", Color(0.1, 0.32, 0.95), _begin_move.bind(kind, id))
+    var mb := _make_button("FLEET" if kind == "s" else "MOVE", Color(0.1, 0.32, 0.95), _fleet_open_ship.bind(id) if kind == "s" else _begin_move.bind(kind, id))
     mb.custom_minimum_size = Vector2(130.0, 52.0)
     mb.add_theme_font_size_override("font_size", 22)
     h.add_child(mb)
@@ -5254,6 +5350,12 @@ func _refresh_manage() -> void:
         _manage_row("d", int(s["id"]), 1, sub, str(DEFENSES[sub]["name"]),
             "Condition %d%%   Shots %d   %s" % [hp, int(s["mag"]), st], refund)
         count += 1
+    for shv in _ships_of(0):
+        var sh: Dictionary = shv
+        var shp := int(round(float(sh["hp"]) / float(sh["maxhp"]) * 100.0))
+        _manage_row("s", int(sh["id"]), 8, int(sh["t"]), str(NAVY[int(sh["t"])]["name"]),
+            "Condition %d%%   %s" % [shp, str(sh["mode"]).to_upper()], _ship_refund(sh))
+        count += 1
     var trucks: Array = e["mnodes"]
     for tv in trucks:
         var tr: Dictionary = tv
@@ -5275,6 +5377,8 @@ func _ui_sell(kind: String, id: int) -> void:
     var code := 0
     if kind == "d":
         code = _do_sell_defense(0, id)
+    elif kind == "s":
+        code = _do_sell_ship(0, id)
     else:
         code = _do_sell_truck(0, id)
     if code == 0:
@@ -5462,6 +5566,7 @@ func _refresh_ui() -> void:
         ui.text = "Houses Lv%d -> Lv%d\nEarning +$%d -> +$%d per house" % [lvl, lvl + 1, int(HOUSE_INCOME[lvl - 1]), int(HOUSE_INCOME[lvl])]
         ub.text = "$%s   UPGRADE" % _fmt_money(uprice)
         ub.disabled = money < uprice or int(e["builders"]) < 1
+    _refresh_navy_cards()
     _refresh_hotbar()
     if sat_open:
         _refresh_sat()
@@ -5483,7 +5588,7 @@ func _selftest() -> void:
         print("SELFTEST jet ", t3, " ", _do_buy_jet(0, t3), _do_buy_jet(0, t3))
     print("SELFTEST up ", _do_upgrade_builder(0), _do_upgrade_builder(0))
     _toggle_mil()
-    for k in range(4):
+    for k in range(5):
         _mil_tab(k)
     _close_windows()
     _toggle_work()
@@ -5628,7 +5733,7 @@ func _selftest() -> void:
         _process(0.25)
         mx2 = maxi(mx2, sorties.size())
         if k7 % 200 == 0:
-            print("SELFTEST t=", k7, " ", game_state, " e1 money ", emp[1]["money"], " ammo ", _ammo_total(1), " jets ", _jets_owned(1, -1), " defs ", _count_structs(1, "defense", -1, false), " b ", emp[1]["builders"], " myhouses ", _count_structs(0, "house", -1, true), " proj ", projectiles.size())
+            print("SELFTEST t=", k7, " ", game_state, " e1 money ", emp[1]["money"], " ammo ", _ammo_total(1), " jets ", _jets_owned(1, -1), " defs ", _count_structs(1, "defense", -1, false), " b ", emp[1]["builders"], " myhouses ", _count_structs(0, "house", -1, true), " proj ", projectiles.size(), " ships ", _ships_of(0).size(), "/", _ships_of(1).size(), "/", _ships_of(2).size(), " air ", air.size())
     print("SELFTEST phase2 state ", game_state, " max sorties ", mx2, " e1 jets ", _jets_owned(1, -1), " e2 jets ", _jets_owned(2, -1), " e1 ammo ", _ammo_total(1), " me jets ", _jets_owned(0, -1))
     print("SELFTEST done")
     get_tree().quit()
@@ -6293,10 +6398,11 @@ func _build_hud_extras() -> void:
     air_btn.add_child(al)
     al.position = Vector2(6.0, 56.0)
     al.size = Vector2(100.0, 48.0)
+    _build_navy_ui()
 
 
 func _hud_show(on: bool) -> void:
-    for c in [strike_btn, air_btn, money_chip, unlock_card]:
+    for c in [strike_btn, air_btn, money_chip, unlock_card, fleet_btn]:
         if c != null:
             var ctl: Control = c
             ctl.visible = on
@@ -6457,7 +6563,7 @@ func _island_scenery(root: Node3D) -> void:
         elif side == 1:
             pz = 118.0
         elif side == 2:
-            px = -118.0
+            continue
         else:
             px = 118.0
         if k4 % 3 == 0:
@@ -6471,8 +6577,2830 @@ func _island_scenery(root: Node3D) -> void:
                 var leaf := _box(root, Vector3(3.2, 0.1, 0.8), Vector3(px + cos(pa) * 1.4, 4.3, pz + sin(pa) * 1.4), Color(0.12, 0.5, 0.2))
                 leaf.rotation.y = -pa
     # watch towers on the military fence corners
-    for cxz in [Vector2(-116.0, -116.0), Vector2(38.0, -116.0), Vector2(-116.0, 10.0), Vector2(38.0, 10.0)]:
+    for cxz in [Vector2(-88.0, -116.0), Vector2(38.0, -116.0), Vector2(-88.0, 10.0), Vector2(38.0, 10.0)]:
         _box(root, Vector3(0.5, 6.0, 0.5), Vector3(cxz.x, 3.4, cxz.y), Color(0.4, 0.42, 0.45))
         _box(root, Vector3(2.4, 1.4, 2.4), Vector3(cxz.x, 6.8, cxz.y), Color(0.35, 0.38, 0.34))
         _box(root, Vector3(2.9, 0.25, 2.9), Vector3(cxz.x, 7.7, cxz.y), Color(0.25, 0.27, 0.25))
+
+
+# ---------- navy port layout (island local coordinates, sea is to the west) ----------
+const PIER_Z := [-84.0, -44.0, -4.0]
+const CARRIER_BERTH := [Vector2(-245.0, -64.0), Vector2(-245.0, 24.0)]
+const MAX_SHIPS := 14
+
+
+func _dock_pos(slot: int) -> Vector2:
+    if slot >= 12:
+        return CARRIER_BERTH[slot - 12]
+    var p := int(slot / 4)
+    var r := slot % 4
+    var side := -1.0 if r < 2 else 1.0
+    var k := r % 2
+    return Vector2(-142.0 - float(k) * 34.0, float(PIER_Z[p]) + side * 11.0)
+
+
+func _port_scenery(root: Node3D) -> void:
+    var conc := Color(0.46, 0.48, 0.5)
+    var dark := Color(0.2, 0.22, 0.25)
+    # shipyard apron
+    _box(root, Vector3(30.0, 0.07, 130.0), Vector3(-103.0, 0.65, -54.0), conc)
+    # piers
+    for pz in PIER_Z:
+        _box(root, Vector3(82.0, 0.6, 9.0), Vector3(-160.0, 0.35, float(pz)), conc.lightened(0.05))
+        for k in range(9):
+            _cyl(root, 0.4, 0.4, 1.4, Vector3(-122.0 - float(k) * 9.0, -0.4, float(pz) + 4.6), dark)
+            _cyl(root, 0.4, 0.4, 1.4, Vector3(-122.0 - float(k) * 9.0, -0.4, float(pz) - 4.6), dark)
+        for k2 in range(5):
+            _cyl(root, 0.35, 0.35, 0.7, Vector3(-130.0 - float(k2) * 16.0, 1.0, float(pz) + 3.6), Color(0.9, 0.75, 0.1))
+        # portal crane at the pier root
+        for lx in [-1.0, 1.0]:
+            for lz in [-1.0, 1.0]:
+                _box(root, Vector3(0.6, 11.0, 0.6), Vector3(-130.0 + float(lx) * 3.0, 6.0, float(pz) + float(lz) * 3.4), Color(0.85, 0.35, 0.1))
+        _box(root, Vector3(9.0, 1.0, 9.0), Vector3(-130.0, 11.8, float(pz)), Color(0.85, 0.35, 0.1))
+        _box(root, Vector3(2.0, 1.4, 22.0), Vector3(-130.0, 12.6, float(pz) - 6.0), Color(0.85, 0.35, 0.1))
+    # warehouses, fuel tanks, headquarters
+    for wz in range(5):
+        _box(root, Vector3(14.0, 7.0, 16.0), Vector3(-108.0, 3.9, -105.0 + float(wz) * 21.0), Color(0.55, 0.6, 0.66))
+        _box(root, Vector3(14.4, 0.6, 16.4), Vector3(-108.0, 7.6, -105.0 + float(wz) * 21.0), Color(0.3, 0.36, 0.42))
+        _box(root, Vector3(0.3, 4.5, 8.0), Vector3(-100.8, 2.8, -105.0 + float(wz) * 21.0), Color(0.18, 0.2, 0.24))
+    _box(root, Vector3(10.0, 9.0, 18.0), Vector3(-96.0, 5.0, 2.0), Color(0.7, 0.72, 0.76))
+    _cyl(root, 0.3, 0.4, 16.0, Vector3(-96.0, 17.0, 2.0), Color(0.8, 0.8, 0.85))
+    for sg in range(3):
+        _box(root, Vector3(0.2, 1.4, 1.8), Vector3(-90.8, 5.5 + float(sg) * 1.4, -4.0), Color.WHITE).material_override = _glow_mat(Color(0.5, 0.85, 1.0))
+    # radar dome
+    _cyl(root, 0.0, 3.2, 2.4, Vector3(-96.0, 11.4, 2.0), Color(0.9, 0.92, 0.95))
+
+
+# kind: gun / missile / torpedo / carrier.  land = can strike the enemy island with cruise missiles
+const NAVY := [
+    {"name": "Patrol Boat", "cls": "Fast attack craft, gun + AShM", "short": "Patrol", "price": 6000, "hp": 260.0, "speed": 20.0,
+        "len": 15.0, "range": 70.0, "dmg": 16.0, "cd": 0.8, "kind": "gun", "aa": 0.12, "aa_range": 45.0, "land": false, "unlock": 15000},
+    {"name": "Frigate", "cls": "Type 054 / Perry class, guns + SAM", "short": "Frigate", "price": 16000, "hp": 760.0, "speed": 15.0,
+        "len": 28.0, "range": 110.0, "dmg": 30.0, "cd": 1.3, "kind": "gun", "aa": 0.55, "aa_range": 120.0, "land": false, "unlock": 35000},
+    {"name": "Destroyer", "cls": "Type 052D / Arleigh Burke class, VLS missiles", "short": "Destroyer", "price": 42000, "hp": 1600.0, "speed": 13.0,
+        "len": 36.0, "range": 230.0, "dmg": 85.0, "cd": 3.5, "kind": "missile", "aa": 0.8, "aa_range": 170.0, "land": true, "unlock": 90000},
+    {"name": "Submarine", "cls": "Akula / Virginia class, torpedoes", "short": "Submarine", "price": 30000, "hp": 900.0, "speed": 11.0,
+        "len": 32.0, "range": 140.0, "dmg": 220.0, "cd": 8.0, "kind": "torpedo", "aa": 0.0, "aa_range": 0.0, "land": false, "unlock": 60000},
+    {"name": "Aircraft Carrier", "cls": "Nimitz / Liaoning class, carries 8 jets", "short": "Carrier", "price": 120000, "hp": 5200.0, "speed": 8.0,
+        "len": 100.0, "range": 0.0, "dmg": 0.0, "cd": 99.0, "kind": "carrier", "aa": 0.7, "aa_range": 150.0, "land": false, "unlock": 220000},
+]
+const CARRIER_CAP := 8
+const SHIP_ALERT_R := 620.0
+const GUARD_R := 430.0
+# chance a ship's air defence kills each missile type (cruise, ballistic, hypersonic, MIRV, drone, rockets, stealth, ICBM)
+const SHIP_AA_VS := [0.8, 0.45, 0.15, 0.2, 0.9, 0.65, 0.35, 0.05]
+
+
+func _hull_mat(color: Color) -> StandardMaterial3D:
+    var key := "hull_" + color.to_html(true)
+    if mat_cache.has(key):
+        return mat_cache[key]
+    var m := StandardMaterial3D.new()
+    m.albedo_color = color
+    m.roughness = 0.7
+    m.metallic_specular = 0.2
+    m.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat_cache[key] = m
+    return m
+
+
+# extrudes a convex plan polygon (Vector2: x = right, y = z along the ship) between two heights
+func _hull(parent: Node3D, pts: Array, y0: float, y1: float, color: Color, top_pts: Array = []) -> MeshInstance3D:
+    var st := SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var n := pts.size()
+    var tp: Array = pts if top_pts.is_empty() else top_pts
+    var cx := 0.0
+    var cz := 0.0
+    for p in tp:
+        var pv: Vector2 = p
+        cx += pv.x
+        cz += pv.y
+    cx /= float(n)
+    cz /= float(n)
+    for k in range(n):
+        var a: Vector2 = tp[k]
+        var b: Vector2 = tp[(k + 1) % n]
+        st.set_normal(Vector3.UP)
+        st.add_vertex(Vector3(cx, y1, cz))
+        st.add_vertex(Vector3(a.x, y1, a.y))
+        st.add_vertex(Vector3(b.x, y1, b.y))
+        var a0: Vector2 = pts[k]
+        var b0: Vector2 = pts[(k + 1) % n]
+        var e := b0 - a0
+        var nrm := Vector3(e.y, 0.0, -e.x).normalized()
+        var mid := Vector3((a0.x + b0.x) * 0.5 - cx, 0.0, (a0.y + b0.y) * 0.5 - cz)
+        if nrm.dot(mid) < 0.0:
+            nrm = -nrm
+        st.set_normal(nrm)
+        st.add_vertex(Vector3(a0.x, y0, a0.y))
+        st.add_vertex(Vector3(b0.x, y0, b0.y))
+        st.add_vertex(Vector3(b.x, y1, b.y))
+        st.add_vertex(Vector3(a0.x, y0, a0.y))
+        st.add_vertex(Vector3(b.x, y1, b.y))
+        st.add_vertex(Vector3(a.x, y1, a.y))
+    var mi := MeshInstance3D.new()
+    mi.mesh = st.commit()
+    mi.material_override = _hull_mat(color)
+    parent.add_child(mi)
+    return mi
+
+
+func _hull_pts(l: float, w: float) -> Array:
+    return [Vector2(-w * 0.42, l * 0.5), Vector2(w * 0.42, l * 0.5), Vector2(w * 0.5, l * 0.18), Vector2(w * 0.4, -l * 0.22),
+        Vector2(w * 0.16, -l * 0.42), Vector2(0.0, -l * 0.5), Vector2(-w * 0.16, -l * 0.42), Vector2(-w * 0.4, -l * 0.22), Vector2(-w * 0.5, l * 0.18)]
+
+
+func _gun(parent: Node3D, pos: Vector3, sc: float, col: Color) -> void:
+    _cyl(parent, 0.9 * sc, 1.1 * sc, 0.5 * sc, pos, col.darkened(0.1))
+    var tur := _box(parent, Vector3(1.5 * sc, 0.7 * sc, 1.8 * sc), pos + Vector3(0.0, 0.55 * sc, 0.0), col)
+    var bar := _cyl(parent, 0.12 * sc, 0.12 * sc, 2.4 * sc, pos + Vector3(0.0, 0.65 * sc, -1.7 * sc), Color(0.2, 0.22, 0.25))
+    bar.rotation.x = PI / 2.0
+    tur.rotation.y = 0.0
+
+
+func _vls(parent: Node3D, pos: Vector3, cols: int, rows: int, cell: float) -> void:
+    _box(parent, Vector3(float(cols) * cell, 0.3, float(rows) * cell), pos, Color(0.16, 0.18, 0.2))
+    for c in range(cols):
+        for r in range(rows):
+            _box(parent, Vector3(cell * 0.72, 0.06, cell * 0.72), pos + Vector3((float(c) - float(cols - 1) * 0.5) * cell, 0.18, (float(r) - float(rows - 1) * 0.5) * cell), Color(0.3, 0.32, 0.34))
+
+
+func _ship_model(t: int, team: Color) -> Node3D:
+    var root := Node3D.new()
+    var inner := Node3D.new()
+    root.add_child(inner)
+    root.set_meta("inner", inner)
+    var info: Dictionary = NAVY[t]
+    var l: float = info["len"]
+    var gray := Color(0.5, 0.55, 0.6)
+    var light := Color(0.62, 0.66, 0.7)
+    var red := Color(0.42, 0.16, 0.14)
+    var slots: Array = []
+    if t == 3:
+        _sub_model(inner, team)
+    elif t == 4:
+        slots = _carrier_model(inner, team)
+    else:
+        var w := l * 0.24
+        var dh := l * 0.07 + 0.9
+        _hull(inner, _hull_pts(l * 1.0, w * 0.96), -1.3, 0.35, red)
+        _hull(inner, _hull_pts(l, w), 0.3, dh, gray)
+        _box(inner, Vector3(w * 0.9, 0.12, l * 0.05), Vector3(0.0, dh + 0.05, -l * 0.28), team)
+        # team stripe
+        for sd in [-1.0, 1.0]:
+            _box(inner, Vector3(0.08, 0.35, l * 0.25), Vector3(float(sd) * w * 0.495, dh - 0.45, -l * 0.18), team)
+        if t == 0:
+            _box(inner, Vector3(w * 0.6, 1.4, l * 0.28), Vector3(0.0, dh + 0.7, l * 0.02), light)
+            _box(inner, Vector3(w * 0.5, 0.6, l * 0.2), Vector3(0.0, dh + 1.7, l * 0.02), light.darkened(0.15))
+            _cyl(inner, 0.08, 0.08, 3.0, Vector3(0.0, dh + 3.2, l * 0.06), Color(0.3, 0.3, 0.34))
+            _gun(inner, Vector3(0.0, dh + 0.1, -l * 0.3), 0.75, gray.darkened(0.1))
+            for sd2 in [-1.0, 1.0]:
+                var ln := _box(inner, Vector3(0.5, 0.5, 2.2), Vector3(float(sd2) * w * 0.28, dh + 0.5, l * 0.3), Color(0.25, 0.28, 0.3))
+                ln.rotation.x = 0.35
+            _box(inner, Vector3(w * 0.5, 0.5, l * 0.2), Vector3(0.0, dh + 0.25, l * 0.36), gray.darkened(0.15))
+        elif t == 1:
+            _box(inner, Vector3(w * 0.7, 2.4, l * 0.3), Vector3(0.0, dh + 1.2, -l * 0.02), light)
+            _box(inner, Vector3(w * 0.55, 1.6, l * 0.2), Vector3(0.0, dh + 3.1, -l * 0.04), light.darkened(0.1))
+            _box(inner, Vector3(w * 0.4, 0.9, l * 0.1), Vector3(0.0, dh + 4.4, -l * 0.04), gray)
+            _cyl(inner, 0.1, 0.12, 5.0, Vector3(0.0, dh + 7.0, -l * 0.02), Color(0.35, 0.36, 0.4))
+            var rd := _box(inner, Vector3(2.4, 0.15, 0.7), Vector3(0.0, dh + 6.0, -l * 0.02), Color(0.4, 0.42, 0.46))
+            rd.rotation.y = 0.0
+            _cyl(inner, 0.9, 1.0, 1.6, Vector3(0.0, dh + 2.2, l * 0.2), Color(0.3, 0.32, 0.34))
+            _gun(inner, Vector3(0.0, dh + 0.1, -l * 0.3), 1.0, gray.darkened(0.1))
+            _sphere(inner, 0.7, Vector3(0.0, dh + 5.0, l * 0.12), Color(0.8, 0.82, 0.85))
+            _box(inner, Vector3(w * 0.7, 0.2, l * 0.2), Vector3(0.0, dh + 0.1, l * 0.38), Color(0.3, 0.33, 0.36))
+            _vls(inner, Vector3(0.0, dh + 0.2, -l * 0.15), 2, 3, 1.1)
+        else:
+            _box(inner, Vector3(w * 0.78, 2.8, l * 0.32), Vector3(0.0, dh + 1.4, -l * 0.04), light)
+            _box(inner, Vector3(w * 0.62, 2.0, l * 0.24), Vector3(0.0, dh + 3.7, -l * 0.04), light.darkened(0.1))
+            for sd3 in [-1.0, 1.0]:
+                var pa := _box(inner, Vector3(0.18, 1.7, 1.7), Vector3(float(sd3) * w * 0.32, dh + 3.7, -l * 0.15), Color(0.28, 0.32, 0.36))
+                pa.rotation.x = -0.1
+            _box(inner, Vector3(w * 0.4, 1.0, l * 0.1), Vector3(0.0, dh + 5.2, -l * 0.04), gray)
+            _cyl(inner, 0.12, 0.14, 7.0, Vector3(0.0, dh + 9.0, -l * 0.04), Color(0.35, 0.36, 0.4))
+            _box(inner, Vector3(3.0, 0.15, 0.9), Vector3(0.0, dh + 8.0, -l * 0.04), Color(0.4, 0.42, 0.46))
+            _cyl(inner, 0.8, 1.0, 2.6, Vector3(0.0, dh + 3.4, l * 0.2), Color(0.3, 0.32, 0.34))
+            _cyl(inner, 0.7, 0.9, 2.2, Vector3(0.0, dh + 3.3, l * 0.28), Color(0.28, 0.3, 0.32))
+            _gun(inner, Vector3(0.0, dh + 0.1, -l * 0.32), 1.1, gray.darkened(0.1))
+            _vls(inner, Vector3(0.0, dh + 0.2, -l * 0.19), 4, 4, 1.05)
+            _vls(inner, Vector3(0.0, dh + 0.2, l * 0.1), 3, 3, 1.05)
+            _box(inner, Vector3(w * 0.8, 0.2, l * 0.2), Vector3(0.0, dh + 0.12, l * 0.4), Color(0.3, 0.33, 0.36))
+            _cyl(inner, 0.5, 0.5, 0.3, Vector3(0.0, dh + 0.3, l * 0.4), Color(0.9, 0.8, 0.1))
+        # flag mast
+        _cyl(inner, 0.04, 0.04, 2.0, Vector3(0.0, dh + 5.0 + l * 0.12, l * 0.3), Color(0.8, 0.8, 0.85))
+        _box(inner, Vector3(0.06, 0.6, 1.0), Vector3(0.0, dh + 5.7 + l * 0.12, l * 0.3 + 0.5), team)
+    # wake behind the ship
+    var wake := Node3D.new()
+    root.add_child(wake)
+    var wmat = mat_cache.get("wake", null)
+    if wmat == null:
+        var wm := StandardMaterial3D.new()
+        wm.albedo_color = Color(1.0, 1.0, 1.0, 0.4)
+        wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+        mat_cache["wake"] = wm
+        wmat = wm
+    for sd4 in [-1.0, 1.0]:
+        var ws := MeshInstance3D.new()
+        var wb := BoxMesh.new()
+        wb.size = Vector3(l * 0.07 + 0.8, 0.04, l * 1.8)
+        ws.mesh = wb
+        ws.material_override = wmat
+        ws.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        ws.position = Vector3(float(sd4) * l * 0.12, -0.38, l * 1.1)
+        ws.rotation.y = float(sd4) * 0.13
+        wake.add_child(ws)
+    var wc := MeshInstance3D.new()
+    var wcb := BoxMesh.new()
+    wcb.size = Vector3(l * 0.16, 0.04, l * 1.6)
+    wc.mesh = wcb
+    wc.material_override = wmat
+    wc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    wc.position = Vector3(0.0, -0.38, l * 1.0)
+    wake.add_child(wc)
+    root.set_meta("wake", wake)
+    root.set_meta("slots", slots)
+    _merge_model(inner, [])
+    return root
+
+
+func _sub_model(inner: Node3D, team: Color) -> void:
+    var dark := Color(0.12, 0.14, 0.17)
+    var body := _cyl(inner, 1.9, 1.9, 24.0, Vector3(0.0, -0.1, 0.0), dark)
+    body.rotation.x = PI / 2.0
+    var bow := _sphere(inner, 1.9, Vector3(0.0, -0.1, -12.0), dark)
+    bow.scale = Vector3(1.0, 1.0, 1.6)
+    var tail := _cyl(inner, 0.2, 1.9, 8.0, Vector3(0.0, -0.1, 15.5), dark)
+    tail.rotation.x = -PI / 2.0
+    _box(inner, Vector3(0.3, 4.4, 2.6), Vector3(0.0, -0.1, 18.0), dark)
+    _box(inner, Vector3(4.6, 0.3, 2.2), Vector3(0.0, -0.1, 18.0), dark)
+    _box(inner, Vector3(2.2, 2.8, 6.0), Vector3(0.0, 2.2, -2.0), dark.lightened(0.05))
+    _cyl(inner, 0.12, 0.12, 2.2, Vector3(0.0, 4.6, -3.0), Color(0.3, 0.3, 0.34))
+    _box(inner, Vector3(4.2, 0.25, 1.4), Vector3(0.0, 1.8, -5.0), dark)
+    _box(inner, Vector3(0.1, 0.2, 5.0), Vector3(1.0, 3.4, -2.0), team)
+
+
+# returns the deck parking slots (local positions)
+func _carrier_model(inner: Node3D, team: Color) -> Array:
+    var l := 100.0
+    var w := 21.0
+    var gray := Color(0.42, 0.46, 0.5)
+    var red := Color(0.4, 0.15, 0.13)
+    _hull(inner, _hull_pts(l, w * 0.95), -2.2, 0.6, red)
+    _hull(inner, _hull_pts(l, w), 0.5, 5.2, gray)
+    # flight deck: wider than the hull
+    var dpts: Array = [Vector2(-13.0, l * 0.5 - 2.0), Vector2(13.0, l * 0.5 - 2.0), Vector2(15.5, l * 0.1), Vector2(10.0, -l * 0.34),
+        Vector2(0.0, -l * 0.5 - 2.0), Vector2(-10.0, -l * 0.34), Vector2(-15.5, l * 0.1)]
+    _hull(inner, dpts, 5.2, 6.0, Color(0.24, 0.26, 0.29))
+    # deck markings
+    _box(inner, Vector3(0.35, 0.05, l * 0.9), Vector3(-2.0, 6.05, -1.0), Color(0.95, 0.95, 0.95))
+    var ang := _box(inner, Vector3(0.35, 0.05, l * 0.62), Vector3(-7.5, 6.06, 12.0), Color(0.95, 0.95, 0.95))
+    ang.rotation.y = 0.16
+    for k in range(5):
+        _box(inner, Vector3(5.0, 0.05, 0.25), Vector3(-2.0, 6.06, 40.0 - float(k) * 3.0), Color(0.9, 0.8, 0.1))
+    for cz in [-26.0, -34.0]:
+        _box(inner, Vector3(0.25, 0.06, 7.0), Vector3(-2.0, 6.08, float(cz)), Color(0.9, 0.8, 0.1))
+    for ex in [Vector3(9.0, 6.03, 22.0), Vector3(-12.0, 6.03, -10.0), Vector3(10.0, 6.03, -22.0)]:
+        _box(inner, Vector3(7.0, 0.06, 12.0), ex, Color(0.34, 0.37, 0.4))
+    # island superstructure
+    _box(inner, Vector3(5.0, 9.0, 18.0), Vector3(11.5, 10.5, 2.0), gray.lightened(0.1))
+    _box(inner, Vector3(4.4, 4.0, 11.0), Vector3(11.5, 16.0, 1.0), gray.lightened(0.15))
+    _box(inner, Vector3(5.2, 1.4, 9.0), Vector3(11.5, 14.0, 1.0), Color(0.1, 0.16, 0.22))
+    _cyl(inner, 0.18, 0.22, 11.0, Vector3(11.5, 23.0, 2.0), Color(0.35, 0.36, 0.4))
+    _box(inner, Vector3(4.2, 0.2, 1.2), Vector3(11.5, 20.0, 2.0), Color(0.4, 0.42, 0.46))
+    var dish := _cyl(inner, 2.0, 0.2, 0.5, Vector3(11.5, 19.0, 7.0), Color(0.75, 0.77, 0.8))
+    dish.rotation.x = 0.4
+    _box(inner, Vector3(0.1, 0.5, 4.0), Vector3(9.0, 8.0, 2.0), team)
+    # sponsons with defence guns
+    for gz in [-30.0, 20.0, 38.0]:
+        _box(inner, Vector3(3.0, 0.6, 5.0), Vector3(14.6, 5.0, float(gz)), gray)
+        _cyl(inner, 0.8, 0.9, 1.4, Vector3(14.6, 5.9, float(gz)), Color(0.8, 0.82, 0.85))
+    # flag
+    _cyl(inner, 0.05, 0.05, 3.0, Vector3(11.5, 27.0, 2.0), Color(0.8, 0.8, 0.85))
+    _box(inner, Vector3(0.06, 1.0, 1.8), Vector3(11.5, 28.0, 3.0), team)
+    var slots: Array = []
+    for k2 in range(CARRIER_CAP):
+        slots.append(Vector3(-8.5 + float(k2 % 2) * 13.0, 6.1, 18.0 + float(int(k2 / 2)) * 10.5))
+    return slots
+
+
+func _ship_marker(col: Color) -> MeshInstance3D:
+    var mi := MeshInstance3D.new()
+    var pm := PrismMesh.new()
+    pm.size = Vector3(1.0, 0.3, 1.5)
+    mi.mesh = pm
+    mi.rotation.x = -PI / 2.0
+    var m := StandardMaterial3D.new()
+    m.albedo_color = col
+    m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    m.no_depth_test = true
+    mi.material_override = m
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    return mi
+
+
+# ================= NAVY: ships, weapons, alerts, AI =================
+const SEA_Y := -0.45
+var ships: Array = []
+var shots: Array = []
+var ship_uid := 0
+var navy_clock := 0.0
+var alert_set := {}
+var alert_t := 0.0
+var alert_best := -1
+var alert_dist := 0.0
+var navy_ai_t := 3.0
+var sel_ship := -1
+var sel_enemy := -1
+var hit_say_t := 0.0
+
+
+func _navy_reset() -> void:
+    ships = []
+    shots = []
+    air = []
+    alert_set = {}
+    alert_best = -1
+    sel_ship = -1
+    sel_enemy = -1
+    navy_ai_t = 3.0
+
+
+func _ship_by_id(id: int) -> Dictionary:
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["id"]) == id:
+            return s
+    return {}
+
+
+func _ships_of(i: int) -> Array:
+    var out: Array = []
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == i:
+            out.append(s)
+    return out
+
+
+func _ship_world(s: Dictionary) -> Vector3:
+    var p: Vector2 = s["pos"]
+    return Vector3(p.x, SEA_Y, p.y)
+
+
+func _count_ships(i: int, carriers: bool) -> int:
+    var n := 0
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == i and (int(s["t"]) == 4) == carriers:
+            n += 1
+    return n
+
+
+func _station_for(i: int, t: int, k: int) -> Vector2:
+    var lp := Vector3(-340.0 - float(int(k / 4)) * 50.0, 0.0, -95.0 + float(k % 4) * 62.0)
+    if t == 4:
+        lp = Vector3(-440.0, 0.0, -60.0 + float(k) * 110.0)
+    var g := _isl(i).to_global(lp)
+    return Vector2(g.x, g.z)
+
+
+func _free_dock(i: int, t: int) -> int:
+    var used := {}
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == i and (str(s["state"]) == "dock" or str(s["state"]) == "undock"):
+            used[int(s["slot"])] = true
+    if t == 4:
+        for k in [12, 13]:
+            if not used.has(k):
+                return k
+        return -1
+    for k2 in range(12):
+        if not used.has(k2):
+            return k2
+    return -1
+
+
+func _make_ship(i: int, t: int, slot: int) -> Dictionary:
+    var info: Dictionary = NAVY[t]
+    var isl := _isl(i)
+    var dp := _dock_pos(slot)
+    var g := isl.to_global(Vector3(dp.x, 0.0, dp.y))
+    var ex := isl.to_global(Vector3(-345.0 if t != 4 else -350.0, 0.0, dp.y))
+    ship_uid += 1
+    var k := _count_ships(i, t == 4)
+    var s := {
+        "id": ship_uid, "t": t, "own": i, "pos": Vector2(g.x, g.z), "hdg": isl.rotation.y + PI / 2.0, "spd": 0.0,
+        "hp": float(info["hp"]), "maxhp": float(info["hp"]), "mode": "guard", "dest": Vector2(g.x, g.z), "tgt": -1, "siege": -1,
+        "cd": randf_range(0.5, 2.0), "slot": slot, "state": "undock", "node": null, "jets": [], "reveal": 0.0,
+        "wander": _station_for(i, t, k), "wt": 0.0, "station": _station_for(i, t, k), "dockexit": Vector2(ex.x, ex.z),
+        "smoke": 0.0, "aacd": 0.0, "lean": 0.0, "vis": true, "aip": 0.0,
+    }
+    ships.append(s)
+    _ship_node(s)
+    return s
+
+
+func _ship_node(s: Dictionary) -> void:
+    var t: int = s["t"]
+    var n := _ship_model(t, _team(int(s["own"])))
+    level_root.add_child(n)
+    s["node"] = n
+    _ship_place(s)
+    if t == 4:
+        _carrier_sync_jets(s)
+
+
+func _navy_rebuild() -> void:
+    var cnt := {}
+    for sv in ships:
+        var s: Dictionary = sv
+        var ck := "%d_%d" % [int(s["own"]), 1 if int(s["t"]) == 4 else 0]
+        var kk: int = int(cnt.get(ck, 0))
+        cnt[ck] = kk + 1
+        var st := _station_for(int(s["own"]), int(s["t"]), kk)
+        s["station"] = st
+        s["wander"] = st
+        s["node"] = null
+        _ship_node(s)
+        if int(s["t"]) == 4:
+            var jl: Array = s["jets"]
+            for jv in jl:
+                var jr: Dictionary = jv
+                jr["node"] = null
+                jr["out"] = false
+            _carrier_sync_jets(s)
+
+
+func _ship_place(s: Dictionary) -> void:
+    var nn = s["node"]
+    if nn == null or not is_instance_valid(nn):
+        return
+    var n: Node3D = nn
+    var p: Vector2 = s["pos"]
+    var t: int = s["t"]
+    var id := float(s["id"])
+    var big := 0.35 if t == 4 else 1.0
+    n.position = Vector3(p.x, SEA_Y + (-1.0 if t == 3 else 0.0), p.y)
+    n.rotation.y = float(s["hdg"])
+    var inner: Node3D = n.get_meta("inner")
+    inner.position.y = sin(navy_clock * 0.8 + id * 1.7) * 0.12 * big
+    inner.rotation.z = sin(navy_clock * 0.6 + id) * 0.02 * big + float(s["lean"])
+    inner.rotation.x = cos(navy_clock * 0.7 + id) * 0.012 * big
+    var wake: Node3D = n.get_meta("wake")
+    var sp: float = absf(float(s["spd"]))
+    wake.visible = sp > 1.5 and t != 3
+    wake.scale = Vector3(1.0, 1.0, clampf(sp / float(NAVY[t]["speed"]), 0.2, 1.0))
+    n.visible = bool(s["vis"])
+
+
+# ---------- visibility / targeting ----------
+func _ship_visible_to(s: Dictionary, viewer: int) -> bool:
+    if int(s["own"]) == viewer or int(s["t"]) != 3:
+        return true
+    if float(s["reveal"]) > 0.0:
+        return true
+    var sp: Vector2 = s["pos"]
+    for ov in ships:
+        var o: Dictionary = ov
+        if int(o["own"]) == viewer:
+            var op: Vector2 = o["pos"]
+            if sp.distance_to(op) < 90.0:
+                return true
+    return false
+
+
+func _ship_alive(s: Dictionary) -> bool:
+    if s.is_empty():
+        return false
+    var st: String = s["state"]
+    return st != "sinking" and st != "dead"
+
+
+func _nearest_foe(s: Dictionary, center: Vector2, radius: float) -> Dictionary:
+    var best := {}
+    var bd := radius
+    for ov in ships:
+        var o: Dictionary = ov
+        if int(o["own"]) == int(s["own"]) or not _ship_alive(o) or str(o["state"]) == "dock":
+            continue
+        var op: Vector2 = o["pos"]
+        var d := center.distance_to(op)
+        if d < bd and _ship_visible_to(o, int(s["own"])):
+            bd = d
+            best = o
+    return best
+
+
+func _foe_of_empire(own: int, center: Vector2, radius: float) -> Dictionary:
+    var best := {}
+    var bd := radius
+    for ov in ships:
+        var o: Dictionary = ov
+        if int(o["own"]) == own or not _ship_alive(o) or str(o["state"]) == "dock":
+            continue
+        var op: Vector2 = o["pos"]
+        var d := center.distance_to(op)
+        if d < bd and _ship_visible_to(o, own):
+            bd = d
+            best = o
+    return best
+
+
+# ---------- movement ----------
+func _land_push(p: Vector2, undocking: bool) -> Vector2:
+    var push := Vector2.ZERO
+    for k in range(island_count):
+        var e: Dictionary = emp[k]
+        if bool(e["dead"]):
+            continue
+        var isl := _isl(k)
+        var lp3 := isl.to_local(Vector3(p.x, 0.0, p.y))
+        var lp := Vector2(lp3.x, lp3.z)
+        var rects := [Rect2(-136.0, -136.0, 268.0, 272.0)]
+        if not undocking:
+            rects.append(Rect2(-215.0, -100.0, 95.0, 114.0))
+        for rv in rects:
+            var r: Rect2 = rv
+            var near := Vector2(clampf(lp.x, r.position.x, r.end.x), clampf(lp.y, r.position.y, r.end.y))
+            var dv := lp - near
+            var dr := dv.length()
+            var dirl := Vector2.ZERO
+            var strength := 0.0
+            if dr < 0.01:
+                var c := r.get_center()
+                dirl = (lp - c).normalized()
+                strength = 3.0
+            elif dr < 90.0:
+                dirl = dv / dr
+                strength = (1.0 - dr / 90.0) * 2.4
+            if strength > 0.0:
+                var w3 := isl.global_transform.basis * Vector3(dirl.x, 0.0, dirl.y)
+                push += Vector2(w3.x, w3.z) * strength
+    return push
+
+
+func _ship_steer(s: Dictionary, goal: Vector2, dt: float, undocking: bool) -> void:
+    var t: int = s["t"]
+    var info: Dictionary = NAVY[t]
+    var pos: Vector2 = s["pos"]
+    var hdg: float = s["hdg"]
+    var dv := goal - pos
+    var dist := dv.length()
+    var spd: float = s["spd"]
+    var maxs: float = info["speed"]
+    var turn: float = 0.55 if t == 4 else (0.9 if t == 0 else 0.7)
+    var tgt_spd := 0.0
+    if dist > 3.0:
+        var want := dv / dist
+        var push := _land_push(pos, undocking)
+        if push.length() > 0.01:
+            want = (want + push * 1.6).normalized()
+            if dist < 40.0:
+                dist = 40.0
+        var wy := atan2(-want.x, -want.y)
+        var diff := wrapf(wy - hdg, -PI, PI)
+        var step := clampf(diff, -turn * dt, turn * dt)
+        hdg += step
+        s["lean"] = lerpf(float(s["lean"]), clampf(-step / maxf(dt, 0.001) * 0.05, -0.08, 0.08), clampf(dt * 3.0, 0.0, 1.0))
+        var slow := clampf(dist / 45.0, 0.15, 1.0)
+        var align := 1.0 - 0.6 * clampf(absf(diff) / 1.4, 0.0, 1.0)
+        tgt_spd = maxs * slow * align
+    spd = move_toward(spd, tgt_spd, maxs * 0.35 * dt)
+    pos += Vector2(-sin(hdg), -cos(hdg)) * spd * dt
+    s["pos"] = pos
+    s["hdg"] = hdg
+    s["spd"] = spd
+
+
+func _ship_guard_goal(s: Dictionary, dt: float) -> Vector2:
+    var i: int = s["own"]
+    var pos: Vector2 = s["pos"]
+    var t: int = s["t"]
+    if t != 4:
+        var home: Vector3 = island_pos[i]
+        var hv := Vector2(home.x, home.z)
+        var foe := _nearest_foe(s, hv, SHIP_ALERT_R)
+        if not foe.is_empty():
+            s["tgt"] = int(foe["id"])
+            var fp: Vector2 = foe["pos"]
+            var info: Dictionary = NAVY[t]
+            var stand := maxf(60.0, float(info["range"]) * 0.7) if t != 3 else 90.0
+            if pos.distance_to(fp) > stand:
+                return fp
+            return pos
+    var st: Vector2 = s["station"]
+    var wt: float = float(s["wt"]) - dt
+    s["wt"] = wt
+    var wander: Vector2 = s["wander"]
+    if wt <= 0.0:
+        s["wt"] = randf_range(14.0, 28.0)
+        var sp := 45.0 if t != 4 else 10.0
+        wander = st + Vector2(randf_range(-sp, sp), randf_range(-sp, sp))
+        s["wander"] = wander
+    return wander
+
+
+func _siege_goal(s: Dictionary, si: int) -> Vector2:
+    var c: Vector3 = island_pos[si]
+    var c2 := Vector2(c.x, c.z)
+    var pos: Vector2 = s["pos"]
+    var dirv := (pos - c2).normalized()
+    if dirv.length() < 0.1:
+        dirv = Vector2(1.0, 0.0)
+    return c2 + dirv * 190.0
+
+
+func _ship_attack_goal(s: Dictionary) -> Vector2:
+    var pos: Vector2 = s["pos"]
+    var t: int = s["t"]
+    var info: Dictionary = NAVY[t]
+    var tg := _ship_by_id(int(s["tgt"]))
+    if not _ship_alive(tg) or int(tg["own"]) == int(s["own"]) or not _ship_visible_to(tg, int(s["own"])):
+        var foe := _nearest_foe(s, pos, 1500.0)
+        if not foe.is_empty():
+            s["tgt"] = int(foe["id"])
+            tg = foe
+        else:
+            s["tgt"] = -1
+            var si: int = s["siege"]
+            if si >= 0 and not bool(emp[si]["dead"]):
+                return _siege_goal(s, si)
+            s["mode"] = "guard"
+            return pos
+    var tp: Vector2 = tg["pos"]
+    var stand := float(info["range"]) * 0.7 if t != 3 else 85.0
+    if t == 4:
+        stand = 400.0
+    if pos.distance_to(tp) > stand + 8.0:
+        return tp
+    return pos
+
+
+func _ship_brain(s: Dictionary, dt: float) -> Vector2:
+    var pos: Vector2 = s["pos"]
+    var mode: String = s["mode"]
+    if mode == "move":
+        var dst: Vector2 = s["dest"]
+        if pos.distance_to(dst) < 14.0:
+            s["mode"] = "hold"
+        return dst
+    if mode == "hold":
+        return pos
+    if mode == "attack":
+        return _ship_attack_goal(s)
+    return _ship_guard_goal(s, dt)
+
+
+func _ship_update(s: Dictionary, dt: float) -> void:
+    var t: int = s["t"]
+    s["cd"] = float(s["cd"]) - dt
+    s["reveal"] = maxf(0.0, float(s["reveal"]) - dt)
+    s["aacd"] = maxf(0.0, float(s["aacd"]) - dt)
+    var pos: Vector2 = s["pos"]
+    var state: String = s["state"]
+    var goal := pos
+    if state == "undock":
+        var ds: Vector2 = s["dockexit"]
+        goal = ds
+        if pos.distance_to(ds) < 16.0:
+            s["state"] = "sail"
+    else:
+        goal = _ship_brain(s, dt)
+    _ship_steer(s, goal, dt, state == "undock")
+    if str(s["state"]) == "sail":
+        _ship_combat(s)
+    # visibility of submarines for the player
+    if t == 3:
+        s["vis"] = _ship_visible_to(s, 0)
+    # damage smoke
+    var frac := float(s["hp"]) / float(s["maxhp"])
+    if frac < 0.5:
+        s["smoke"] = float(s["smoke"]) - dt
+        if float(s["smoke"]) <= 0.0:
+            s["smoke"] = 0.35 + frac
+            var wp := _ship_world(s)
+            var big := 1.0 if t != 4 else 2.2
+            _smoke_puff(wp + Vector3(randf_range(-3.0, 3.0), 6.0 * big, randf_range(-3.0, 3.0)), 2.5 * big, 2.0)
+    _ship_place(s)
+
+
+# ---------- combat ----------
+func _ship_combat(s: Dictionary) -> void:
+    var t: int = s["t"]
+    var info: Dictionary = NAVY[t]
+    var kind: String = info["kind"]
+    if kind == "carrier" or float(s["cd"]) > 0.0:
+        return
+    var pos: Vector2 = s["pos"]
+    var rng: float = info["range"]
+    var tg := _nearest_foe(s, pos, rng)
+    if tg.is_empty():
+        if bool(info["land"]) and str(s["mode"]) == "attack" and int(s["siege"]) >= 0:
+            _ship_land_strike(s)
+        return
+    var own: int = s["own"]
+    var from := _ship_world(s) + Vector3(0.0, 4.0 if t != 3 else 1.0, 0.0)
+    var tpos := _ship_world(tg) + Vector3(0.0, 2.0, 0.0)
+    var dist := from.distance_to(tpos)
+    s["tgt"] = int(tg["id"])
+    if kind == "gun":
+        _fire_shot("gun", from, tpos, own, int(tg["id"]), float(info["dmg"]) * randf_range(0.8, 1.2), dist / 300.0, 0, 0.0)
+        s["cd"] = float(info["cd"])
+        _play3d("launch", from, -6.0, 2.3)
+    elif kind == "missile":
+        _fire_shot("msl", from + Vector3(0.0, 3.0, 0.0), tpos, own, int(tg["id"]), float(info["dmg"]) * 2.4, maxf(0.8, dist / 120.0), 0, dist * 0.08)
+        s["cd"] = float(info["cd"])
+        _play3d("launch", from, 2.0, 1.2)
+    elif kind == "torpedo":
+        _fire_shot("tor", from, tpos, own, int(tg["id"]), float(info["dmg"]), dist / 42.0, 0, 0.0)
+        s["cd"] = float(info["cd"])
+        s["reveal"] = 6.0
+        _play3d("launch", from, -2.0, 0.7)
+
+
+func _pick_strike_aim(tg: int) -> Vector2:
+    var te: Dictionary = emp[tg]
+    var structs: Array = te["structs"]
+    var defs: Array = []
+    var all: Array = []
+    for sv in structs:
+        var s: Dictionary = sv
+        if str(s["state"]) == "destroyed":
+            continue
+        all.append(s)
+        if str(s["kind"]) == "defense":
+            defs.append(s)
+    var pool: Array = all
+    if not defs.is_empty() and randf() < 0.45:
+        pool = defs
+    if pool.is_empty():
+        return Vector2(0.0, 0.0)
+    var pick: Dictionary = pool[randi() % pool.size()]
+    return Vector2(float(pick["lx"]), float(pick["lz"]))
+
+
+func _ship_land_strike(s: Dictionary) -> void:
+    var tg: int = s["siege"]
+    var te: Dictionary = emp[tg]
+    if bool(te["dead"]):
+        s["siege"] = -1
+        return
+    var c: Vector3 = island_pos[tg]
+    var pos: Vector2 = s["pos"]
+    if pos.distance_to(Vector2(c.x, c.z)) > 250.0:
+        return
+    var lp := _pick_strike_aim(tg)
+    var from := _ship_world(s) + Vector3(0.0, 7.0, 0.0)
+    var to := _isl(tg).to_global(Vector3(lp.x, 1.4, lp.y))
+    var m := _make_missile_model(int(s["own"]) == 0, 0)
+    level_root.add_child(m)
+    m.position = from
+    var dist := from.distance_to(to)
+    projectiles.append({
+        "node": m, "start": from, "end": to, "t": 0.0, "dur": maxf(0.8, dist / 120.0), "h": dist * 0.06,
+        "attacker": int(s["own"]), "target": tg, "wt": 0, "lp": lp, "tried": [], "kill": -1.0, "jdmg": 70.0, "jrad": 5.0,
+    })
+    s["cd"] = float(NAVY[int(s["t"])]["cd"])
+    _play3d("launch", from, 4.0, 1.1)
+    _explode(from, Color(1.0, 0.75, 0.35), 1.8)
+
+
+func _fire_shot(kind: String, from: Vector3, to: Vector3, own: int, tid: int, dmg: float, dur: float, wt: int, h: float) -> void:
+    var node: Node3D
+    if kind == "msl":
+        node = _make_missile_model(own == 0, wt)
+    else:
+        node = Node3D.new()
+        var col := Color(1.0, 0.85, 0.35) if kind == "gun" else Color(0.85, 0.95, 1.0)
+        var mesh := MeshInstance3D.new()
+        var bm := BoxMesh.new()
+        bm.size = Vector3(0.18, 0.18, 2.2) if kind == "gun" else Vector3(0.5, 0.4, 3.6)
+        mesh.mesh = bm
+        mesh.material_override = _glow_mat(col) if kind == "gun" else _mat(Color(0.2, 0.22, 0.26))
+        mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        node.add_child(mesh)
+    level_root.add_child(node)
+    node.position = from
+    shots.append({
+        "kind": kind, "from": from, "to": to, "t": 0.0, "dur": maxf(0.12, dur), "own": own, "tid": tid, "dmg": dmg,
+        "node": node, "h": h, "chk": false, "kill": -1.0, "wt": wt,
+    })
+
+
+func _fire_missile_at_ship(i: int, mt: int, tid: int) -> bool:
+    var e: Dictionary = emp[i]
+    var ammo: Array = e["ammo"]
+    if int(ammo[mt]) < 1:
+        return false
+    var tg := _ship_by_id(tid)
+    if not _ship_alive(tg):
+        return false
+    ammo[mt] = int(ammo[mt]) - 1
+    var from := _take_missile_pos(i, mt) + Vector3(0.0, 1.0, 0.0)
+    var tpos := _ship_world(tg) + Vector3(0.0, 2.0, 0.0)
+    var dist := from.distance_to(tpos)
+    var info: Dictionary = MISSILES[mt]
+    var dmg := float(info["dmg"]) * float(info["count"]) * 1.7
+    _fire_shot("msl", from, tpos, i, tid, dmg, maxf(0.8, dist / float(info["speed"])), mt, dist * float(info["arc"]))
+    if mt == 4:
+        _play3d("drone", from, 2.0, 1.0)
+    else:
+        _play3d("launch", from, 4.0, 1.0 + float(mt) * 0.1)
+    _sync_missiles(i)
+    return true
+
+
+func _shots_update(dt: float) -> void:
+    for k in range(shots.size() - 1, -1, -1):
+        var d: Dictionary = shots[k]
+        var kind: String = d["kind"]
+        var tg := _ship_by_id(int(d["tid"]))
+        var t: float = float(d["t"]) + dt / float(d["dur"])
+        d["t"] = t
+        var to: Vector3 = d["to"]
+        var up := 2.0 if kind != "tor" else -0.6
+        if _ship_alive(tg):
+            to = _ship_world(tg) + Vector3(0.0, up, 0.0)
+            d["to"] = to
+        var nd = d["node"]
+        var from: Vector3 = d["from"]
+        var tt := minf(t, 1.0)
+        var pos := from.lerp(to, tt)
+        if kind == "msl":
+            pos = _arc(from, to, tt, float(d["h"]))
+        elif kind == "tor":
+            pos.y = SEA_Y - 0.5
+        if nd != null and is_instance_valid(nd):
+            var n3: Node3D = nd
+            var prev := n3.position
+            n3.position = pos
+            if pos.distance_to(prev) > 0.01:
+                n3.look_at(pos + (pos - prev), Vector3.UP)
+        var kill: float = d["kill"]
+        if kill >= 0.0:
+            kill -= dt
+            d["kill"] = kill
+            if kill <= 0.0:
+                _explode(pos, Color(0.6, 0.9, 1.0), 3.0)
+                _play3d("pop", pos, 6.0)
+                if nd != null and is_instance_valid(nd):
+                    var nf: Node3D = nd
+                    nf.queue_free()
+                shots.remove_at(k)
+                if int(d["own"]) == 0:
+                    _say("Enemy ship defence shot down your missile.")
+                elif int(_ship_owner(tg)) == 0:
+                    _say("Your ship's air defence intercepted a missile!")
+            continue
+        if kind == "msl" and not bool(d["chk"]) and t > 0.4 and t < 0.85 and _ship_alive(tg):
+            d["chk"] = true
+            _shot_aa_check(d, tg, pos)
+        if t >= 1.0:
+            if nd != null and is_instance_valid(nd):
+                var nf2: Node3D = nd
+                nf2.queue_free()
+            shots.remove_at(k)
+            _shot_resolve(d, tg, to)
+
+
+func _ship_owner(tg: Dictionary) -> int:
+    if tg.is_empty():
+        return -1
+    return int(tg["own"])
+
+
+func _shot_aa_check(d: Dictionary, tg: Dictionary, pos: Vector3) -> void:
+    var wt: int = d["wt"]
+    var owner: int = tg["own"]
+    var tp: Vector2 = tg["pos"]
+    var miss := 1.0
+    var best := {}
+    var bestv := 0.0
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) != owner or not _ship_alive(s) or str(s["state"]) == "dock":
+            continue
+        var info: Dictionary = NAVY[int(s["t"])]
+        var aa: float = info["aa"]
+        if aa <= 0.0:
+            continue
+        var sp: Vector2 = s["pos"]
+        if sp.distance_to(tp) > minf(140.0, float(info["aa_range"])):
+            continue
+        var p := aa * float(SHIP_AA_VS[wt])
+        miss *= (1.0 - p)
+        if p > bestv:
+            bestv = p
+            best = s
+    if best.is_empty() or randf() > 1.0 - miss:
+        return
+    var rem := (1.0 - float(d["t"])) * float(d["dur"])
+    var tm := maxf(0.25, rem * 0.5)
+    d["kill"] = tm
+    var meet := _arc(d["from"], d["to"], minf(float(d["t"]) + (1.0 - float(d["t"])) * 0.5, 1.0), float(d["h"]))
+    var from := _ship_world(best) + Vector3(0.0, 8.0, 0.0)
+    var dtype: int = [0, 1, 3, 0, 2][int(best["t"])]
+    _spawn_interceptor(from, meet, tm, dtype, true)
+
+
+func _shot_resolve(d: Dictionary, tg: Dictionary, to: Vector3) -> void:
+    var kind: String = d["kind"]
+    var own: int = d["own"]
+    if not _ship_alive(tg):
+        _splash(to)
+        return
+    var hit := true
+    if kind == "gun":
+        hit = randf() < 0.82
+    elif kind == "tor":
+        hit = randf() < 0.8
+    if not hit:
+        _splash(to + Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0)))
+        return
+    if kind == "msl":
+        _explode(to, Color(1.0, 0.5, 0.1), 3.4)
+        _play3d("boom", to, 6.0)
+    elif kind == "tor":
+        _explode(to + Vector3(0.0, 1.0, 0.0), Color(0.8, 0.9, 1.0), 5.0)
+        _play3d("boom", to, 8.0)
+    elif kind == "gun":
+        _explode(to, Color(1.0, 0.7, 0.3), 1.0)
+    _ship_damage(tg, float(d["dmg"]), own)
+
+
+func _splash(pos: Vector3) -> void:
+    _explode(Vector3(pos.x, SEA_Y + 0.5, pos.z), Color(0.8, 0.95, 1.0), 1.6)
+
+
+func _ship_damage(tg: Dictionary, dmg: float, by: int) -> void:
+    if not _ship_alive(tg):
+        return
+    tg["hp"] = float(tg["hp"]) - dmg
+    var own: int = tg["own"]
+    if own == 0 and hit_say_t <= 0.0:
+        hit_say_t = 4.0
+        _say("Your %s is under attack!  HP %d%%" % [NAVY[int(tg["t"])]["short"], int(maxf(0.0, float(tg["hp"]) / float(tg["maxhp"]) * 100.0))])
+        _play_ui("alarm", -6.0)
+    if float(tg["hp"]) <= 0.0:
+        _ship_sink(tg, by)
+
+
+func _ship_sink(s: Dictionary, by: int) -> void:
+    if str(s["state"]) == "sinking":
+        return
+    s["state"] = "sinking"
+    var t: int = s["t"]
+    var own: int = s["own"]
+    var wp := _ship_world(s)
+    _explode(wp + Vector3(0.0, 4.0, 0.0), Color(1.0, 0.5, 0.1), 7.0 if t == 4 else 5.0)
+    _play3d("boom", wp, 14.0)
+    var nn = s["node"]
+    if nn != null and is_instance_valid(nn):
+        var n3: Node3D = nn
+        var tw := n3.create_tween()
+        tw.set_parallel(true)
+        tw.tween_property(n3, "position:y", SEA_Y - 16.0, 8.0)
+        tw.tween_property(n3, "rotation:z", 0.45 if randf() < 0.5 else -0.45, 8.0)
+        tw.chain().tween_callback(n3.queue_free)
+        for k in range(3):
+            get_tree().create_timer(0.7 + float(k) * 0.9).timeout.connect(_ship_boom.bind(wp, t))
+    if t == 4:
+        var jl: Array = s["jets"]
+        for jv in jl:
+            var jr: Dictionary = jv
+            var jn = jr["node"]
+            if jn != null and is_instance_valid(jn) and not bool(jr["out"]):
+                var jn3: Node3D = jn
+                jn3.queue_free()
+        jl.clear()
+    ships.erase(s)
+    if sel_ship == int(s["id"]):
+        sel_ship = -1
+    if sel_enemy == int(s["id"]):
+        sel_enemy = -1
+    if own == 0:
+        _say("Your %s was SUNK!" % NAVY[t]["name"])
+        _play_ui("alarm", 0.0)
+        _vibrate(250)
+    elif by == 0:
+        _say("You sank an enemy %s!" % NAVY[t]["name"])
+        _play_ui("build", -2.0)
+    else:
+        _say("Enemy %d's %s was sunk." % [own, NAVY[t]["name"]])
+
+
+func _ship_boom(wp: Vector3, t: int) -> void:
+    if level_root == null or not is_instance_valid(level_root):
+        return
+    _explode(wp + Vector3(randf_range(-5.0, 5.0), randf_range(1.0, 6.0), randf_range(-8.0, 8.0)), Color(1.0, 0.55, 0.15), 4.0)
+    _play3d("boom", wp, 8.0)
+
+
+func _clear_ships(i: int) -> void:
+    for sv in ships.duplicate():
+        var s: Dictionary = sv
+        if int(s["own"]) == i:
+            _ship_sink(s, -1)
+
+
+# ---------- coastal air defence shoots enemy ships ----------
+func _coastal_tick(dt: float) -> void:
+    for i in range(island_count):
+        var e: Dictionary = emp[i]
+        if bool(e["dead"]):
+            continue
+        var structs: Array = e["structs"]
+        for sv in structs:
+            var s: Dictionary = sv
+            if str(s["kind"]) != "defense" or str(s["state"]) != "ok":
+                continue
+            var ncd: float = float(s.get("ncd", 0.0))
+            if ncd > 0.0:
+                s["ncd"] = ncd - dt
+                continue
+            var sub: int = s["sub"]
+            var wp := _struct_world(i, s)
+            var rng: float = float(DEFENSES[sub]["range"]) * 2.4
+            var foe := _foe_of_empire(i, Vector2(wp.x, wp.z), rng)
+            if foe.is_empty():
+                continue
+            s["ncd"] = float(DEFENSES[sub]["cd"]) * 1.4 + 0.6
+            var tpos := _ship_world(foe) + Vector3(0.0, 3.0, 0.0)
+            var from := wp + Vector3(0.0, 3.0, 0.0)
+            var tm := maxf(0.4, from.distance_to(tpos) / float(DEF_SPEED[sub]))
+            _spawn_interceptor(from, tpos, tm, sub, true)
+            var dmg: float = [20.0, 38.0, 75.0, 115.0, 160.0][sub]
+            shots.append({"kind": "dly", "from": from, "to": tpos, "t": 0.0, "dur": tm, "own": i, "tid": int(foe["id"]), "dmg": dmg,
+                "node": null, "h": 0.0, "chk": true, "kill": -1.0, "wt": 0})
+
+
+# ---------- enemy ship alert (indicator) ----------
+func _navy_alerts(dt: float) -> void:
+    hit_say_t = maxf(0.0, hit_say_t - dt)
+    alert_t -= dt
+    if alert_t > 0.0:
+        return
+    alert_t = 0.5
+    var home: Vector3 = island_pos[0]
+    var hv := Vector2(home.x, home.z)
+    var best := {}
+    var bd := 1e9
+    var current := {}
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == 0 or not _ship_alive(s) or str(s["state"]) == "dock":
+            continue
+        if not _ship_visible_to(s, 0):
+            continue
+        var p: Vector2 = s["pos"]
+        var d := p.distance_to(hv)
+        if d < SHIP_ALERT_R:
+            var sid := int(s["id"])
+            current[sid] = true
+            if d < bd:
+                bd = d
+                best = s
+            if not alert_set.has(sid):
+                alert_set[sid] = true
+                _play_ui("alarm", -3.0)
+                _vibrate(200)
+                _say("WARNING! Enemy %s approaching your coast!" % NAVY[int(s["t"])]["name"])
+    for kk in alert_set.keys():
+        if not current.has(kk):
+            alert_set.erase(kk)
+    if best.is_empty():
+        alert_best = -1
+    else:
+        alert_best = int(best["id"])
+        alert_dist = bd
+    _alert_banner_update(best, bd, current.size())
+
+
+# ---------- buy / sell ----------
+func _do_buy_ship(i: int, t: int) -> int:
+    var e: Dictionary = emp[i]
+    if not _unlocked(i, "s", t):
+        return 4
+    var carrier := t == 4
+    if carrier and _count_ships(i, true) >= 2:
+        return 2
+    if not carrier and _count_ships(i, false) >= 10:
+        return 2
+    var price: int = NAVY[t]["price"]
+    if int(e["money"]) < price:
+        return 1
+    var slot := _free_dock(i, t)
+    if slot < 0:
+        return 3
+    e["money"] = int(e["money"]) - price
+    _make_ship(i, t, slot)
+    if i == 0:
+        _play_ui("hammer", -2.0)
+    return 0
+
+
+func _do_sell_ship(i: int, id: int) -> int:
+    var s := _ship_by_id(id)
+    if s.is_empty() or int(s["own"]) != i:
+        return 1
+    var t: int = s["t"]
+    var e: Dictionary = emp[i]
+    var refund := int(float(NAVY[t]["price"]) * 0.5 * clampf(float(s["hp"]) / float(s["maxhp"]), 0.2, 1.0))
+    e["money"] = int(e["money"]) + refund
+    var nn = s["node"]
+    if nn != null and is_instance_valid(nn):
+        var n3: Node3D = nn
+        n3.queue_free()
+    if t == 4:
+        var jl: Array = s["jets"]
+        for jv in jl:
+            var jr: Dictionary = jv
+            var jn = jr["node"]
+            if jn != null and is_instance_valid(jn) and not bool(jr["out"]):
+                var jn3: Node3D = jn
+                jn3.queue_free()
+    ships.erase(s)
+    if sel_ship == id:
+        sel_ship = -1
+    return 0
+
+
+func _ship_refund(s: Dictionary) -> int:
+    return int(float(NAVY[int(s["t"])]["price"]) * 0.5 * clampf(float(s["hp"]) / float(s["maxhp"]), 0.2, 1.0))
+
+
+func _ship_order(s: Dictionary, mode: String, dest: Vector2 = Vector2.ZERO, siege: int = -1, tgt: int = -1) -> void:
+    if str(s["state"]) == "dock":
+        s["state"] = "undock"
+    s["mode"] = mode
+    if mode == "move":
+        s["dest"] = dest
+    s["siege"] = siege
+    s["tgt"] = tgt
+    if mode == "guard":
+        s["wt"] = 0.0
+
+
+# ---------- per-frame ----------
+func _navy_tick(dt: float) -> void:
+    navy_clock += dt
+    for sv in ships.duplicate():
+        var s: Dictionary = sv
+        if str(s["state"]) == "sinking":
+            continue
+        _ship_update(s, dt)
+    _shots_update(dt)
+    _air_update(dt)
+    _coastal_tick(dt)
+    _navy_alerts(dt)
+    _navy_ai(dt)
+    _fleet_tick(dt)
+
+
+# ---------- AI navy ----------
+func _navy_ai(dt: float) -> void:
+    navy_ai_t -= dt
+    if navy_ai_t > 0.0:
+        return
+    navy_ai_t = 4.0
+    for i in range(1, island_count):
+        _ai_navy(i)
+
+
+func _ai_navy(i: int) -> void:
+    var e: Dictionary = emp[i]
+    if bool(e["dead"]):
+        return
+    var mine := _ships_of(i)
+    var war := 0
+    var carriers: Array = []
+    var warlist: Array = []
+    for sv in mine:
+        var s: Dictionary = sv
+        if int(s["t"]) == 4:
+            carriers.append(s)
+        else:
+            war += 1
+            warlist.append(s)
+    # ----- buy ships (the AI keeps growing its fleet and unlocks stronger ships) -----
+    var want := clampi(int((elapsed - 200.0) / 130.0), 0, 10)
+    if war < want:
+        var order: Array = [2, 1, 3, 0]
+        if randf() < 0.3:
+            order = [1, 3, 2, 0]
+        for t in order:
+            var price: int = NAVY[t]["price"]
+            if _unlocked(i, "s", t) and int(e["money"]) >= int(float(price) * 1.25):
+                _do_buy_ship(i, t)
+                break
+    if carriers.size() < (2 if elapsed > 2600.0 else 1) and elapsed > 800.0 and _unlocked(i, "s", 4) and int(e["money"]) >= int(float(NAVY[4]["price"]) * 1.2):
+        _do_buy_ship(i, 4)
+    # ----- air wing for carriers -----
+    for cv in carriers:
+        var c: Dictionary = cv
+        var cj: Array = c["jets"]
+        if cj.size() < CARRIER_CAP:
+            for jt in [5, 4, 3, 2, 1, 0]:
+                if _unlocked(i, "j", jt) and int(e["money"]) >= int(float(JETS[jt]["price"]) * 1.4):
+                    _do_buy_carrier_jet(i, c, jt)
+                    break
+    if elapsed < PEACE_TIME or bool(e["dead"]):
+        return
+    # ----- orders -----
+    var attackers := 0
+    for wv in warlist:
+        var w: Dictionary = wv
+        if str(w["mode"]) == "attack":
+            attackers += 1
+            if float(w["hp"]) < float(w["maxhp"]) * 0.3:
+                _ship_order(w, "guard")
+    e["navy_t"] = float(e.get("navy_t", 20.0)) - 4.0
+    var aggr: float = e["aggr"]
+    var need := 4 - int(aggr * 2.5)
+    if attackers == 0 and float(e["navy_t"]) <= 0.0 and war >= maxi(2, need):
+        e["navy_t"] = randf_range(45.0, 80.0)
+        var tgi := _ai_pick_target_island(i)
+        if tgi >= 0:
+            for wv2 in warlist:
+                var w2: Dictionary = wv2
+                if float(w2["hp"]) > float(w2["maxhp"]) * 0.55 and str(w2["state"]) != "sinking":
+                    _ship_order(w2, "attack", Vector2.ZERO, tgi)
+            _say_ai_fleet(i, tgi)
+    # carriers go forward and launch strikes
+    for cv2 in carriers:
+        var c2: Dictionary = cv2
+        _ai_carrier(i, c2)
+
+
+func _say_ai_fleet(i: int, tgi: int) -> void:
+    if tgi == 0:
+        _say("Enemy %d's fleet is sailing against you!" % i)
+
+
+func _ai_pick_target_island(i: int) -> int:
+    var e: Dictionary = emp[i]
+    var g: int = e["grudge"]
+    if g >= 0 and g != i and not bool(emp[g]["dead"]):
+        return g
+    var opts: Array = []
+    for k in range(island_count):
+        if k != i and not bool(emp[k]["dead"]):
+            opts.append(k)
+            if k == 0:
+                opts.append(0)
+    if opts.is_empty():
+        return -1
+    return opts[randi() % opts.size()]
+
+
+func _ai_carrier(i: int, c: Dictionary) -> void:
+    var e: Dictionary = emp[i]
+    if elapsed < PEACE_TIME + 60.0:
+        return
+    var cj: Array = c["jets"]
+    var ready := 0
+    for jv in cj:
+        var jr: Dictionary = jv
+        if not bool(jr["out"]):
+            ready += 1
+    var tgi := _ai_pick_target_island(i)
+    if tgi < 0:
+        return
+    var cp: Vector2 = c["pos"]
+    var ic: Vector3 = island_pos[tgi]
+    var ic2 := Vector2(ic.x, ic.z)
+    var stage := ic2 + (cp - ic2).normalized() * 700.0
+    if str(c["mode"]) == "guard" and ready >= 3:
+        _ship_order(c, "move", stage)
+    var ac: float = float(c.get("acd", 0.0)) - 4.0
+    c["acd"] = ac
+    if ac > 0.0 or ready < 3:
+        return
+    if cp.distance_to(ic2) > 1000.0:
+        return
+    c["acd"] = randf_range(40.0, 70.0)
+    var foe := _foe_of_empire(i, cp, 950.0)
+    var n := mini(ready, 4)
+    if not foe.is_empty():
+        _launch_carrier_jets(c, n, "ship", int(foe["id"]), -1, Vector2.ZERO)
+    else:
+        _launch_carrier_jets(c, n, "isl", -1, tgi, _pick_strike_aim(tgi))
+
+
+func _ships_save() -> Array:
+    var out: Array = []
+    for sv in ships:
+        var s: Dictionary = sv
+        if str(s["state"]) == "sinking":
+            continue
+        var jl: Array = []
+        var jets: Array = s["jets"]
+        for jv in jets:
+            var jr: Dictionary = jv
+            jl.append(int(jr["t"]))
+        var p: Vector2 = s["pos"]
+        var d: Vector2 = s["dest"]
+        out.append({"t": s["t"], "own": s["own"], "x": p.x, "z": p.y, "hdg": s["hdg"], "hp": s["hp"], "mode": s["mode"],
+            "dx": d.x, "dz": d.y, "siege": s["siege"], "jets": jl})
+    return out
+
+
+func _ships_load(raw) -> void:
+    ships = []
+    ship_uid = 0
+    if typeof(raw) != TYPE_ARRAY:
+        return
+    for rv in raw:
+        var r: Dictionary = rv
+        var t := clampi(int(r.get("t", 0)), 0, NAVY.size() - 1)
+        var own := clampi(int(r.get("own", 0)), 0, island_count - 1)
+        var info: Dictionary = NAVY[t]
+        ship_uid += 1
+        var mode := str(r.get("mode", "guard"))
+        if mode != "guard" and mode != "hold" and mode != "move" and mode != "attack":
+            mode = "guard"
+        var s := {
+            "id": ship_uid, "t": t, "own": own, "pos": Vector2(float(r.get("x", 0.0)), float(r.get("z", 0.0))), "hdg": float(r.get("hdg", 0.0)), "spd": 0.0,
+            "hp": minf(float(r.get("hp", info["hp"])), float(info["hp"])), "maxhp": float(info["hp"]), "mode": mode,
+            "dest": Vector2(float(r.get("dx", 0.0)), float(r.get("dz", 0.0))), "tgt": -1, "siege": int(r.get("siege", -1)),
+            "cd": 1.0, "slot": 0, "state": "sail", "node": null, "jets": [], "reveal": 0.0,
+            "wander": Vector2.ZERO, "wt": 0.0, "station": Vector2.ZERO, "dockexit": Vector2.ZERO,
+            "smoke": 0.0, "aacd": 0.0, "lean": 0.0, "vis": true, "aip": 0.0,
+        }
+        if t == 4:
+            var jl: Array = s["jets"]
+            var jraw = r.get("jets", [])
+            for jt in jraw:
+                if jl.size() < CARRIER_CAP:
+                    jl.append({"t": clampi(int(jt), 0, JETS.size() - 1), "out": false, "node": null, "slot": jl.size(), "rearm": 0.0})
+        ships.append(s)
+
+
+# ================= NAVY: carrier air wing + jets hunting ships =================
+const AIR_ALT := 40.0
+var air: Array = []
+var air_uid := 0
+
+
+func _carrier_sync_jets(c: Dictionary) -> void:
+    var nn = c["node"]
+    if nn == null or not is_instance_valid(nn):
+        return
+    var n: Node3D = nn
+    var slots: Array = n.get_meta("slots")
+    var inner: Node3D = n.get_meta("inner")
+    var jl: Array = c["jets"]
+    for jv in jl:
+        var jr: Dictionary = jv
+        if bool(jr["out"]):
+            continue
+        var jn = jr["node"]
+        if jn == null or not is_instance_valid(jn):
+            var jm := _jet_model(int(jr["t"]), _team(int(c["own"])))
+            jm.scale = Vector3.ONE * 2.0
+            inner.add_child(jm)
+            jr["node"] = jm
+            var sp: Vector3 = slots[int(jr["slot"])]
+            jm.position = sp + Vector3(0.0, 0.25, 0.0)
+            jm.rotation = Vector3.ZERO
+            var mdl: Node3D = jm.get_meta("mdl")
+            mdl.rotation = Vector3.ZERO
+
+
+func _carrier_jets_ready(c: Dictionary) -> int:
+    var n := 0
+    var jl: Array = c["jets"]
+    for jv in jl:
+        var jr: Dictionary = jv
+        if not bool(jr["out"]) and float(jr["rearm"]) <= 0.0:
+            n += 1
+    return n
+
+
+func _carrier_free_slot(c: Dictionary) -> int:
+    var used := {}
+    var jl: Array = c["jets"]
+    for jv in jl:
+        var jr: Dictionary = jv
+        used[int(jr["slot"])] = true
+    for k in range(CARRIER_CAP):
+        if not used.has(k):
+            return k
+    return -1
+
+
+func _do_buy_carrier_jet(i: int, c: Dictionary, jt: int) -> int:
+    var e: Dictionary = emp[i]
+    if not _unlocked(i, "j", jt):
+        return 4
+    var slot := _carrier_free_slot(c)
+    if slot < 0:
+        return 2
+    var price: int = JETS[jt]["price"]
+    if int(e["money"]) < price:
+        return 1
+    e["money"] = int(e["money"]) - price
+    var jl: Array = c["jets"]
+    jl.append({"t": jt, "out": false, "node": null, "slot": slot, "rearm": 0.0})
+    _carrier_sync_jets(c)
+    if i == 0:
+        _play_ui("hammer", -2.0)
+    return 0
+
+
+func _player_carrier_with_room() -> Dictionary:
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == 0 and int(s["t"]) == 4 and _carrier_free_slot(s) >= 0:
+            return s
+    return {}
+
+
+func _air_new(own: int, jt: int, node: Node3D, mission: Dictionary) -> Dictionary:
+    air_uid += 1
+    var a := {
+        "id": air_uid, "own": own, "t": jt, "node": node, "pos": node.global_position, "hdg": 0.0, "pitch": 0.0, "roll": 0.0, "spd": 0.0,
+        "state": "wait", "delay": float(mission.get("delay", 0.0)), "lpath": [], "lidx": 0, "lp": Vector3.ZERO, "lyaw": 0.0,
+        "frame": "isl", "fid": own, "land": false, "acc": 14.0, "vr": 66.0,
+        "tk": str(mission.get("kind", "ship")), "tid": int(mission.get("tid", -1)), "isl": int(mission.get("isl", -1)),
+        "aim": mission.get("aim", Vector2.ZERO), "shots": int(JETS[jt]["shots"]), "scd": 0.0, "wp": 0,
+        "rec": mission["rec"], "home": int(mission.get("home", -1)), "hi": own, "aat": 0.0,
+    }
+    air.append(a)
+    return a
+
+
+# carrier jets take off one after another and hit a ship or the enemy island
+func _launch_carrier_jets(c: Dictionary, n: int, kind: String, tid: int, isl: int, aim: Vector2, jtype: int = -1) -> int:
+    var own: int = c["own"]
+    var e: Dictionary = emp[own]
+    var sent := 0
+    var delay := 0.0
+    var jl: Array = c["jets"]
+    var cn: Node3D = c["node"]
+    var slots: Array = cn.get_meta("slots")
+    for jv in jl:
+        if sent >= n:
+            break
+        var jr: Dictionary = jv
+        if bool(jr["out"]) or float(jr["rearm"]) > 0.0:
+            continue
+        if jtype >= 0 and int(jr["t"]) != jtype:
+            continue
+        var jt: int = jr["t"]
+        var fee: int = JETS[jt]["fee"]
+        if int(e["money"]) < fee:
+            break
+        _carrier_sync_jets(c)
+        var jn = jr["node"]
+        if jn == null or not is_instance_valid(jn):
+            continue
+        e["money"] = int(e["money"]) - fee
+        var jn3: Node3D = jn
+        jr["out"] = true
+        jn3.reparent(level_root, true)
+        var a := _air_new(own, jt, jn3, {"kind": kind, "tid": tid, "isl": isl, "aim": aim, "rec": jr, "home": int(c["id"]), "delay": delay})
+        var sp: Vector3 = slots[int(jr["slot"])]
+        a["frame"] = "ship"
+        a["fid"] = int(c["id"])
+        a["lp"] = Vector3(sp.x, 6.3, sp.z)
+        a["lpath"] = [Vector3(-2.0, 6.3, sp.z), Vector3(-2.0, 6.3, -56.0)]
+        a["acc"] = 24.0
+        a["vr"] = 56.0
+        delay += 1.5
+        sent += 1
+    if sent > 0 and own == 0:
+        _say("%d jet(s) launching from the carrier!" % sent)
+    return sent
+
+
+# airport jets hunt a ship
+func _launch_airport_jets_at_ship(i: int, n: int, tid: int) -> int:
+    var e: Dictionary = emp[i]
+    var jets: Array = e["jets"]
+    var sent := 0
+    var delay := 0.0
+    for jv in jets:
+        if sent >= n:
+            break
+        var j: Dictionary = jv
+        if str(j["state"]) != "parked":
+            continue
+        var jt: int = j["t"]
+        var fee: int = JETS[jt]["fee"]
+        if int(e["money"]) < fee:
+            break
+        var jn = j["node"]
+        if jn == null or not is_instance_valid(jn):
+            _park_node(i, j)
+            jn = j["node"]
+        e["money"] = int(e["money"]) - fee
+        var jn3: Node3D = jn
+        j["state"] = "away"
+        var a := _air_new(i, jt, jn3, {"kind": "ship", "tid": tid, "isl": -1, "aim": Vector2.ZERO, "rec": j, "home": -1, "delay": delay})
+        var sp := _stand_pos(int(j["slot"]))
+        a["frame"] = "isl"
+        a["fid"] = i
+        a["lp"] = Vector3(sp.x, 1.0, sp.y)
+        a["lpath"] = [
+            Vector3(sp.x, 1.0, sp.y + 8.0), Vector3(TAXI_X, 1.0, sp.y + 12.0), Vector3(TAXI_X, 1.0, RW_Z0 - 14.0),
+            Vector3(TAXI_X + 8.0, 1.0, RW_Z0 - 3.0), Vector3(RW_X - 1.0, 1.0, RW_Z0 - 4.0), Vector3(RW_X, 1.0, RW_Z0 - 18.0),
+            Vector3(RW_X, 1.2, RW_Z1 + 6.0),
+        ]
+        delay += 1.6
+        sent += 1
+    if sent > 0 and i == 0:
+        _say("%d jet(s) scrambled against the enemy ship!" % sent)
+    return sent
+
+
+func _air_target_pos(a: Dictionary) -> Vector3:
+    if str(a["tk"]) == "ship":
+        var tg := _ship_by_id(int(a["tid"]))
+        if _ship_alive(tg):
+            return _ship_world(tg) + Vector3(0.0, 3.0, 0.0)
+        return Vector3.INF
+    var isl: int = a["isl"]
+    if isl < 0 or bool(emp[isl]["dead"]):
+        return Vector3.INF
+    var aim: Vector2 = a["aim"]
+    return _isl(isl).to_global(Vector3(aim.x, 1.4, aim.y))
+
+
+func _air_wps(a: Dictionary) -> Array:
+    var out: Array = []
+    var hs: int = a["home"]
+    if hs >= 0:
+        var sh := _ship_by_id(hs)
+        if sh.is_empty() or sh["node"] == null or not is_instance_valid(sh["node"]):
+            return out
+        var n: Node3D = sh["node"]
+        out.append(n.to_global(Vector3(-2.0, 44.0, 430.0)))
+        out.append(n.to_global(Vector3(-2.0, 18.0, 170.0)))
+        out.append(n.to_global(Vector3(-2.0, 7.0, 44.0)))
+    else:
+        var isl := _isl(int(a["hi"]))
+        out.append(isl.to_global(Vector3(RW_X, 40.0, RW_Z1 - 340.0)))
+        out.append(isl.to_global(Vector3(RW_X, 20.0, RW_Z1 - 215.0)))
+        out.append(isl.to_global(Vector3(RW_X, 2.0, RW_Z1 + 12.0)))
+    return out
+
+
+func _air_world_of_frame(a: Dictionary, lp: Vector3, lyaw: float) -> Dictionary:
+    if str(a["frame"]) == "ship":
+        var sh := _ship_by_id(int(a["fid"]))
+        if sh.is_empty() or sh["node"] == null or not is_instance_valid(sh["node"]):
+            return {}
+        var sn: Node3D = sh["node"]
+        return {"pos": sn.to_global(lp), "hdg": float(sh["hdg"]) + lyaw, "sspd": float(sh["spd"])}
+    var isl := _isl(int(a["fid"]))
+    return {"pos": isl.to_global(lp), "hdg": isl.rotation.y + lyaw, "sspd": 0.0}
+
+
+func _air_ground(a: Dictionary, dt: float) -> void:
+    var path: Array = a["lpath"]
+    var idx: int = a["lidx"]
+    var cur: Vector3 = a["lp"]
+    var tgt: Vector3 = path[idx]
+    var flat := Vector3(tgt.x - cur.x, 0.0, tgt.z - cur.z)
+    var dist := flat.length()
+    var last := idx >= path.size() - 1
+    var landing: bool = a["land"]
+    var spd: float = a["spd"]
+    if landing:
+        spd = move_toward(spd, 6.0 if last else 14.0, 26.0 * dt)
+    elif last:
+        spd += float(a["acc"]) * dt
+    else:
+        spd = move_toward(spd, minf(16.0, 5.0 + dist * 0.8), 20.0 * dt)
+    a["spd"] = spd
+    var step := spd * dt
+    if dist > 0.01:
+        var dirv := flat / dist
+        cur += dirv * minf(step, dist)
+        a["lyaw"] = lerp_angle(float(a["lyaw"]), atan2(-dirv.x, -dirv.z), clampf(dt * 9.0, 0.0, 1.0))
+    cur.y = tgt.y
+    a["lp"] = cur
+    var w := _air_world_of_frame(a, cur, float(a["lyaw"]))
+    if w.is_empty():
+        _air_kill(a)
+        return
+    var nd: Node3D = a["node"]
+    var wp: Vector3 = w["pos"]
+    nd.position = wp
+    nd.rotation = Vector3(0.0, float(w["hdg"]), 0.0)
+    a["pos"] = wp
+    a["hdg"] = float(w["hdg"])
+    var lift := false
+    if step >= dist - 0.01:
+        if last:
+            if landing:
+                _air_park(a)
+                return
+            lift = true
+        else:
+            a["lidx"] = idx + 1
+    if not landing and last and spd >= float(a["vr"]):
+        lift = true
+    if lift:
+        a["state"] = "climb"
+        a["spd"] = spd + float(w["sspd"])
+        a["pitch"] = 0.0
+        _play3d("launch", wp, 2.0, 0.8)
+
+
+func _air_park(a: Dictionary) -> void:
+    var nd: Node3D = a["node"]
+    var rec: Dictionary = a["rec"]
+    var hs: int = a["home"]
+    var jt: int = a["t"]
+    air.erase(a)
+    if hs >= 0:
+        var sh := _ship_by_id(hs)
+        if sh.is_empty() or sh["node"] == null or not is_instance_valid(sh["node"]):
+            nd.queue_free()
+            return
+        var sn: Node3D = sh["node"]
+        var inner: Node3D = sn.get_meta("inner")
+        var slots: Array = sn.get_meta("slots")
+        nd.reparent(inner, false)
+        var sp: Vector3 = slots[int(rec["slot"])]
+        nd.position = sp + Vector3(0.0, 0.25, 0.0)
+        nd.rotation = Vector3.ZERO
+        var mdl: Node3D = nd.get_meta("mdl")
+        mdl.rotation = Vector3.ZERO
+        rec["out"] = false
+        rec["node"] = nd
+        rec["rearm"] = 14.0
+    else:
+        var i: int = a["hi"]
+        rec["state"] = "rearm"
+        rec["timer"] = 14.0
+        rec["node"] = nd
+        _park_node(i, rec)
+    if int(a["own"]) == 0:
+        _say("%s landed safely." % JETS[jt]["short"])
+
+
+func _air_remove_rec(a: Dictionary) -> void:
+    var rec: Dictionary = a["rec"]
+    var hs: int = a["home"]
+    if hs >= 0:
+        var sh := _ship_by_id(hs)
+        if not sh.is_empty():
+            var jl: Array = sh["jets"]
+            jl.erase(rec)
+    else:
+        var e: Dictionary = emp[int(a["hi"])]
+        var jets: Array = e["jets"]
+        jets.erase(rec)
+
+
+func _air_kill(a: Dictionary) -> void:
+    if str(a["state"]) == "dying":
+        return
+    var nd: Node3D = a["node"]
+    var pos: Vector3 = a["pos"]
+    var jt: int = a["t"]
+    a["state"] = "dying"
+    _air_remove_rec(a)
+    air.erase(a)
+    _explode(pos, Color(1.0, 0.5, 0.1), 5.0)
+    _play3d("boom", pos, 8.0)
+    if is_instance_valid(nd):
+        var fwd := Vector3(-sin(float(a["hdg"])), 0.0, -cos(float(a["hdg"])))
+        var tw := nd.create_tween()
+        tw.set_parallel(true)
+        tw.tween_property(nd, "position", Vector3(pos.x, SEA_Y, pos.z) + fwd * 25.0, 1.3)
+        tw.tween_property(nd, "rotation:z", 3.0, 1.3)
+        tw.chain().tween_callback(_air_splash_end.bind(nd))
+    if int(a["own"]) == 0:
+        _say("Your %s was shot down!" % JETS[jt]["short"])
+        _play_ui("alarm", -2.0)
+
+
+func _air_splash_end(nd) -> void:
+    if nd == null or not is_instance_valid(nd):
+        return
+    var n3: Node3D = nd
+    _explode(n3.position, Color(0.85, 0.95, 1.0), 3.0)
+    n3.queue_free()
+
+
+func _air_aa(a: Dictionary, dt: float) -> void:
+    var jt: int = a["t"]
+    var ev: float = JETS[jt]["evade"]
+    var pos: Vector3 = a["pos"]
+    var own: int = a["own"]
+    var tk: String = a["tk"]
+    var risk := 0.0
+    # ships of other empires
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == own or not _ship_alive(s) or str(s["state"]) == "dock":
+            continue
+        var info: Dictionary = NAVY[int(s["t"])]
+        var aa: float = info["aa"]
+        if aa <= 0.0:
+            continue
+        var sp: Vector2 = s["pos"]
+        if Vector2(pos.x - sp.x, pos.z - sp.y).length() < float(info["aa_range"]) * 0.7:
+            risk += aa * 0.13
+            if float(s["aacd"]) <= 0.0 and randf() < 0.5:
+                s["aacd"] = randf_range(0.7, 1.4)
+                var dtype: int = [0, 1, 3, 0, 2][int(s["t"])]
+                var from := _ship_world(s) + Vector3(0.0, 8.0, 0.0)
+                _spawn_interceptor(from, pos, maxf(0.3, from.distance_to(pos) / 160.0), dtype, false)
+    # island air defence near the target island
+    var isl := int(a["isl"]) if tk == "isl" else -1
+    if isl >= 0:
+        var te: Dictionary = emp[isl]
+        var structs: Array = te["structs"]
+        for stv in structs:
+            var st: Dictionary = stv
+            if str(st["kind"]) != "defense" or str(st["state"]) != "ok":
+                continue
+            var sub: int = st["sub"]
+            var wp := _struct_world(isl, st)
+            if wp.distance_to(pos) < float(DEFENSES[sub]["range"]) * 1.2:
+                risk += float(JET_DEF[sub]) * 0.2
+    if risk > 0.0 and randf() < risk * (1.0 - ev) * dt:
+        _air_kill(a)
+
+
+func _air_fire(a: Dictionary, tpos: Vector3) -> void:
+    var jt: int = a["t"]
+    var own: int = a["own"]
+    var pos: Vector3 = a["pos"]
+    var jinfo: Dictionary = JETS[jt]
+    a["shots"] = int(a["shots"]) - 1
+    a["scd"] = 0.5
+    var from := pos + Vector3(0.0, -1.0, 0.0)
+    var dist := from.distance_to(tpos)
+    if str(a["tk"]) == "ship":
+        _fire_shot("msl", from, tpos, own, int(a["tid"]), float(jinfo["dmg"]) * 4.0, maxf(0.7, dist / 150.0), 0, dist * 0.04)
+    else:
+        var isl: int = a["isl"]
+        var aim: Vector2 = a["aim"]
+        var lp := aim + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 5.0
+        lp.x = clampf(lp.x, -118.0, 118.0)
+        lp.y = clampf(lp.y, -118.0, 118.0)
+        var to := _isl(isl).to_global(Vector3(lp.x, 1.4, lp.y))
+        var m := _make_missile_model(own == 0, 0)
+        level_root.add_child(m)
+        m.position = from
+        var d2 := from.distance_to(to)
+        projectiles.append({
+            "node": m, "start": from, "end": to, "t": 0.0, "dur": maxf(0.7, d2 / 140.0), "h": d2 * 0.04,
+            "attacker": own, "target": isl, "wt": 0, "lp": lp, "tried": [], "kill": -1.0,
+            "jdmg": float(jinfo["dmg"]), "jrad": float(jinfo["radius"]),
+        })
+    _play3d("launch", from, 2.0, 1.3)
+
+
+func _air_flight(a: Dictionary, dt: float) -> void:
+    var jt: int = a["t"]
+    var cruise: float = JETS[jt]["speed"]
+    var pos: Vector3 = a["pos"]
+    var hdg: float = a["hdg"]
+    var spd: float = a["spd"]
+    var st: String = a["state"]
+    var goal := pos
+    var galt := AIR_ALT
+    var want_spd := cruise
+    var turn := 1.3
+    var fwd := Vector3(-sin(hdg), 0.0, -cos(hdg))
+    a["aat"] = float(a["aat"]) + dt
+    if st == "climb":
+        goal = pos + fwd * 200.0
+        galt = AIR_ALT
+        want_spd = maxf(spd, 70.0)
+        turn = 0.3
+        if pos.y > AIR_ALT * 0.75:
+            a["state"] = "ingress"
+            st = "ingress"
+    if st == "ingress" or st == "attack":
+        var tp := _air_target_pos(a)
+        if tp == Vector3.INF:
+            if str(a["tk"]) == "ship":
+                var foe := _foe_of_empire(int(a["own"]), Vector2(pos.x, pos.z), 700.0)
+                if not foe.is_empty():
+                    a["tid"] = int(foe["id"])
+                    tp = _air_target_pos(a)
+            if tp == Vector3.INF:
+                a["state"] = "return"
+                a["wp"] = 0
+                st = "return"
+        if tp != Vector3.INF:
+            goal = tp
+            var hd := Vector2(tp.x - pos.x, tp.z - pos.z).length()
+            if st == "ingress" and hd < (170.0 if str(a["tk"]) == "ship" else 190.0):
+                a["state"] = "attack"
+                st = "attack"
+            if st == "attack":
+                a["scd"] = float(a["scd"]) - dt
+                if float(a["scd"]) <= 0.0 and int(a["shots"]) > 0:
+                    _air_fire(a, tp)
+                if int(a["shots"]) <= 0:
+                    a["state"] = "return"
+                    a["wp"] = 0
+                    st = "return"
+    if st == "return" or st == "appr":
+        var wps := _air_wps(a)
+        if wps.is_empty():
+            if float(a["aat"]) > 1.0:
+                a["lost"] = float(a.get("lost", 0.0)) + dt
+                if float(a["lost"]) > 12.0:
+                    _air_kill(a)
+                    return
+            goal = pos + fwd * 100.0
+        else:
+            var wi: int = a["wp"]
+            var wpt: Vector3 = wps[wi]
+            goal = wpt
+            galt = wpt.y
+            var hd2 := Vector2(wpt.x - pos.x, wpt.z - pos.z).length()
+            if st == "return":
+                if hd2 < 90.0:
+                    a["state"] = "appr"
+                    a["wp"] = 1
+            else:
+                want_spd = 85.0 if wi < 2 else 56.0
+                turn = 1.5
+                if wi == 1 and hd2 < 40.0:
+                    a["wp"] = 2
+                elif wi == 2 and hd2 < 18.0:
+                    # touchdown
+                    var rec: Dictionary = a["rec"]
+                    a["state"] = "ground"
+                    a["land"] = true
+                    a["lidx"] = 0
+                    if int(a["home"]) >= 0:
+                        a["frame"] = "ship"
+                        a["fid"] = int(a["home"])
+                        var sh := _ship_by_id(int(a["home"]))
+                        var sn: Node3D = sh["node"]
+                        var slots: Array = sn.get_meta("slots")
+                        var sp: Vector3 = slots[int(rec["slot"])]
+                        a["lp"] = sn.to_local(pos)
+                        var lp0: Vector3 = a["lp"]
+                        a["lp"] = Vector3(lp0.x, 6.3, lp0.z)
+                        a["lpath"] = [Vector3(-2.0, 6.3, 20.0), Vector3(sp.x, 6.3, sp.z + 1.0), Vector3(sp.x, 6.3, sp.z)]
+                        a["lyaw"] = wrapf(hdg - float(sh["hdg"]), -PI, PI)
+                    else:
+                        var ii: int = a["hi"]
+                        var sp2 := _stand_pos(int(rec["slot"]))
+                        a["frame"] = "isl"
+                        a["fid"] = ii
+                        var isln := _isl(ii)
+                        var lp1 := isln.to_local(pos)
+                        a["lp"] = Vector3(lp1.x, 1.3, lp1.z)
+                        a["lpath"] = [
+                            Vector3(RW_X, 1.2, 26.0), Vector3(RW_X - 6.0, 1.0, 36.0), Vector3(TAXI_X + 1.0, 1.0, 30.0),
+                            Vector3(TAXI_X, 1.0, 10.0), Vector3(TAXI_X, 1.0, sp2.y + 12.0), Vector3(sp2.x, 1.0, sp2.y + 8.0),
+                            Vector3(sp2.x, 1.0, sp2.y),
+                        ]
+                        a["lyaw"] = wrapf(hdg - isln.rotation.y, -PI, PI)
+                    return
+    # flight dynamics
+    var dv := Vector2(goal.x - pos.x, goal.z - pos.z)
+    var step := 0.0
+    if dv.length() > 1.0:
+        var wy := atan2(-dv.x, -dv.y)
+        var diff := wrapf(wy - hdg, -PI, PI)
+        step = clampf(diff, -turn * dt, turn * dt)
+        hdg += step
+    spd = move_toward(spd, want_spd, 32.0 * dt)
+    var vy := clampf((galt - pos.y) * 1.4, -14.0, 16.0)
+    fwd = Vector3(-sin(hdg), 0.0, -cos(hdg))
+    pos += fwd * spd * dt
+    pos.y += vy * dt
+    a["pos"] = pos
+    a["hdg"] = hdg
+    a["spd"] = spd
+    a["pitch"] = lerpf(float(a["pitch"]), atan2(vy, maxf(spd, 10.0)), clampf(dt * 4.0, 0.0, 1.0))
+    a["roll"] = lerpf(float(a["roll"]), clampf(step / maxf(dt, 0.001) * 0.7, -0.9, 0.9), clampf(dt * 4.0, 0.0, 1.0))
+    var nd: Node3D = a["node"]
+    nd.position = pos
+    nd.rotation = Vector3(float(a["pitch"]), hdg, 0.0)
+    var mdl: Node3D = nd.get_meta("mdl")
+    mdl.rotation.z = float(a["roll"])
+    if str(a["state"]) == "ingress" or str(a["state"]) == "attack" or str(a["state"]) == "return":
+        _air_aa(a, dt)
+
+
+func _air_update(dt: float) -> void:
+    for av in air.duplicate():
+        var a: Dictionary = av
+        var nd = a["node"]
+        if nd == null or not is_instance_valid(nd):
+            air.erase(a)
+            continue
+        var st: String = a["state"]
+        if st == "wait":
+            if str(a["frame"]) == "ship" and _ship_by_id(int(a["fid"])).is_empty():
+                _air_kill(a)
+                continue
+            a["delay"] = float(a["delay"]) - dt
+            if float(a["delay"]) <= 0.0:
+                a["state"] = "ground"
+            continue
+        if st == "ground":
+            _air_ground(a, dt)
+            continue
+        if st == "dying":
+            continue
+        _air_flight(a, dt)
+    # carrier jets rearm
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["t"]) == 4:
+            var jl: Array = s["jets"]
+            for jv in jl:
+                var jr: Dictionary = jv
+                if float(jr["rearm"]) > 0.0:
+                    jr["rearm"] = maxf(0.0, float(jr["rearm"]) - dt)
+
+
+# ================= NAVY: minimap, alert banner, fleet map, military tab =================
+var fleet_open := false
+var fleet_c := Vector2.ZERO
+var fleet_size := 2400.0
+var fleet_layer: Control
+var fleet_canvas: Control
+var fleet_info: Label
+var fleet_btns := {}
+var fleet_touch := {}
+var fleet_moved := 0.0
+var fleet_pinch := 0.0
+var fleet_panels: Array = []
+var fleet_btn: Button
+var mini_ctl: Control
+var alert_panel: PanelContainer
+var alert_label: Label
+var cards_ship: Array = []
+var cards_cjet: Array = []
+var mil_body_navy: Control
+var fleet_all := false
+var fleet_isl := 1
+var world_env: Environment
+var sat_base := 0
+var sat_base_btn: Button
+var mini_t := 0.0
+var fleet_ref_t := 0.0
+var fleet_flash := 0.0
+var water_node: MeshInstance3D
+var water_mat0: Material
+
+
+func _build_navy_ui() -> void:
+    # radar minimap (top right)
+    mini_ctl = Control.new()
+    mini_ctl.anchor_left = 1.0
+    mini_ctl.anchor_right = 1.0
+    mini_ctl.offset_left = -204.0
+    mini_ctl.offset_right = -14.0
+    mini_ctl.offset_top = 66.0
+    mini_ctl.offset_bottom = 256.0
+    mini_ctl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    mini_ctl.draw.connect(_mini_draw)
+    ui_root.add_child(mini_ctl)
+    # enemy ship alert banner under the minimap
+    alert_panel = PanelContainer.new()
+    _style_panel(alert_panel, Color(0.5, 0.04, 0.04, 0.93))
+    alert_panel.anchor_left = 1.0
+    alert_panel.anchor_right = 1.0
+    alert_panel.offset_left = -240.0
+    alert_panel.offset_right = -10.0
+    alert_panel.offset_top = 262.0
+    alert_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(alert_panel)
+    alert_label = Label.new()
+    alert_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _style_text(alert_label, 17, Color(1.0, 0.9, 0.8))
+    alert_panel.add_child(alert_label)
+    alert_panel.hide()
+    # FLEET button
+    fleet_btn = _round_btn(104.0, Color(0.04, 0.2, 0.3), Color(0.3, 0.85, 0.9), 4, _fleet_open)
+    ui_root.add_child(fleet_btn)
+    fleet_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
+    fleet_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    fleet_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    fleet_btn.offset_top -= 282.0
+    fleet_btn.offset_bottom -= 282.0
+    var fic := MiniIcon.new()
+    fic.kind = 8
+    fic.sub = 2
+    fic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    fleet_btn.add_child(fic)
+    fic.position = Vector2(12.0, 8.0)
+    fic.size = Vector2(80.0, 50.0)
+    var fl := Label.new()
+    fl.text = "FLEET"
+    fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    fl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _style_text(fl, 20, Color(1.0, 1.0, 1.0))
+    fleet_btn.add_child(fl)
+    fl.position = Vector2(4.0, 62.0)
+    fl.size = Vector2(96.0, 30.0)
+    _build_fleet_ui()
+
+
+func _fb(text: String, col: Color, cb: Callable, w: float) -> Button:
+    var b := _make_button(text, col, cb)
+    b.custom_minimum_size = Vector2(w, 54.0)
+    b.add_theme_font_size_override("font_size", 21)
+    return b
+
+
+func _build_fleet_ui() -> void:
+    fleet_layer = Control.new()
+    fleet_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    fleet_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ui_root.add_child(fleet_layer)
+    fleet_canvas = Control.new()
+    fleet_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    fleet_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    fleet_canvas.draw.connect(_fleet_canvas_draw)
+    fleet_layer.add_child(fleet_canvas)
+    # top-left: back + title
+    var top := PanelContainer.new()
+    _style_panel(top)
+    top.position = Vector2(12.0, 10.0)
+    fleet_layer.add_child(top)
+    var th := HBoxContainer.new()
+    th.add_theme_constant_override("separation", 14)
+    top.add_child(th)
+    th.add_child(_fb("BACK", Color(0.7, 0.15, 0.15), _fleet_close, 130.0))
+    var tl := Label.new()
+    tl.text = "FLEET COMMAND"
+    _style_text(tl, 30, Color(0.5, 0.9, 1.0))
+    th.add_child(tl)
+    # zoom (right)
+    var zoom := VBoxContainer.new()
+    zoom.add_theme_constant_override("separation", 10)
+    zoom.anchor_left = 1.0
+    zoom.anchor_right = 1.0
+    zoom.offset_left = -90.0
+    zoom.offset_right = -14.0
+    zoom.offset_top = 90.0
+    fleet_layer.add_child(zoom)
+    var zin := _fb("+", Color(0.1, 0.32, 0.95), _fleet_zoom.bind(0.7), 76.0)
+    zin.custom_minimum_size = Vector2(76.0, 76.0)
+    zin.add_theme_font_size_override("font_size", 40)
+    zoom.add_child(zin)
+    var zout := _fb("-", Color(0.1, 0.32, 0.95), _fleet_zoom.bind(1.4), 76.0)
+    zout.custom_minimum_size = Vector2(76.0, 76.0)
+    zout.add_theme_font_size_override("font_size", 40)
+    zoom.add_child(zout)
+    # bottom command bar
+    var bar := PanelContainer.new()
+    _style_panel(bar)
+    bar.anchor_left = 0.5
+    bar.anchor_right = 0.5
+    bar.anchor_top = 1.0
+    bar.anchor_bottom = 1.0
+    bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+    bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+    bar.offset_bottom = -10.0
+    fleet_layer.add_child(bar)
+    var bv := VBoxContainer.new()
+    bv.add_theme_constant_override("separation", 6)
+    bar.add_child(bv)
+    fleet_info = Label.new()
+    fleet_info.custom_minimum_size = Vector2(900.0, 0.0)
+    fleet_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    fleet_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _style_text(fleet_info, 22, Color(1.0, 1.0, 1.0))
+    bv.add_child(fleet_info)
+    var r1 := HBoxContainer.new()
+    r1.alignment = BoxContainer.ALIGNMENT_CENTER
+    r1.add_theme_constant_override("separation", 8)
+    bv.add_child(r1)
+    fleet_btns["all"] = _fb("ALL WARSHIPS", Color(0.1, 0.32, 0.95), _fleet_toggle_all, 210.0)
+    fleet_btns["guard"] = _fb("GUARD", Color(0.1, 0.45, 0.3), _fleet_order.bind("guard"), 130.0)
+    fleet_btns["hold"] = _fb("HOLD", Color(0.35, 0.3, 0.1), _fleet_order.bind("hold"), 110.0)
+    fleet_btns["attack"] = _fb("HUNT", Color(0.7, 0.2, 0.15), _fleet_order.bind("attack"), 120.0)
+    fleet_btns["siege"] = _fb("SHELL ISLAND", Color(0.6, 0.15, 0.35), _fleet_siege, 210.0)
+    for k in ["all", "guard", "hold", "attack", "siege"]:
+        r1.add_child(fleet_btns[k])
+    var r2 := HBoxContainer.new()
+    r2.alignment = BoxContainer.ALIGNMENT_CENTER
+    r2.add_theme_constant_override("separation", 8)
+    bv.add_child(r2)
+    fleet_btns["ships"] = _fb("SHIPS ATTACK", Color(0.7, 0.2, 0.15), _fleet_ships_attack, 220.0)
+    fleet_btns["jets"] = _fb("JETS ATTACK", Color(0.1, 0.5, 0.75), _fleet_jets, 220.0)
+    fleet_btns["missile"] = _fb("FIRE MISSILE", Color(0.75, 0.3, 0.05), _fleet_missile, 220.0)
+    fleet_btns["cstrike"] = _fb("CARRIER > ISLAND", Color(0.35, 0.2, 0.6), _fleet_carrier_island, 240.0)
+    for k2 in ["ships", "jets", "missile", "cstrike"]:
+        r2.add_child(fleet_btns[k2])
+    fleet_panels = [top, zoom, bar]
+    fleet_layer.hide()
+
+
+# ---------- minimap ----------
+func _mini_draw() -> void:
+    var c := mini_ctl
+    if c == null or emp.is_empty() or island_pos.is_empty():
+        return
+    var sz := c.size
+    var ctr := sz * 0.5
+    var rad := minf(sz.x, sz.y) * 0.5 - 3.0
+    var alert := alert_best >= 0
+    var flash := alert and fmod(navy_clock, 0.8) < 0.4
+    c.draw_circle(ctr, rad, Color(0.02, 0.09, 0.13, 0.84))
+    for k in range(1, 4):
+        c.draw_arc(ctr, rad * float(k) / 3.0, 0.0, TAU, 48, Color(0.25, 0.75, 0.85, 0.22), 1.0)
+    c.draw_line(ctr - Vector2(rad, 0.0), ctr + Vector2(rad, 0.0), Color(0.25, 0.75, 0.85, 0.2), 1.0)
+    c.draw_line(ctr - Vector2(0.0, rad), ctr + Vector2(0.0, rad), Color(0.25, 0.75, 0.85, 0.2), 1.0)
+    var sw := fmod(navy_clock * 1.4, TAU)
+    c.draw_line(ctr, ctr + Vector2(cos(sw), sin(sw)) * rad, Color(0.4, 1.0, 0.8, 0.5), 2.0)
+    var span := float(RING[island_count]) + 480.0
+    var sc := rad / span
+    var font := ThemeDB.fallback_font
+    for k2 in range(island_count):
+        var e: Dictionary = emp[k2]
+        var ip: Vector3 = island_pos[k2]
+        var p := ctr + Vector2(ip.x, ip.z) * sc
+        var col := _team(k2)
+        if bool(e["dead"]):
+            col = Color(0.4, 0.4, 0.4)
+        c.draw_rect(Rect2(p - Vector2(7.0, 7.0), Vector2(14.0, 14.0)), col)
+        c.draw_rect(Rect2(p - Vector2(7.0, 7.0), Vector2(14.0, 14.0)), Color(1.0, 1.0, 1.0, 0.8), false, 1.5)
+        c.draw_string(font, p + Vector2(-8.0, -11.0), "YOU" if k2 == 0 else "E%d" % k2, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(1.0, 1.0, 1.0))
+    for sv in ships:
+        var s: Dictionary = sv
+        if not _ship_alive(s) or not _ship_visible_to(s, 0):
+            continue
+        var sp: Vector2 = s["pos"]
+        var p2 := ctr + sp * sc
+        if (p2 - ctr).length() > rad:
+            p2 = ctr + (p2 - ctr).normalized() * rad
+        var own: int = s["own"]
+        var r := 4.0 if int(s["t"]) == 4 else 3.0
+        if own != 0 and alert_set.has(int(s["id"])):
+            c.draw_circle(p2, r + 3.0, Color(1.0, 0.2, 0.15, 0.9 if flash else 0.4))
+        c.draw_circle(p2, r, _team(own))
+    c.draw_arc(ctr, rad, 0.0, TAU, 64, Color(1.0, 0.2, 0.15) if flash else Color(0.35, 0.85, 0.95), 3.0)
+
+
+func _alert_banner_update(best: Dictionary, bd: float, n: int) -> void:
+    if alert_panel == null:
+        return
+    if best.is_empty() or sat_open or fleet_open or jetcam_on:
+        alert_panel.visible = false
+        return
+    alert_panel.visible = true
+    var bp: Vector2 = best["pos"]
+    var home: Vector3 = island_pos[0]
+    var ang := rad_to_deg(atan2(bp.x - home.x, -(bp.y - home.z)))
+    var dirs := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    var di := int(round(ang / 45.0))
+    di = ((di % 8) + 8) % 8
+    var more := "" if n <= 1 else "  (+%d more)" % (n - 1)
+    alert_label.text = "!! ENEMY %s !!\n%d m %s%s - TAP" % [str(NAVY[int(best["t"])]["name"]).to_upper(), int(bd), dirs[di], more]
+
+
+func _fleet_ui_press(pos: Vector2) -> bool:
+    if mini_ctl != null and mini_ctl.is_visible_in_tree() and mini_ctl.get_global_rect().has_point(pos):
+        _fleet_open()
+        return true
+    if alert_panel != null and alert_panel.visible and alert_panel.get_global_rect().has_point(pos):
+        _fleet_open()
+        var tg := _ship_by_id(alert_best)
+        if not tg.is_empty():
+            fleet_c = tg["pos"]
+            fleet_size = 900.0
+            sel_enemy = alert_best
+            _fleet_refresh()
+        return true
+    return false
+
+
+# ---------- fleet map ----------
+func _fleet_open() -> void:
+    if game_state != "playing" or fleet_open or sat_open:
+        return
+    if jetcam_on:
+        _jetcam_exit()
+    _close_windows()
+    fleet_open = true
+    fleet_all = false
+    fleet_touch = {}
+    var ip0: Vector3 = island_pos[0]
+    fleet_c = Vector2(ip0.x - 150.0, ip0.z - 380.0)
+    fleet_size = 1700.0
+    if water_node != null:
+        if water_mat0 == null:
+            water_mat0 = water_node.material_override
+        var fm := StandardMaterial3D.new()
+        fm.albedo_color = Color(0.05, 0.27, 0.5)
+        fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        water_node.material_override = fm
+    var s := _ship_by_id(sel_ship)
+    if s.is_empty() or int(s["own"]) != 0:
+        sel_ship = -1
+    for cl in clouds:
+        var cn: Node3D = cl
+        cn.visible = false
+    if world_env != null:
+        world_env.fog_enabled = false
+    camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+    camera.size = fleet_size
+    camera.far = 6000.0
+    joy_id = -1
+    look_id = -1
+    joy_vec = Vector2.ZERO
+    _reset_joystick()
+    tabs_box.visible = false
+    hot_box.visible = false
+    stats_panel.visible = false
+    status_box.visible = false
+    joy_base.visible = false
+    joy_knob.visible = false
+    _hud_show(false)
+    mini_ctl.visible = false
+    alert_panel.visible = false
+    fleet_layer.show()
+    _fleet_ensure_target()
+    _fleet_refresh()
+    _play_ui("sat")
+
+
+func _fleet_open_ship(id: int) -> void:
+    _close_windows()
+    _fleet_open()
+    var s := _ship_by_id(id)
+    if not s.is_empty():
+        sel_ship = id
+        fleet_c = s["pos"]
+        fleet_size = 1100.0
+        _fleet_refresh()
+
+
+func _fleet_ensure_target() -> void:
+    if fleet_isl < 1 or fleet_isl >= island_count or bool(emp[fleet_isl]["dead"]):
+        fleet_isl = selected_enemy
+
+
+func _fleet_close() -> void:
+    if not fleet_open:
+        return
+    fleet_open = false
+    fleet_layer.hide()
+    if water_node != null and water_mat0 != null:
+        water_node.material_override = water_mat0
+    camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+    camera.fov = 70.0
+    camera.far = 3000.0
+    for cl in clouds:
+        var cn: Node3D = cl
+        cn.visible = true
+    if world_env != null:
+        world_env.fog_enabled = true
+    tabs_box.visible = true
+    hot_box.visible = true
+    stats_panel.visible = true
+    status_box.visible = true
+    joy_base.visible = true
+    joy_knob.visible = true
+    _hud_show(true)
+    mini_ctl.visible = true
+    camera.position = _player_world() + Vector3(0.0, 6.0, 12.0)
+    _look_at_target(false)
+    _refresh_ui()
+
+
+func _fleet_camera() -> void:
+    camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+    camera.size = fleet_size
+    camera.position = Vector3(fleet_c.x, 2600.0, fleet_c.y)
+    camera.rotation = Vector3(-PI / 2.0, 0.0, 0.0)
+
+
+func _fleet_upp() -> float:
+    return fleet_size / get_viewport().get_visible_rect().size.y
+
+
+func _w2s(p: Vector2) -> Vector2:
+    var vp := get_viewport().get_visible_rect().size
+    return vp * 0.5 + (p - fleet_c) / _fleet_upp()
+
+
+func _s2w(p: Vector2) -> Vector2:
+    var vp := get_viewport().get_visible_rect().size
+    return fleet_c + (p - vp * 0.5) * _fleet_upp()
+
+
+func _fleet_zoom(f: float) -> void:
+    fleet_size = clampf(fleet_size * f, 260.0, 4200.0)
+
+
+func _over_fleet_ui(pos: Vector2) -> bool:
+    for c in fleet_panels:
+        var ctl: Control = c
+        if ctl.is_visible_in_tree() and ctl.get_global_rect().has_point(pos):
+            return true
+    return menu_btn.get_global_rect().has_point(pos) or overlay.is_visible_in_tree()
+
+
+func _fleet_input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch:
+        var te := event as InputEventScreenTouch
+        if te.pressed:
+            if _over_fleet_ui(te.position):
+                return
+            fleet_touch[te.index] = te.position
+            if fleet_touch.size() == 1:
+                fleet_moved = 0.0
+            elif fleet_touch.size() == 2:
+                var ks := fleet_touch.keys()
+                var pa: Vector2 = fleet_touch[ks[0]]
+                var pb: Vector2 = fleet_touch[ks[1]]
+                fleet_pinch = pa.distance_to(pb)
+                fleet_moved = 999.0
+        else:
+            if fleet_touch.has(te.index):
+                var single := fleet_touch.size() == 1
+                fleet_touch.erase(te.index)
+                if single and fleet_moved < 14.0:
+                    _fleet_tap(te.position)
+                fleet_pinch = 0.0
+    elif event is InputEventScreenDrag:
+        var de := event as InputEventScreenDrag
+        if not fleet_touch.has(de.index):
+            return
+        fleet_touch[de.index] = de.position
+        if fleet_touch.size() == 1:
+            fleet_c -= de.relative * _fleet_upp()
+            fleet_moved += de.relative.length()
+        elif fleet_touch.size() == 2:
+            var ks2 := fleet_touch.keys()
+            var qa: Vector2 = fleet_touch[ks2[0]]
+            var qb: Vector2 = fleet_touch[ks2[1]]
+            var dd := qa.distance_to(qb)
+            if fleet_pinch > 10.0 and dd > 10.0:
+                fleet_size = clampf(fleet_size * fleet_pinch / dd, 260.0, 4200.0)
+            fleet_pinch = dd
+    var lim := float(RING[island_count]) + 700.0
+    fleet_c = Vector2(clampf(fleet_c.x, -lim, lim), clampf(fleet_c.y, -lim, lim))
+
+
+func _fleet_tap(pos: Vector2) -> void:
+    var w := _s2w(pos)
+    var upp := _fleet_upp()
+    var best := -1
+    var bd := 1e9
+    for sv in ships:
+        var s: Dictionary = sv
+        if not _ship_alive(s) or not _ship_visible_to(s, 0):
+            continue
+        var sp: Vector2 = s["pos"]
+        var d := sp.distance_to(w)
+        var reach := maxf(26.0 * upp, float(NAVY[int(s["t"])]["len"]) * 0.6)
+        if d < reach and d < bd:
+            bd = d
+            best = int(s["id"])
+    if best >= 0:
+        var bs := _ship_by_id(best)
+        _play_ui("click", -6.0)
+        if int(bs["own"]) == 0:
+            sel_ship = best
+            fleet_all = false
+        else:
+            sel_enemy = best
+        _fleet_refresh()
+        return
+    # enemy island tapped = choose it as the bombardment target
+    for k in range(1, island_count):
+        var ip: Vector3 = island_pos[k]
+        if Vector2(ip.x, ip.z).distance_to(w) < maxf(150.0, 30.0 * upp) and not bool(emp[k]["dead"]):
+            fleet_isl = k
+            selected_enemy = k
+            _play_ui("click", -6.0)
+            _say("Target island: Enemy %d" % k)
+            _fleet_refresh()
+            return
+    # empty sea: send the selected ship(s) there
+    var g := _fleet_group()
+    if g.is_empty():
+        sel_enemy = -1
+        _fleet_refresh()
+        return
+    var n := g.size()
+    for k2 in range(n):
+        var s2: Dictionary = g[k2]
+        var off := Vector2.ZERO
+        if n > 1:
+            off = Vector2((float(k2 % 4) - 1.5) * 55.0, float(int(k2 / 4)) * 55.0)
+        _ship_order(s2, "move", w + off)
+    fleet_flash = 1.0
+    fleet_flash_pos = w
+    _play_ui("click", -4.0)
+    _fleet_refresh()
+
+
+var fleet_flash_pos := Vector2.ZERO
+
+
+func _fleet_group() -> Array:
+    var g: Array = []
+    if fleet_all:
+        for sv in ships:
+            var s: Dictionary = sv
+            if int(s["own"]) == 0 and int(s["t"]) != 4 and _ship_alive(s):
+                g.append(s)
+        return g
+    var one := _ship_by_id(sel_ship)
+    if _ship_alive(one) and int(one["own"]) == 0:
+        g.append(one)
+    return g
+
+
+func _fleet_toggle_all() -> void:
+    fleet_all = not fleet_all
+    if fleet_all:
+        sel_ship = -1
+    _fleet_refresh()
+
+
+func _fleet_order(mode: String) -> void:
+    var g := _fleet_group()
+    if g.is_empty():
+        return
+    for sv in g:
+        var s: Dictionary = sv
+        _ship_order(s, mode, Vector2.ZERO, -1, sel_enemy if mode == "attack" else -1)
+    _say("Order given: %s" % mode.to_upper())
+    _fleet_refresh()
+
+
+func _fleet_siege() -> void:
+    var g := _fleet_group()
+    if g.is_empty():
+        return
+    _fleet_ensure_target()
+    if bool(emp[fleet_isl]["dead"]):
+        return
+    for sv in g:
+        var s: Dictionary = sv
+        _ship_order(s, "attack", Vector2.ZERO, fleet_isl, -1)
+    _say("Fleet sails to bombard Enemy %d. Destroyers fire missiles at the island." % fleet_isl)
+    _fleet_refresh()
+
+
+func _fleet_ships_attack() -> void:
+    var tg := _ship_by_id(sel_enemy)
+    if not _ship_alive(tg):
+        return
+    var n := 0
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == 0 and int(s["t"]) != 4 and _ship_alive(s):
+            _ship_order(s, "attack", Vector2.ZERO, -1, sel_enemy)
+            n += 1
+    _say("%d warship(s) sent to sink the enemy %s." % [n, NAVY[int(tg["t"])]["name"]])
+    _fleet_refresh()
+
+
+func _fleet_jets() -> void:
+    var tg := _ship_by_id(sel_enemy)
+    if not _ship_alive(tg):
+        return
+    var n := 0
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == 0 and int(s["t"]) == 4:
+            n += _launch_carrier_jets(s, 4, "ship", sel_enemy, -1, Vector2.ZERO)
+    n += _launch_airport_jets_at_ship(0, 4, sel_enemy)
+    if n == 0:
+        _play_ui("error")
+        _say("No jet is ready. Buy jets (MILITARY > AIRCRAFT or NAVY) or wait for them to rearm.")
+    else:
+        _play_ui("build", -4.0)
+    _fleet_refresh()
+
+
+func _fleet_missile() -> void:
+    var tg := _ship_by_id(sel_enemy)
+    if not _ship_alive(tg):
+        return
+    var e: Dictionary = emp[0]
+    var ammo: Array = e["ammo"]
+    var fired := 0
+    for mt in [2, 1, 6, 0, 3, 5, 4, 7]:
+        if int(ammo[mt]) > 0:
+            var cnt := mini(2, int(ammo[mt]))
+            for k in range(cnt):
+                if _fire_missile_at_ship(0, mt, sel_enemy):
+                    fired += 1
+            break
+    if fired == 0:
+        _play_ui("error")
+        _say("No missiles left. Buy more in MILITARY.")
+    else:
+        _say("%d missile(s) launched at the enemy %s!" % [fired, NAVY[int(tg["t"])]["name"]])
+        _vibrate(40)
+    _fleet_refresh()
+    _refresh_ui()
+
+
+func _fleet_carrier_island() -> void:
+    _fleet_close()
+    sat_base = 1
+    _open_sat()
+    _refresh_sat()
+
+
+func _fleet_refresh() -> void:
+    if fleet_info == null or not fleet_open:
+        return
+    var s := _ship_by_id(sel_ship)
+    var e := _ship_by_id(sel_enemy)
+    var lines: Array = []
+    var my_war := 0
+    var my_car := false
+    for sv in ships:
+        var o: Dictionary = sv
+        if int(o["own"]) == 0:
+            if int(o["t"]) == 4:
+                my_car = true
+            else:
+                my_war += 1
+    if fleet_all:
+        lines.append("ALL WARSHIPS selected (%d). Tap the sea to send them." % my_war)
+    elif _ship_alive(s):
+        var info: Dictionary = NAVY[int(s["t"])]
+        var extra := ""
+        if int(s["t"]) == 4:
+            extra = "   Jets %d/%d" % [(s["jets"] as Array).size(), CARRIER_CAP]
+        lines.append("%s   HP %d%%   %s%s   Tap the sea to move" % [info["name"], int(float(s["hp"]) / float(s["maxhp"]) * 100.0), str(s["mode"]).to_upper(), extra])
+    elif ships.is_empty() or (my_war == 0 and not my_car):
+        lines.append("You have no ships yet. Buy them in MILITARY > NAVY.")
+    else:
+        lines.append("Tap one of your ships (colored arrow) to select it, then tap the sea to move it.")
+    if _ship_alive(e):
+        var ep: Vector2 = e["pos"]
+        var hp3: Vector3 = island_pos[0]
+        lines.append("TARGET: Enemy %s  HP %d%%  %d m from your island" % [NAVY[int(e["t"])]["name"], int(float(e["hp"]) / float(e["maxhp"]) * 100.0), int(ep.distance_to(Vector2(hp3.x, hp3.z)))])
+    fleet_info.text = "\n".join(PackedStringArray(lines))
+    var has_sel := fleet_all or _ship_alive(s)
+    var has_tgt := _ship_alive(e)
+    var all_b: Button = fleet_btns["all"]
+    all_b.visible = my_war > 0
+    all_b.modulate = Color(0.6, 1.0, 0.7) if fleet_all else Color(1.0, 1.0, 1.0)
+    for k in ["guard", "hold", "attack", "siege"]:
+        var b: Button = fleet_btns[k]
+        b.visible = has_sel
+    var sb: Button = fleet_btns["siege"]
+    sb.text = "SHELL ENEMY %d" % fleet_isl
+    for k2 in ["ships", "jets", "missile"]:
+        var b2: Button = fleet_btns[k2]
+        b2.visible = has_tgt
+    var cb: Button = fleet_btns["cstrike"]
+    cb.visible = my_car
+
+
+func _fleet_tick(dt: float) -> void:
+    mini_t += dt
+    if mini_t >= 0.12:
+        mini_t = 0.0
+        if mini_ctl != null and mini_ctl.visible:
+            mini_ctl.queue_redraw()
+    if fleet_open:
+        fleet_flash = maxf(0.0, fleet_flash - dt)
+        fleet_canvas.queue_redraw()
+        fleet_ref_t += dt
+        if fleet_ref_t > 0.4:
+            fleet_ref_t = 0.0
+            _fleet_refresh()
+
+
+func _tri(c: Control, p: Vector2, dirv: Vector2, l: float, col: Color) -> void:
+    var side := Vector2(-dirv.y, dirv.x)
+    var pts := PackedVector2Array([p + dirv * l, p - dirv * l * 0.7 + side * l * 0.65, p - dirv * l * 0.35, p - dirv * l * 0.7 - side * l * 0.65])
+    c.draw_colored_polygon(pts, col)
+    c.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), Color(1.0, 1.0, 1.0, 0.85), 1.5)
+
+
+func _fleet_canvas_draw() -> void:
+    var c := fleet_canvas
+    if not fleet_open or emp.is_empty():
+        return
+    var upp := _fleet_upp()
+    var font := ThemeDB.fallback_font
+    var vps := c.size
+    var gstep := 200.0
+    var gx := floorf((fleet_c.x - vps.x * 0.5 * upp) / gstep) * gstep
+    while gx < fleet_c.x + vps.x * 0.5 * upp:
+        var sx := _w2s(Vector2(gx, 0.0)).x
+        c.draw_line(Vector2(sx, 0.0), Vector2(sx, vps.y), Color(1.0, 1.0, 1.0, 0.07), 1.0)
+        gx += gstep
+    var gz := floorf((fleet_c.y - vps.y * 0.5 * upp) / gstep) * gstep
+    while gz < fleet_c.y + vps.y * 0.5 * upp:
+        var sy := _w2s(Vector2(0.0, gz)).y
+        c.draw_line(Vector2(0.0, sy), Vector2(vps.x, sy), Color(1.0, 1.0, 1.0, 0.07), 1.0)
+        gz += gstep
+    # islands
+    for k in range(island_count):
+        var ip: Vector3 = island_pos[k]
+        var p := _w2s(Vector2(ip.x, ip.z))
+        var e: Dictionary = emp[k]
+        var col := _team(k)
+        if bool(e["dead"]):
+            col = Color(0.5, 0.5, 0.5)
+        var lbl := "YOUR ISLAND" if k == 0 else "ENEMY %d" % k
+        c.draw_string(font, p + Vector2(-50.0, -134.0 / upp - 6.0), lbl, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, col.lightened(0.3))
+        if k == 0:
+            c.draw_arc(p, SHIP_ALERT_R / upp, 0.0, TAU, 96, Color(0.3, 0.85, 1.0, 0.5), 2.0)
+            c.draw_string(font, p + Vector2(SHIP_ALERT_R / upp * 0.72, -SHIP_ALERT_R / upp * 0.72), "alert zone", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color(0.4, 0.9, 1.0, 0.8))
+        if k == fleet_isl and k > 0:
+            c.draw_arc(p, 150.0 / upp, 0.0, TAU, 48, Color(1.0, 0.5, 0.2, 0.9), 3.0)
+    # selected ship: range ring and route
+    var sel := _ship_by_id(sel_ship)
+    if _ship_alive(sel):
+        var sp: Vector2 = sel["pos"]
+        var info: Dictionary = NAVY[int(sel["t"])]
+        if float(info["range"]) > 0.0:
+            c.draw_arc(_w2s(sp), float(info["range"]) / upp, 0.0, TAU, 64, Color(1.0, 1.0, 1.0, 0.35), 2.0)
+        if str(sel["mode"]) == "move":
+            var dp: Vector2 = sel["dest"]
+            c.draw_dashed_line(_w2s(sp), _w2s(dp), Color(0.6, 1.0, 0.7, 0.9), 3.0, 10.0)
+            c.draw_arc(_w2s(dp), 11.0, 0.0, TAU, 20, Color(0.6, 1.0, 0.7), 3.0)
+    if fleet_flash > 0.0:
+        c.draw_arc(_w2s(fleet_flash_pos), 10.0 + (1.0 - fleet_flash) * 40.0, 0.0, TAU, 24, Color(0.6, 1.0, 0.7, fleet_flash), 3.0)
+    # ships
+    for sv in ships:
+        var s: Dictionary = sv
+        if not _ship_alive(s) or not _ship_visible_to(s, 0):
+            continue
+        var pos: Vector2 = s["pos"]
+        var sp2 := _w2s(pos)
+        var own: int = s["own"]
+        var t: int = s["t"]
+        var hd: float = s["hdg"]
+        var dirv := Vector2(-sin(hd), -cos(hd))
+        var l := 17.0 if t == 4 else 11.0
+        var col2 := _team(own).lightened(0.15)
+        if own != 0 and alert_set.has(int(s["id"])) and fmod(navy_clock, 0.8) < 0.4:
+            c.draw_arc(sp2, l + 9.0, 0.0, TAU, 24, Color(1.0, 0.2, 0.15), 3.0)
+        _tri(c, sp2, dirv, l, col2)
+        if int(s["id"]) == sel_ship or (fleet_all and own == 0 and t != 4):
+            c.draw_arc(sp2, l + 6.0, 0.0, TAU, 28, Color(1.0, 1.0, 1.0), 2.5)
+        if int(s["id"]) == sel_enemy:
+            var q := l + 8.0
+            for sx in [-1.0, 1.0]:
+                for sy in [-1.0, 1.0]:
+                    c.draw_line(sp2 + Vector2(float(sx) * q, float(sy) * q), sp2 + Vector2(float(sx) * (q - 7.0), float(sy) * q), Color(1.0, 0.3, 0.2), 3.0)
+                    c.draw_line(sp2 + Vector2(float(sx) * q, float(sy) * q), sp2 + Vector2(float(sx) * q, float(sy) * (q - 7.0)), Color(1.0, 0.3, 0.2), 3.0)
+        var fr := clampf(float(s["hp"]) / float(s["maxhp"]), 0.0, 1.0)
+        c.draw_rect(Rect2(sp2 + Vector2(-13.0, l + 5.0), Vector2(26.0, 4.0)), Color(0.0, 0.0, 0.0, 0.7))
+        c.draw_rect(Rect2(sp2 + Vector2(-13.0, l + 5.0), Vector2(26.0 * fr, 4.0)), Color(0.3, 1.0, 0.3) if fr > 0.5 else Color(1.0, 0.7, 0.1) if fr > 0.25 else Color(1.0, 0.2, 0.15))
+        if upp < 5.0 or int(s["id"]) == sel_ship or int(s["id"]) == sel_enemy:
+            c.draw_string(font, sp2 + Vector2(-24.0, l + 22.0), str(NAVY[t]["short"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color(1.0, 1.0, 1.0, 0.9))
+    # aircraft
+    for av in air:
+        var a: Dictionary = av
+        if str(a["state"]) == "wait" or str(a["state"]) == "dying":
+            continue
+        var apos: Vector3 = a["pos"]
+        var ap := _w2s(Vector2(apos.x, apos.z))
+        c.draw_circle(ap, 4.0, _team(int(a["own"])).lightened(0.4))
+        c.draw_arc(ap, 6.0, 0.0, TAU, 12, Color(1.0, 1.0, 1.0, 0.8), 1.5)
+
+
+# ---------- military window: NAVY tab ----------
+func _build_navy_tab(v: VBoxContainer) -> void:
+    var g := _make_grid(v)
+    mil_body_navy = g.get_parent()
+    cards_ship = []
+    for t in range(NAVY.size()):
+        var nv: Dictionary = NAVY[t]
+        var c := _make_card(8, t, str(nv["name"]), ["", "", str(nv["cls"])], _ui_buy_ship.bind(t), Callable())
+        g.add_child(c["card"])
+        cards_ship.append(c)
+    cards_cjet = []
+    for jt in range(JETS.size()):
+        var jd: Dictionary = JETS[jt]
+        var c2 := _make_card(7, jt, "Carrier: %s" % str(jd["short"]), ["", "", "Parks on your aircraft carrier"], _ui_buy_cjet.bind(jt), Callable())
+        g.add_child(c2["card"])
+        cards_cjet.append(c2)
+    mil_body_navy.hide()
+
+
+func _ui_buy_ship(t: int) -> void:
+    var nm: String = NAVY[t]["name"]
+    var code := _do_buy_ship(0, t)
+    if code == 3:
+        _play_ui("error")
+        _say("The dock is busy. Wait a moment and try again.")
+        return
+    _ui_result(code, nm, "%s leaves the port. Open FLEET to command it." % nm)
+
+
+func _ui_buy_cjet(jt: int) -> void:
+    var c := _player_carrier_with_room()
+    if c.is_empty():
+        _play_ui("error")
+        var have := false
+        for sv in ships:
+            var s: Dictionary = sv
+            if int(s["own"]) == 0 and int(s["t"]) == 4:
+                have = true
+        _say("Your carrier is full (8 jets)." if have else "Buy an Aircraft Carrier first.")
+        return
+    var nm: String = JETS[jt]["name"]
+    _ui_result(_do_buy_carrier_jet(0, c, jt), nm, "%s is on the carrier deck. Send it from FLEET or the satellite view." % nm)
+
+
+func _refresh_navy_cards() -> void:
+    if cards_ship.is_empty():
+        return
+    var e: Dictionary = emp[0]
+    var money: int = e["money"]
+    for t in range(NAVY.size()):
+        var c: Dictionary = cards_ship[t]
+        var nv: Dictionary = NAVY[t]
+        var price: int = nv["price"]
+        var info: Label = c["info"]
+        var b: Button = c["b1"]
+        if not _unlocked(0, "s", t):
+            info.text = "LOCKED\nUnlocks when you reach %s\nHP %d" % [_unlock_text("s", t), int(nv["hp"])]
+            b.text = "LOCKED"
+            b.disabled = true
+            continue
+        var owned := 0
+        for sv in ships:
+            var s: Dictionary = sv
+            if int(s["own"]) == 0 and int(s["t"]) == t:
+                owned += 1
+        var wtxt := "no weapons, carries %d jets" % CARRIER_CAP if t == 4 else "Range %d   Dmg %d" % [int(nv["range"]), int(nv["dmg"])]
+        info.text = "HP %d   Speed %d\n%s\nOwned: %d" % [int(nv["hp"]), int(nv["speed"]), wtxt, owned]
+        b.text = "$%s   BUY" % _fmt_money(price)
+        b.disabled = money < price
+    for jt in range(JETS.size()):
+        var c2: Dictionary = cards_cjet[jt]
+        var jd: Dictionary = JETS[jt]
+        var jprice: int = jd["price"]
+        var info2: Label = c2["info"]
+        var b2: Button = c2["b1"]
+        var onboard := 0
+        for sv2 in ships:
+            var s2: Dictionary = sv2
+            if int(s2["own"]) == 0 and int(s2["t"]) == 4:
+                onboard += (s2["jets"] as Array).size()
+        if not _unlocked(0, "j", jt):
+            info2.text = "LOCKED\nUnlocks when you reach %s\nStrike x%d" % [_unlock_text("j", jt), int(jd["shots"])]
+            b2.text = "LOCKED"
+            b2.disabled = true
+            continue
+        info2.text = "Strike x%d   DMG %d\nOn carriers: %d\nNeeds a free deck slot" % [int(jd["shots"]), int(jd["dmg"]), onboard]
+        b2.text = "$%s   BUY" % _fmt_money(jprice)
+        b2.disabled = money < jprice or _player_carrier_with_room().is_empty()
+
+
+# ---------- satellite: launch from carrier ----------
+func _sat_base_toggle() -> void:
+    sat_base = 1 - sat_base
+    _refresh_sat()
+
+
+func _player_has_carrier() -> bool:
+    for sv in ships:
+        var s: Dictionary = sv
+        if int(s["own"]) == 0 and int(s["t"]) == 4:
+            return true
+    return false
+
+
+func _sat_commit_carrier(aim: Vector2) -> void:
+    var jt := sat_type - NM
+    var want := sat_mult
+    var sent := 0
+    var far_msg := false
+    var ic: Vector3 = island_pos[sat_island]
+    for sv in ships:
+        var c: Dictionary = sv
+        if int(c["own"]) != 0 or int(c["t"]) != 4 or sent >= want:
+            continue
+        var cp: Vector2 = c["pos"]
+        if cp.distance_to(Vector2(ic.x, ic.z)) > 1500.0:
+            far_msg = true
+            continue
+        sent += _launch_carrier_jets(c, want - sent, "isl", -1, sat_island, aim, jt)
+    if sent > 0:
+        sat_cool = 0.4
+        _say("%d %s launched from the carrier!" % [sent, JETS[jt]["short"]])
+        _vibrate(40)
+    elif far_msg:
+        _play_ui("error")
+        _say("Your carrier is too far from Enemy %d. Move it closer in FLEET." % sat_island)
+    else:
+        _play_ui("error")
+        _say("No %s ready on your carrier. Buy one (MILITARY > NAVY) or wait for rearm." % JETS[jt]["short"])
+    _refresh_sat()
+    _refresh_ui()
 
