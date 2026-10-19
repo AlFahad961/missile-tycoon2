@@ -19,6 +19,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download free 3D models (Kenney, CC0/MIT)
+        continue-on-error: true
+        run: |
+          mkdir -p assets
+          wget -q -O kit.zip https://github.com/KenneyNL/Starter-Kit-City-Builder/archive/refs/heads/main.zip
+          unzip -q -o kit.zip -d kit
+          cp -r kit/*/models/* assets/
+          ls assets
+
       - name: Setup Godot
         run: |
           mkdir -v -p ~/.local/share/godot/export_templates/
