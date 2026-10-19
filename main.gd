@@ -247,11 +247,13 @@ varying vec3 wp;
 varying float vy;
 varying vec3 vcol;
 varying float vflag;
+varying vec3 wnrm;
 void vertex() {
     wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
     vy = VERTEX.y;
     vcol = COLOR.rgb;
     vflag = COLOR.a;
+    wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 float h21(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -290,11 +292,25 @@ void fragment() {
     }
     float g = h21(floor(wp.xz * 3.0) + floor(wp.y * 2.0));
     col *= 0.93 + 0.07 * g;
-    col *= mix(0.66, 1.0, clamp(vy * 0.35, 0.0, 1.0));
-    ALBEDO = col;
+    col *= mix(0.62, 1.0, clamp(vy * 0.35, 0.0, 1.0));
+    // stylized grade: richer colour, bright tops, cool sides
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(lum), col, 1.28);
+    float top = smoothstep(0.55, 0.95, wnrm.y);
+    col *= mix(vec3(0.96, 0.98, 1.04), vec3(1.1, 1.07, 1.0), top);
+    ALBEDO = clamp(col, 0.0, 1.0);
     ROUGHNESS = rough;
     METALLIC = metal;
     EMISSION = em;
+}
+void light() {
+    float nl = dot(NORMAL, LIGHT);
+    float t = smoothstep(-0.2, 0.6, nl);
+    t = mix(t, smoothstep(0.0, 0.35, nl), 0.35);
+    DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * t / PI;
+    vec3 hv = normalize(LIGHT + VIEW);
+    float sp = pow(max(dot(NORMAL, hv), 0.0), mix(8.0, 90.0, 1.0 - ROUGHNESS));
+    SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * sp * (1.0 - ROUGHNESS) * 0.5 / PI * step(0.0, nl);
 }
 """
 
@@ -348,14 +364,15 @@ void fragment() {
         float n1 = fbm(lp * 0.07);
         float n2 = fbm(lp * 0.6 + 4.0);
         float n3 = fbm(lp * 0.02 + 11.0);
-        vec3 g1 = vec3(0.08, 0.22, 0.06);
-        vec3 g2 = vec3(0.2, 0.38, 0.1);
-        vec3 g3 = vec3(0.3, 0.42, 0.14);
+        vec3 g1 = vec3(0.26, 0.6, 0.32);
+        vec3 g2 = vec3(0.32, 0.67, 0.37);
+        vec3 g3 = vec3(0.4, 0.74, 0.42);
         col = mix(g1, g2, n1);
         col = mix(col, g3, smoothstep(0.55, 0.8, n3) * 0.6);
         col *= 0.88 + 0.24 * n2;
+        col *= 0.975 + 0.05 * step(0.5, fract(lp.x / 14.0 + floor(lp.y / 14.0) * 0.5));
         float dirt = smoothstep(0.62, 0.72, fbm(lp * 0.035 + 31.0));
-        col = mix(col, vec3(0.32, 0.25, 0.15) * (0.8 + 0.4 * n2), dirt * 0.7);
+        col = mix(col, vec3(0.5, 0.72, 0.45), dirt * 0.25);
         // roads
         float rx = abs(mod(lp.x + 32.0, 64.0) - 32.0);
         float rz = abs(mod(lp.y + 32.0, 64.0) - 32.0);
@@ -363,12 +380,12 @@ void fragment() {
         float roadm = max(1.0 - step(4.6, rx), 1.0 - step(4.6, rz));
         float walk = max(1.0 - step(6.3, rx), 1.0 - step(6.3, rz));
         float inland = 1.0 - step(-4.0, d);
-        vec3 asph = vec3(0.075, 0.08, 0.09) * (0.8 + 0.5 * n2);
-        col = mix(col, vec3(0.55, 0.55, 0.52) * (0.85 + 0.2 * n2), walk * inland);
+        vec3 asph = vec3(0.27, 0.29, 0.34) * (0.8 + 0.5 * n2);
+        col = mix(col, vec3(0.78, 0.8, 0.86), walk * inland);
         col = mix(col, asph, roadm * inland);
         float dash1 = (1.0 - step(0.18, rx)) * step(0.5, fract(lp.y / 7.0)) * (1.0 - step(4.6, rz));
         float dash2 = (1.0 - step(0.18, rz)) * step(0.5, fract(lp.x / 7.0)) * (1.0 - step(4.6, rx));
-        col = mix(col, vec3(0.85, 0.8, 0.45), max(dash1, dash2) * inland * 0.9);
+        col = mix(col, vec3(0.95, 0.95, 0.95), max(dash1, dash2) * inland * 0.9);
         // beach
         float beach = smoothstep(-6.0, 4.0, d);
         vec3 sand = mix(vec3(0.72, 0.65, 0.48), vec3(0.8, 0.74, 0.58), n2);
@@ -397,7 +414,7 @@ void fragment() {
         }
         col *= tint;
         ALBEDO = col;
-        ROUGHNESS = mix(0.95, 0.55, roadm * inland);
+        ROUGHNESS = mix(0.95, 0.9, roadm * inland);
         float gx = fbm(lp * 0.9 + vec2(0.3, 0.0)) - fbm(lp * 0.9 - vec2(0.3, 0.0));
         float gz = fbm(lp * 0.9 + vec2(0.0, 0.3)) - fbm(lp * 0.9 - vec2(0.0, 0.3));
         vec3 nn = normalize(vec3(-gx * 0.9, 1.0, -gz * 0.9));
@@ -730,13 +747,92 @@ func _lot(mb: MB, w: float, d: float, col: Color, h: float = 0.16, off: Vector3 
 
 func _tree_m(mb: MB, x: float, z: float, s: float, kind: int = 0, y: float = 0.0) -> void:
     if kind == 0:
-        mb.cyl(Vector3(x, y + 0.9 * s, z), 0.22 * s, 1.8 * s, Color(0.28, 0.18, 0.1), 6)
-        mb.sph(Vector3(x, y + 2.7 * s, z), 1.5 * s, Color(0.14, 0.34, 0.1), 8, 5, Vector3(1.0, 1.1, 1.0))
-        mb.sph(Vector3(x + 0.5 * s, y + 3.2 * s, z - 0.3 * s), 1.0 * s, Color(0.2, 0.42, 0.13), 7, 4)
+        mb.cyl(Vector3(x, y + 0.5 * s, z), 0.28 * s, 1.0 * s, Color(0.55, 0.38, 0.25), 6)
+        mb.cyl(Vector3(x, y + 1.9 * s, z), 1.7 * s, 2.0 * s, Color(0.28, 0.72, 0.46), 8, 0.0, Vector3.ZERO, "bld", 0.15 * s)
+        mb.cyl(Vector3(x, y + 3.3 * s, z), 1.3 * s, 1.8 * s, Color(0.34, 0.8, 0.52), 8, 0.0, Vector3.ZERO, "bld", 0.1 * s)
+        mb.cyl(Vector3(x, y + 4.5 * s, z), 0.9 * s, 1.6 * s, Color(0.42, 0.86, 0.58), 8, 0.0, Vector3.ZERO, "bld", 0.0)
     else:
-        mb.cyl(Vector3(x, y + 0.7 * s, z), 0.2 * s, 1.4 * s, Color(0.25, 0.16, 0.09), 6)
-        mb.cyl(Vector3(x, y + 2.3 * s, z), 1.7 * s, 2.4 * s, Color(0.08, 0.25, 0.1), 8, 0.0, Vector3.ZERO, "bld", 0.2)
-        mb.cyl(Vector3(x, y + 3.9 * s, z), 1.2 * s, 2.2 * s, Color(0.1, 0.3, 0.12), 8, 0.0, Vector3.ZERO, "bld", 0.0)
+        mb.cyl(Vector3(x, y + 0.5 * s, z), 0.3 * s, 1.0 * s, Color(0.55, 0.38, 0.25), 6)
+        mb.sph(Vector3(x, y + 2.4 * s, z), 1.6 * s, Color(0.3, 0.76, 0.48), 9, 6, Vector3(1.0, 1.1, 1.0))
+        mb.sph(Vector3(x + 0.6 * s, y + 3.2 * s, z - 0.3 * s), 1.0 * s, Color(0.4, 0.84, 0.54), 8, 5)
+
+
+const TRAFFIC_SHADER := """
+shader_type spatial;
+global uniform float night;
+varying vec3 vc;
+varying float vf;
+void vertex() {
+    float t = mod(INSTANCE_CUSTOM.y + TIME * INSTANCE_CUSTOM.x, 280.0) - 140.0;
+    VERTEX.z += t;
+    float h = INSTANCE_CUSTOM.z;
+    vec3 pal = 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));
+    vc = mix(pal, vec3(0.9), step(0.8, fract(h * 7.0)) * 0.7);
+    vf = COLOR.a;
+}
+void fragment() {
+    vec3 c = COLOR.rgb;
+    if (COLOR.r > 0.95 && COLOR.g < 0.05 && COLOR.b > 0.95) {
+        c = vc;
+    }
+    ALBEDO = c;
+    ROUGHNESS = 0.4;
+    METALLIC = 0.2;
+    if (COLOR.r > 0.95 && COLOR.g > 0.95 && COLOR.b > 0.75 && COLOR.b < 0.85) {
+        EMISSION = vec3(1.0, 0.9, 0.6) * (0.4 + night * 2.0);
+    }
+}
+"""
+
+var traffic_mat: ShaderMaterial = null
+var traffic_mesh: ArrayMesh = null
+
+
+func _make_traffic(node: Node3D) -> void:
+    if traffic_mat == null:
+        var sh := Shader.new()
+        sh.code = TRAFFIC_SHADER
+        traffic_mat = ShaderMaterial.new()
+        traffic_mat.shader = sh
+        var mb := MB.new()
+        mb.box(Vector3(0, 0.55, 0), Vector3(1.8, 0.7, 4.0), Color(1, 0, 1), 0.0)
+        mb.box(Vector3(0, 1.1, -0.2), Vector3(1.6, 0.55, 2.1), Color(0.08, 0.1, 0.14), 0.0)
+        mb.box(Vector3(0, 0.2, 0), Vector3(1.7, 0.3, 3.6), Color(0.03, 0.03, 0.03), 0.0)
+        mb.box(Vector3(-0.6, 0.6, 2.02), Vector3(0.4, 0.2, 0.06), Color(1, 1, 0.8), 2.0)
+        mb.box(Vector3(0.6, 0.6, 2.02), Vector3(0.4, 0.2, 0.06), Color(1, 1, 0.8), 2.0)
+        traffic_mesh = mb.bake(mats)
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 777 + node.get_instance_id() % 1000
+    var items := []
+    for k in range(-2, 3):
+        var rc := float(k) * 64.0
+        for dir in range(2):
+            for n in range(2):
+                # along Z
+                var sgn := 1.0 if dir == 0 else -1.0
+                var lane := -1.6 * sgn
+                var tz := Transform3D(Basis(Vector3.UP, 0.0 if dir == 0 else PI), Vector3(rc + lane, 0.05, 0))
+                items.append([tz, rng.randf_range(7.0, 13.0), rng.randf_range(0.0, 280.0), rng.randf()])
+                var tx := Transform3D(Basis(Vector3.UP, PI * 0.5 if dir == 0 else -PI * 0.5), Vector3(0, 0.05, rc + lane))
+                items.append([tx, rng.randf_range(7.0, 13.0), rng.randf_range(0.0, 280.0), rng.randf()])
+    var mm := MultiMesh.new()
+    mm.transform_format = MultiMesh.TRANSFORM_3D
+    mm.use_colors = true
+    mm.use_custom_data = true
+    mm.mesh = traffic_mesh
+    mm.instance_count = items.size()
+    for q in range(items.size()):
+        mm.set_instance_transform(q, items[q][0])
+        mm.set_instance_color(q, Color(1, 1, 1, 1))
+        mm.set_instance_custom_data(q, Color(items[q][1], items[q][2], items[q][3], 0.0))
+    var inst := MultiMeshInstance3D.new()
+    inst.multimesh = mm
+    inst.material_override = traffic_mat
+    inst.custom_aabb = AABB(Vector3(-170, -2, -170), Vector3(340, 12, 340))
+    inst.visibility_range_end = 420.0
+    inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    node.add_child(inst)
+
 
 
 func _car_m(mb: MB, x: float, z: float, rot: float, col: Color, y: float = 0.0) -> void:
@@ -1572,12 +1668,12 @@ func _build_environment() -> void:
     sky.sky_material = sky_mat
     env.sky = sky
     env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-    env.ambient_light_energy = 0.9
+    env.ambient_light_energy = 1.05
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-    env.tonemap_white = 5.0
+    env.tonemap_white = 6.0
     env.adjustment_enabled = true
-    env.adjustment_saturation = 1.12
-    env.adjustment_contrast = 1.08
+    env.adjustment_saturation = 1.05
+    env.adjustment_contrast = 1.05
     env.glow_enabled = true
     env.glow_intensity = 0.6
     env.glow_bloom = 0.08
@@ -1591,10 +1687,12 @@ func _build_environment() -> void:
 
     sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52.0, -35.0, 0.0)
-    sun.light_energy = 1.3
+    sun.light_energy = 1.45
     sun.light_color = Color(1.0, 0.96, 0.88)
     sun.shadow_enabled = true
-    sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+    sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+    sun.light_angular_distance = 1.2
+    sun.shadow_blur = 1.6
     sun.directional_shadow_max_distance = 500.0
     sun.shadow_bias = 0.08
     add_child(sun)
@@ -1668,6 +1766,7 @@ func _make_world() -> void:
         slab.material_override = gm
         node.add_child(slab)
         ground_mats.append(gm)
+        _make_traffic(node)
         # trees
         var trs := []
         for kind in range(2):
@@ -1969,6 +2068,55 @@ func _snap(v: float) -> float:
     return roundf(v / GRID) * GRID
 
 
+var kn_cache := {}
+# type -> [model, width factor, height multiplier on width, depth factor]
+const KN_MAP := {
+    "house": ["building-small-a", 0.86, 0.86, 0.86],
+    "apartment": ["building-small-b", 0.86, 0.86, 0.86],
+    "office": ["building-small-c", 0.86, 1.1, 0.86],
+    "commerce": ["building-small-d", 0.86, 0.5, 0.86],
+    "factory": ["building-garage", 0.86, 0.7, 0.86],
+}
+
+
+func _kn_mesh(nm: String) -> Mesh:
+    if kn_cache.has(nm):
+        return kn_cache[nm]
+    var m: Mesh = null
+    var path := "res://assets/" + nm + ".glb"
+    if ResourceLoader.exists(path):
+        var ps = load(path)
+        if ps is PackedScene:
+            var inst: Node = ps.instantiate()
+            var stack := [inst]
+            while stack.size() > 0 and m == null:
+                var cur: Node = stack.pop_back()
+                if cur is MeshInstance3D and cur.mesh != null:
+                    m = cur.mesh
+                for ch in cur.get_children():
+                    stack.append(ch)
+            inst.free()
+    kn_cache[nm] = m
+    return m
+
+
+func _apply_kenney(mi: MeshInstance3D, b: Dictionary, d: Dictionary) -> void:
+    if not KN_MAP.has(b["t"]):
+        return
+    var info: Array = KN_MAP[b["t"]]
+    var km := _kn_mesh(String(info[0]))
+    if km == null:
+        return
+    var w := float(d["w"])
+    var dd := float(d["d"])
+    var sx := w * float(info[1])
+    var sz := dd * float(info[3])
+    var sy := w * float(info[2]) * (1.0 + 0.08 * float(int(b["lvl"]) - 1))
+    mi.mesh = km
+    mi.scale = Vector3(sx, sy, sz)
+
+
+
 func _building_mesh(t: String, lvl: int, v: int, c: int) -> ArrayMesh:
     var key := t + "_" + str(lvl) + "_" + str(v) + "_" + str(c)
     if mesh_cache.has(key):
@@ -2054,6 +2202,8 @@ func _make_node(b: Dictionary) -> void:
         mi.mesh = _building_mesh(b["t"], b["lvl"], b["v"], b["c"])
     mi.visibility_range_end = 1000.0
     mi.name = "mesh"
+    if b["st"] != "ruin":
+        _apply_kenney(mi, b, d)
     n.add_child(mi)
     b["spin"] = null
     b["parked"] = []
@@ -2415,15 +2565,15 @@ func _update_daylight() -> void:
     RenderingServer.global_shader_parameter_set("night", nightk)
     sun.rotation_degrees = Vector3(-lerp(6.0, 66.0, clamp(el, 0.0, 1.0)) if el > 0.0 else -12.0, lerp(-130.0, 130.0, day_t), 0.0)
     var day_e: float = clamp(el * 2.0 + 0.25, 0.0, 1.0)
-    sun.light_energy = lerp(0.14, 1.35, day_e)
+    sun.light_energy = lerp(0.14, 1.15, day_e)
     sun.light_color = Color(0.55, 0.65, 0.95).lerp(Color(1.0, 0.96, 0.88), day_e)
     if el > 0.0 and el < 0.3:
         sun.light_color = Color(1.0, 0.7, 0.45).lerp(Color(1.0, 0.96, 0.88), el / 0.3)
-    env.ambient_light_energy = lerp(0.42, 0.95, day_e)
-    sky_mat.sky_top_color = Color(0.02, 0.03, 0.1).lerp(Color(0.1, 0.34, 0.8), day_e)
-    sky_mat.sky_horizon_color = Color(0.06, 0.07, 0.14).lerp(Color(0.7, 0.82, 0.95), day_e)
+    env.ambient_light_energy = lerp(0.42, 0.72, day_e)
+    sky_mat.sky_top_color = Color(0.02, 0.03, 0.1).lerp(Color(0.36, 0.6, 0.92), day_e)
+    sky_mat.sky_horizon_color = Color(0.06, 0.07, 0.14).lerp(Color(0.82, 0.9, 0.97), day_e)
     sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-    sky_mat.ground_bottom_color = Color(0.03, 0.04, 0.08).lerp(Color(0.25, 0.4, 0.55), day_e)
+    sky_mat.ground_bottom_color = Color(0.03, 0.04, 0.08).lerp(Color(0.6, 0.7, 0.8), day_e)
     env.fog_light_color = sky_mat.sky_horizon_color
     for gm in ground_mats:
         gm.set_shader_parameter("tint", Vector3(1, 1, 1).lerp(Vector3(0.55, 0.62, 0.85), nightk * 0.8))
@@ -2961,7 +3111,8 @@ func _check_unlock_notices() -> void:
 
 func _election(c: int) -> void:
     var s: Dictionary = cs[c]
-    s["next_elec"] = month + 48
+    s["next_elec"] = month + 99999
+    return
     var h: float = s["happy"]
     if h >= 45.0:
         if c == me:
@@ -3023,6 +3174,7 @@ func _start_research(c: int, k: String) -> String:
 var ev_timer := 14
 
 func _events_tick() -> void:
+    return
     ev_timer -= 1
     if ev_timer > 0 or game_state != "playing":
         return
@@ -5104,7 +5256,7 @@ func _pm_arrived(f: Dictionary) -> void:
         _open_summit(b)
     else:
         _add_rel(a, b, 10.0)
-        if b == me:
+        if false:
             _popup("Visit from " + String(COUNTRIES[a]["name"]), "The " + String(COUNTRIES[a]["title"]) + " of " + String(COUNTRIES[a]["name"]) + " landed in " + String(COUNTRIES[b]["cap"]) + " and proposes a partnership.",
                 [["Sign trade deal", "prop:trade:" + str(a)], ["Sign defence pact", "prop:alliance:" + str(a)], ["Just a handshake", ""]])
         else:
@@ -5435,8 +5587,10 @@ func _ai_diplomacy(c: int) -> void:
                     _declare_war(c, j, "tensions escalated")
                     wars = _wars_of(c)
                     continue
-        # friendly proposals
+        # friendly proposals (removed: no diplomacy popups)
         if j == me:
+            continue
+        if false:
             if st == "peace" and rel > 58.0 and rng.randf() < 0.012 and gtime - float(s.get("ref_" + str(me) + "ai", -999.0)) > 60.0:
                 _popup(String(COUNTRIES[c]["name"]) + " proposes an alliance", String(COUNTRIES[c]["title"]) + " of " + String(COUNTRIES[c]["name"]) + " offers a mutual defence pact.",
                     [["Sign the pact", "prop:alliance:" + str(c)], ["Decline", "prop:refuse:" + str(c)]])
@@ -6216,6 +6370,7 @@ func _build_ui() -> void:
     lbl_pop = _lbl("", 18)
     th.add_child(lbl_pop)
     lbl_happy = _lbl("", 18)
+    lbl_happy.visible = false
     th.add_child(lbl_happy)
     lbl_rp = _lbl("", 18, Color(0.6, 0.85, 1.0))
     th.add_child(lbl_rp)
@@ -6266,10 +6421,10 @@ func _build_ui() -> void:
     ui_root.add_child(dock_panel)
     dock = _hbox(6)
     dock_panel.add_child(dock)
-    var tabs := [["BUILD", "build"], ["MILITARY", "mil"], ["AIR", "air"], ["NAVY", "navy"], ["DIPLOMACY", "dip"], ["GOVERNMENT", "gov"], ["RESEARCH", "res"], ["WORLD", "world"]]
+    var tabs := [["BUILD\n(Banao)", "build"], ["MILITARY\n(Fauj)", "mil"], ["AIR\n(Hawai)", "air"], ["NAVY\n(Behri)", "navy"], ["RESEARCH\n(Tehqeeq)", "res"], ["WORLD\n(Dunya)", "world"]]
     for t in tabs:
         var key: String = t[1]
-        dock.add_child(_btn(t[0], "dark", func(): _open_tab(key), 112, 60, 16))
+        dock.add_child(_btn(t[0], "dark", func(): _open_tab(key), 118, 60, 15))
 
     # ---- toasts + banner ----
     toast_box = _vbox(4)
@@ -6927,7 +7082,7 @@ func _tab_world() -> void:
         for j in _wars_of(i):
             wars.append(String(COUNTRIES[j]["short"]))
         vv.add_child(_lbl(String(COUNTRIES[i]["name"]) + ("  (YOU)" if i == me else "") + ("   NUCLEAR" if cs[i]["nuke"] else ""), 19))
-        vv.add_child(_lbl("Pop " + String.num(cs[i]["pop"], 0) + "M   Treasury " + _fmt(cs[i]["money"]) + "   Approval " + str(int(cs[i]["happy"])) + "%   Power " + str(int(_power(i))) + ("   WAR vs " + ", ".join(wars) if wars.size() > 0 else ""), 15, Color(1, 0.6, 0.5) if wars.size() > 0 else C_DIM))
+        vv.add_child(_lbl("Pop " + String.num(cs[i]["pop"], 0) + "M   Treasury " + _fmt(cs[i]["money"]) + "   Power " + str(int(_power(i))) + ("   WAR vs " + ", ".join(wars) if wars.size() > 0 else ""), 15, Color(1, 0.6, 0.5) if wars.size() > 0 else C_DIM))
         var ii = i
         h.add_child(_btn("GO", "dark", func():
             _focus_country(ii)
@@ -6982,7 +7137,7 @@ func _tab_country(c: int) -> void:
     var vv := _vbox(2)
     h.add_child(vv)
     vv.add_child(_lbl(String(COUNTRIES[c]["title"]) + " of " + String(COUNTRIES[c]["name"]) + "  -  capital " + String(COUNTRIES[c]["cap"]), 19))
-    vv.add_child(_lbl("Status: " + _status_text(me, c) + "     Pop " + String.num(s["pop"], 0) + "M     Approval " + str(int(s["happy"])) + "%     Power " + str(int(_power(c))) + " (yours " + str(int(_power(me))) + ")", 16, C_DIM))
+    vv.add_child(_lbl("Status: " + _status_text(me, c) + "     Pop " + String.num(s["pop"], 0) + "M     Power " + str(int(_power(c))) + " (yours " + str(int(_power(me))) + ")", 16, C_DIM))
     vv.add_child(_lbl(String(COUNTRIES[c]["blurb"]), 15, C_DIM, true))
     var rr := _hbox(8)
     vv.add_child(rr)
@@ -7023,56 +7178,14 @@ func _tab_country(c: int) -> void:
             var r := _propose(me, c, "ceasefire")
             country_msg = String(r["msg"])
             _win_refresh(), 0, 54, 18))
-        g.add_child(_btn("PEACE SUMMIT (PM)", "warn", func():
-            country_msg = "You cannot fly to a country at war. Ask for a ceasefire first."
-            _win_refresh(), 0, 54, 18))
     else:
         g.add_child(_btn("DECLARE WAR", "bad", func():
             _popup("Declare war on " + String(COUNTRIES[c]["name"]) + "?", "War means missiles, air raids and unrest. Their allies may join. Your people may protest.", [["Declare WAR", "war:" + str(c)], ["Cancel", ""]]), 0, 54, 18))
-        g.add_child(_btn("SEND PM (state visit)", "good", func():
-            var e := _send_pm(me, c)
-            country_msg = e if e != "" else "Your " + String(COUNTRIES[me]["title"]) + " is flying to " + String(COUNTRIES[c]["cap"]) + ". A summit will open on arrival."
-            _win_refresh(), 0, 54, 18))
-        if st != "ally":
-            g.add_child(_btn("PROPOSE ALLIANCE", "good", func():
-                var r2 := _propose(me, c, "alliance")
-                country_msg = String(r2["msg"])
-                _win_refresh(), 0, 54, 18))
-        else:
-            g.add_child(_btn("END ALLIANCE", "dark", func():
-                cs[me]["st"][c] = "peace"
-                cs[c]["st"][me] = "peace"
-                _add_rel(me, c, -15.0)
-                country_msg = "Alliance ended."
-                _win_refresh(), 0, 54, 18))
-        if not cs[me]["trade"][c]:
-            g.add_child(_btn("PROPOSE TRADE DEAL", "good", func():
-                var r3 := _propose(me, c, "trade")
-                country_msg = String(r3["msg"])
-                _win_refresh(), 0, 54, 18))
-        g.add_child(_btn("IMPROVE RELATIONS", "dark", func():
-            var r4 := _propose(me, c, "peace")
-            country_msg = String(r4["msg"])
-            _win_refresh(), 0, 54, 18))
-        g.add_child(_btn("SEND AID (" + _fmt(5000.0) + ")", "dark", func():
-            var r5 := _propose(me, c, "aid")
-            country_msg = String(r5["msg"])
-            _win_refresh(), 0, 54, 18))
-        if cs[me]["sanc"][c]:
-            g.add_child(_btn("LIFT SANCTIONS", "dark", func():
-                var r6 := _propose(me, c, "unsanction")
-                country_msg = String(r6["msg"])
-                _win_refresh(), 0, 54, 18))
-        else:
-            g.add_child(_btn("IMPOSE SANCTIONS", "warn", func():
-                var r7 := _propose(me, c, "sanction")
-                country_msg = String(r7["msg"])
-                _win_refresh(), 0, 54, 18))
         g.add_child(_btn("FIGHTER SWEEP (provocation)", "warn", func():
             var n2 := _launch_sweep(me, c, 2)
             country_msg = (str(n2) + " jets flying into " + String(COUNTRIES[c]["short"]) + " airspace. This is an airspace violation!") if n2 > 0 else "No ready jets."
             _win_refresh(), 0, 54, 16))
-    win_body.add_child(_lbl("Tip: during a war the AI may refuse a ceasefire when it is winning. Keep fighting, defend yourself, and try again later.", 15, C_DIM, true))
+    win_body.add_child(_lbl("Tip: jang mein AI jeet raha ho to ceasefire se inkar kar sakta hai. Mazboot defence banao aur dobara koshish karo.", 15, C_DIM, true))
 
 
 func _begin_strike(kind: String, c: int) -> void:
@@ -7523,6 +7636,7 @@ var crowd_cache := {}
 
 # street protests: crowds with placards appear in the capital when people are unhappy
 func _protest_update(dt: float) -> void:
+    return
     for c in range(9):
         var level: float = cs[c]["prot"]
         var vis: float = cs[c].get("protest_vis", 0.0)
