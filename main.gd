@@ -2193,6 +2193,8 @@ func _on_built(b: Dictionary) -> void:
 
 
 func _lod_rebuild() -> void:
+    if cs.size() < 9 or lod_mm.size() < 9:
+        return
     for i in range(9):
         if not lod_dirty[i]:
             continue
