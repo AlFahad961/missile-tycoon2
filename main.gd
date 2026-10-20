@@ -1605,6 +1605,36 @@ var sel_country := -1           # country being inspected on the map
 var strike_target_c := -1
 var air_pick_group := {}
 
+# third person + map view
+var view_mode := "walk"          # walk (3rd person) / map (top-down)
+var hero: Node3D = null
+var hero_model: Node = null
+var hero_anim: AnimationPlayer = null
+var hero_pos := Vector3.ZERO
+var hero_face := 0.0
+var walk_yaw := 0.0
+var walk_pitch := 0.38
+var walk_dist := 12.0
+var joy_vec := Vector2.ZERO
+var joy_idx := -1
+var joy_center := Vector2.ZERO
+var joy_ui: Control = null
+var mm_panel: PanelContainer = null
+var mm_vp: SubViewport = null
+var mm_cam: Camera3D = null
+var mm_over: Control = null
+var mm_timer := 0.0
+var back_btn: Button = null
+var fire_panel: PanelContainer = null
+var fire_lbl: Label = null
+var pending_target: Variant = null
+var map_auto_back := false
+const MM_CX := -325.0
+const MM_CZ := 20.0
+const MM_H := 2050.0
+const MM_W_PX := 560
+const MM_H_PX := 240
+
 
 func _ready() -> void:
     rng.randomize()
@@ -1726,6 +1756,7 @@ func _build_environment() -> void:
     cmat.shader = csh
     cl.material_override = cmat
     cl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    cl.layers = 2
     add_child(cl)
 
     get_viewport().msaa_3d = Viewport.MSAA_4X
@@ -1912,7 +1943,10 @@ func _start_game(player: int) -> void:
     cam_dist = 300.0
     cam_goal_dist = 300.0
     cam_yaw = 0.0
-    _news("You lead " + String(COUNTRIES[player]["name"]) + ". Build your nation, protect your people, and rule the world.", "good")
+    _news("Aap " + String(COUNTRIES[player]["name"]) + " ke leader hain. Shehar banao, fauj banao, aur dunya par raaj karo.", "good")
+    pending_target = null
+    _make_hero()
+    _enter_walk()
     _refresh_hud()
     if menu_root:
         menu_root.visible = false
@@ -2079,23 +2113,55 @@ const KN_MAP := {
 }
 
 
+var kn_data: Dictionary = {}
+var kn_init_done := false
+var kn_status := "not loaded"
+
+
+func _kn_init() -> void:
+    if kn_init_done:
+        return
+    kn_init_done = true
+    if not ResourceLoader.exists("res://assets_data.gd"):
+        kn_status = "assets_data.gd NAHI MILI (upload karein)"
+        return
+    var sc = load("res://assets_data.gd")
+    if sc == null:
+        kn_status = "assets_data.gd load nahi hui"
+        return
+    var cm: Dictionary = sc.get_script_constant_map()
+    if cm.has("DATA"):
+        kn_data = cm["DATA"]
+        kn_status = "OK (" + str(kn_data.size()) + " models)"
+
+
+func _kn_scene(nm: String) -> Node:
+    _kn_init()
+    if not kn_data.has(nm):
+        return null
+    var bytes: PackedByteArray = Marshalls.base64_to_raw(String(kn_data[nm]))
+    var doc := GLTFDocument.new()
+    var st := GLTFState.new()
+    var err := doc.append_from_buffer(bytes, "", st)
+    if err != OK:
+        return null
+    return doc.generate_scene(st)
+
+
 func _kn_mesh(nm: String) -> Mesh:
     if kn_cache.has(nm):
         return kn_cache[nm]
     var m: Mesh = null
-    var path := "res://assets/" + nm + ".glb"
-    if ResourceLoader.exists(path):
-        var ps = load(path)
-        if ps is PackedScene:
-            var inst: Node = ps.instantiate()
-            var stack := [inst]
-            while stack.size() > 0 and m == null:
-                var cur: Node = stack.pop_back()
-                if cur is MeshInstance3D and cur.mesh != null:
-                    m = cur.mesh
-                for ch in cur.get_children():
-                    stack.append(ch)
-            inst.free()
+    var inst: Node = _kn_scene(nm)
+    if inst != null:
+        var stack := [inst]
+        while stack.size() > 0 and m == null:
+            var cur: Node = stack.pop_back()
+            if cur is MeshInstance3D and cur.mesh != null:
+                m = cur.mesh
+            for ch in cur.get_children():
+                stack.append(ch)
+        inst.free()
     kn_cache[nm] = m
     return m
 
@@ -2385,6 +2451,15 @@ func _lod_rebuild() -> void:
 #  CAMERA + INPUT
 # =====================================================================
 func _update_camera(delta: float) -> void:
+    if view_mode == "walk" and hero != null and is_instance_valid(hero):
+        var tgt := hero_pos + Vector3(0, 1.7, 0)
+        var cp := Vector3(sin(walk_yaw) * cos(walk_pitch), sin(walk_pitch), cos(walk_yaw) * cos(walk_pitch)) * walk_dist
+        var want := tgt + cp
+        camera.position = camera.position.lerp(want, min(1.0, delta * 14.0)) if delta < 0.5 else want
+        camera.look_at(tgt, Vector3.UP)
+        sun.directional_shadow_max_distance = clamp(walk_dist * 8.0, 120.0, 400.0)
+        camera.far = 9000.0
+        return
     var k = min(1.0, delta * 9.0)
     cam_target = cam_target.lerp(cam_goal, k)
     cam_dist = lerp(cam_dist, cam_goal_dist, k)
@@ -2410,10 +2485,15 @@ func _pan(dx: float, dy: float) -> void:
 
 
 func _zoom(f: float) -> void:
+    if view_mode == "walk":
+        walk_dist = clamp(walk_dist * f, 5.0, 34.0)
+        return
     cam_goal_dist = clamp(cam_goal_dist * f, 45.0, 3900.0)
 
 
 func _focus(p: Vector3, dist: float = -1.0) -> void:
+    if view_mode == "walk":
+        _enter_map(false)
     cam_goal = Vector3(p.x, 0, p.z)
     if dist > 0.0:
         cam_goal_dist = dist
@@ -2450,6 +2530,9 @@ func _unhandled_input(event: InputEvent) -> void:
             touches.erase(event.index)
     elif event is InputEventScreenDrag:
         touches[event.index] = event.position
+        if view_mode == "walk" and touches.size() == 1:
+            walk_yaw -= event.relative.x * 0.006
+            walk_pitch = clamp(walk_pitch + event.relative.y * 0.004, 0.1, 1.25)
         if touches.size() >= 2:
             var ks := touches.keys()
             var a: Vector2 = touches[ks[0]]
@@ -2459,7 +2542,8 @@ func _unhandled_input(event: InputEvent) -> void:
                 _zoom(pinch_d / d)
             var ang := (b - a).angle()
             var da := wrapf(ang - pinch_a, -PI, PI)
-            cam_yaw -= da
+            if view_mode == "map":
+                cam_yaw -= da
             pinch_d = d
             pinch_a = ang
     elif event is InputEventMouseButton:
@@ -2468,7 +2552,9 @@ func _unhandled_input(event: InputEvent) -> void:
         elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
             _zoom(1.14)
         elif event.button_index == MOUSE_BUTTON_LEFT:
-            if event.pressed:
+            if event.pressed and view_mode == "walk" and _in_joy_zone(event.position):
+                pressing = false
+            elif event.pressed:
                 pressing = true
                 press_pos = event.position
                 press_t = Time.get_ticks_msec() / 1000.0
@@ -2482,13 +2568,376 @@ func _unhandled_input(event: InputEvent) -> void:
             if event.button_mask & MOUSE_BUTTON_MASK_LEFT:
                 press_moved += event.relative.length()
                 if press_moved > 8.0:
-                    _pan(event.relative.x, event.relative.y)
+                    if view_mode == "walk":
+                        if not DisplayServer.is_touchscreen_available():
+                            walk_yaw -= event.relative.x * 0.006
+                            walk_pitch = clamp(walk_pitch + event.relative.y * 0.004, 0.1, 1.25)
+                    else:
+                        _pan(event.relative.x, event.relative.y)
         if event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
-            cam_yaw -= event.relative.x * 0.006
+            if view_mode == "walk":
+                walk_yaw -= event.relative.x * 0.006
+            else:
+                cam_yaw -= event.relative.x * 0.006
     elif event is InputEventKey and event.pressed:
         if event.keycode == KEY_SPACE:
             speed = 0 if speed > 0 else 1
             _refresh_hud()
+
+
+# =====================================================================
+#  THIRD PERSON HERO + MAP VIEW
+# =====================================================================
+func _make_hero() -> void:
+    if hero != null and is_instance_valid(hero):
+        hero.queue_free()
+    hero = Node3D.new()
+    add_child(hero)
+    hero_model = null
+    hero_anim = null
+    var sc: Node = _kn_scene("character-soldier")
+    if sc != null:
+        sc.scale = Vector3(2.7, 2.7, 2.7)
+        hero.add_child(sc)
+        hero_model = sc
+        var stack := [sc]
+        while stack.size() > 0:
+            var cur: Node = stack.pop_back()
+            if cur is AnimationPlayer and hero_anim == null:
+                hero_anim = cur
+            for ch in cur.get_children():
+                stack.append(ch)
+        if hero_anim != null:
+            for an in ["idle", "walk", "sprint", "holding-both-shoot", "holding-right-shoot"]:
+                if hero_anim.has_animation(an):
+                    var anim: Animation = hero_anim.get_animation(an)
+                    anim.loop_mode = Animation.LOOP_LINEAR if an in ["idle", "walk", "sprint"] else Animation.LOOP_NONE
+            hero_anim.play("idle")
+    else:
+        var cm := MeshInstance3D.new()
+        var cap := CapsuleMesh.new()
+        cap.radius = 0.45
+        cap.height = 1.8
+        cm.mesh = cap
+        cm.position = Vector3(0, 0.9, 0)
+        hero.add_child(cm)
+    var cen := _land_center(me)
+    hero_pos = Vector3(cen.x, 0.0, cen.z + 34.0)
+    hero_face = PI
+    walk_yaw = 0.0
+    walk_pitch = 0.38
+    walk_dist = 12.0
+    hero.position = hero_pos
+    hero.rotation.y = hero_face
+
+
+func _hero_update(dt: float) -> void:
+    if hero == null or not is_instance_valid(hero) or cs.is_empty() or game_state != "playing":
+        return
+    var mv := joy_vec
+    var kv := Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_up", "ui_down"))
+    if kv.length() > 0.1:
+        mv = kv
+    var moving := view_mode == "walk" and mv.length() > 0.12 and not win_root.visible
+    var anim_name := "idle"
+    if moving:
+        var fwd := Vector3(-sin(walk_yaw), 0, -cos(walk_yaw))
+        var right := Vector3(cos(walk_yaw), 0, -sin(walk_yaw))
+        var d := right * mv.x + fwd * (-mv.y)
+        var ln: float = clamp(mv.length(), 0.0, 1.0)
+        var spd := 6.0 + 7.0 * smoothstep(0.55, 1.0, ln)
+        hero_pos += d.normalized() * spd * ln * dt
+        anim_name = "sprint" if ln > 0.8 else "walk"
+        hero_face = lerp_angle(hero_face, atan2(d.x, d.z), min(1.0, dt * 12.0))
+        # stay on own land, do not walk through buildings
+        var cen := _land_center(me)
+        hero_pos.x = clamp(hero_pos.x, cen.x - LAND + 8.0, cen.x + LAND - 8.0)
+        hero_pos.z = clamp(hero_pos.z, cen.z - LAND + 8.0, cen.z + LAND - 8.0)
+        for b in cs[me]["bl"]:
+            if b["st"] == "ruin":
+                continue
+            var h := _fp_half(b["t"], b["r"], me) + Vector2(0.9, 0.9)
+            var dx: float = hero_pos.x - float(b["x"])
+            var dz: float = hero_pos.z - float(b["z"])
+            if abs(dx) < h.x and abs(dz) < h.y:
+                if h.x - abs(dx) < h.y - abs(dz):
+                    hero_pos.x = float(b["x"]) + (h.x if dx >= 0.0 else -h.x)
+                else:
+                    hero_pos.z = float(b["z"]) + (h.y if dz >= 0.0 else -h.y)
+    hero.position = hero_pos
+    hero.rotation.y = hero_face
+    var sc := 1.0
+    if view_mode == "map":
+        sc = clamp(cam_dist / 60.0, 1.0, 9.0)
+    hero.scale = Vector3.ONE * sc
+    if hero_anim != null and hero_anim.has_animation(anim_name):
+        if hero_anim.current_animation != anim_name and hero_shoot_t <= 0.0:
+            hero_anim.play(anim_name, 0.18)
+    if hero_shoot_t > 0.0:
+        hero_shoot_t -= dt
+
+
+var hero_shoot_t := 0.0
+
+
+func _hero_shoot() -> void:
+    if hero_anim != null and hero_anim.has_animation("holding-both-shoot"):
+        hero_anim.play("holding-both-shoot", 0.1)
+        hero_shoot_t = 1.4
+
+
+func _joy_zone() -> Rect2:
+    var vs := get_viewport().get_visible_rect().size
+    return Rect2(0.0, vs.y * 0.28, vs.x * 0.3, vs.y * 0.72 - 100.0)
+
+
+func _in_joy_zone(p: Vector2) -> bool:
+    return _joy_zone().has_point(p)
+
+
+func _input(event: InputEvent) -> void:
+    if game_state != "playing" or view_mode != "walk" or joy_ui == null:
+        return
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            if joy_idx == -1 and _in_joy_zone(event.position) and not win_root.visible and not (menu_root and menu_root.visible):
+                joy_idx = event.index
+                joy_center = event.position
+                joy_vec = Vector2.ZERO
+                joy_ui.queue_redraw()
+                get_viewport().set_input_as_handled()
+        elif event.index == joy_idx:
+            joy_idx = -1
+            joy_vec = Vector2.ZERO
+            joy_ui.queue_redraw()
+            get_viewport().set_input_as_handled()
+    elif event is InputEventScreenDrag and event.index == joy_idx:
+        var d: Vector2 = event.position - joy_center
+        if d.length() > 90.0:
+            joy_center += d.normalized() * (d.length() - 90.0)
+            d = event.position - joy_center
+        joy_vec = (d / 90.0).limit_length(1.0)
+        joy_ui.queue_redraw()
+        get_viewport().set_input_as_handled()
+
+
+func _enter_map(focus_hero: bool = true) -> void:
+    if view_mode == "map":
+        return
+    view_mode = "map"
+    joy_idx = -1
+    joy_vec = Vector2.ZERO
+    cam_yaw = walk_yaw
+    cam_target = Vector3(hero_pos.x, 0.0, hero_pos.z)
+    cam_dist = 140.0
+    if focus_hero:
+        cam_goal = cam_target
+        cam_goal_dist = 240.0
+    _view_ui_apply()
+    _update_camera(1.0)
+
+
+func _enter_walk() -> void:
+    view_mode = "walk"
+    map_auto_back = false
+    walk_yaw = cam_yaw if hero != null else 0.0
+    if mode == "place" or mode == "strike" or mode == "airtarget" or mode == "shipdest":
+        _hide_all_windows()
+    _view_ui_apply()
+    if camera != null and hero != null:
+        _update_camera(1.0)
+
+
+func _view_ui_apply() -> void:
+    if mm_panel == null:
+        return
+    var w := view_mode == "walk"
+    mm_panel.visible = w
+    back_btn.visible = not w
+    joy_ui.visible = w
+    _refresh_fire_panel()
+
+
+func _refresh_fire_panel() -> void:
+    if fire_panel == null:
+        return
+    if pending_target is Dictionary and bmap.has(pending_target["id"]):
+        var tb: Dictionary = pending_target
+        var d := _bdef(tb["t"], tb["c"])
+        fire_lbl.text = "TARGET: " + String(d["name"]) + " (" + String(COUNTRIES[tb["c"]]["short"]) + ")"
+        fire_panel.visible = true
+    else:
+        pending_target = null
+        fire_panel.visible = false
+
+
+func _build_view_ui() -> void:
+    # ---- minimap (small map at the side) ----
+    mm_vp = SubViewport.new()
+    mm_vp.size = Vector2i(MM_W_PX, MM_H_PX)
+    mm_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    mm_vp.msaa_3d = Viewport.MSAA_DISABLED
+    add_child(mm_vp)
+    mm_cam = Camera3D.new()
+    mm_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+    mm_cam.size = MM_H
+    mm_cam.cull_mask = 1
+    mm_cam.near = 10.0
+    mm_cam.far = 8000.0
+    mm_cam.position = Vector3(MM_CX, 3000.0, MM_CZ)
+    mm_cam.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+    mm_vp.add_child(mm_cam)
+    mm_cam.current = true
+    mm_panel = PanelContainer.new()
+    mm_panel.add_theme_stylebox_override("panel", _sb(Color(0.05, 0.08, 0.14, 0.92), 10, Color(0.4, 0.6, 0.95), 2))
+    mm_panel.anchor_left = 1.0
+    mm_panel.anchor_right = 1.0
+    mm_panel.offset_left = -300
+    mm_panel.offset_right = -10
+    mm_panel.offset_top = 68
+    mm_panel.offset_bottom = 68 + 144
+    ui_root.add_child(mm_panel)
+    var tr := TextureRect.new()
+    tr.texture = mm_vp.get_texture()
+    tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    tr.stretch_mode = TextureRect.STRETCH_SCALE
+    tr.custom_minimum_size = Vector2(270, 116)
+    tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    mm_panel.add_child(tr)
+    mm_over = Control.new()
+    mm_over.mouse_filter = Control.MOUSE_FILTER_STOP
+    mm_over.draw.connect(_mm_draw)
+    mm_over.gui_input.connect(_mm_input)
+    tr.add_child(mm_over)
+    mm_over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    # ---- back button (map view) ----
+    back_btn = _btn("< BACK (character)", "warn", func(): _enter_walk(), 0, 52, 18)
+    back_btn.anchor_left = 0.0
+    back_btn.offset_left = 12
+    back_btn.offset_top = 68
+    back_btn.offset_right = 250
+    back_btn.offset_bottom = 120
+    ui_root.add_child(back_btn)
+    # ---- joystick ----
+    joy_ui = Control.new()
+    joy_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+    joy_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    joy_ui.draw.connect(_joy_draw)
+    ui_root.add_child(joy_ui)
+    # ---- fire panel ----
+    fire_panel = PanelContainer.new()
+    fire_panel.add_theme_stylebox_override("panel", _sb(Color(0.3, 0.06, 0.06, 0.95), 12, Color(1, 0.4, 0.3), 2))
+    fire_panel.anchor_left = 1.0
+    fire_panel.anchor_right = 1.0
+    fire_panel.anchor_top = 1.0
+    fire_panel.anchor_bottom = 1.0
+    fire_panel.offset_left = -300
+    fire_panel.offset_right = -10
+    fire_panel.offset_top = -230
+    fire_panel.offset_bottom = -96
+    fire_panel.visible = false
+    ui_root.add_child(fire_panel)
+    var fv := _vbox(6)
+    fire_panel.add_child(fv)
+    fire_lbl = _lbl("TARGET", 16, Color(1, 0.85, 0.7), true)
+    fv.add_child(fire_lbl)
+    var fh := _hbox(8)
+    fv.add_child(fh)
+    var fb := _btn("FIRE!", "bad", func():
+        if pending_target is Dictionary:
+            _hero_shoot()
+            _open_tab("strike", pending_target), 150, 56, 22)
+    fh.add_child(fb)
+    fh.add_child(_btn("X", "dark", func():
+        pending_target = null
+        _refresh_fire_panel(), 56, 56, 20))
+    _view_ui_apply()
+
+
+func _joy_draw() -> void:
+    if joy_ui == null or view_mode != "walk" or game_state != "playing":
+        return
+    var vs := get_viewport().get_visible_rect().size
+    var base := Vector2(110.0, vs.y - 200.0)
+    var ctr := base
+    var knob := base
+    if joy_idx != -1:
+        ctr = joy_center
+        knob = joy_center + joy_vec * 90.0
+    joy_ui.draw_circle(ctr, 90.0, Color(1, 1, 1, 0.10))
+    joy_ui.draw_arc(ctr, 90.0, 0.0, TAU, 40, Color(1, 1, 1, 0.45), 3.0)
+    joy_ui.draw_circle(knob, 38.0, Color(1, 1, 1, 0.42 if joy_idx != -1 else 0.22))
+
+
+func _mm_world_to_px(x: float, z: float, sz: Vector2) -> Vector2:
+    var w := MM_H * float(MM_W_PX) / float(MM_H_PX)
+    return Vector2((x - (MM_CX - w * 0.5)) / w * sz.x, (z - (MM_CZ - MM_H * 0.5)) / MM_H * sz.y)
+
+
+func _mm_draw() -> void:
+    if mm_over == null or cs.is_empty():
+        return
+    var sz := mm_over.get_parent_control().size
+    if sz.x < 10.0:
+        sz = Vector2(270, 116)
+    mm_over.draw_string(ThemeDB.fallback_font, Vector2(6, sz.y - 6), "MAP (dabao)", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.9))
+    for i in range(9):
+        var c: Vector3 = _land_center(i)
+        var p := _mm_world_to_px(c.x, c.z, sz)
+        if i == me:
+            mm_over.draw_arc(p, 14.0, 0.0, TAU, 24, Color(1, 1, 0.3), 2.5)
+        elif cs[me]["st"][i] == "war":
+            mm_over.draw_arc(p, 14.0, 0.0, TAU, 24, Color(1, 0.2, 0.2), 2.5)
+    var hp := _mm_world_to_px(hero_pos.x, hero_pos.z, sz)
+    mm_over.draw_circle(hp, 4.0, Color(1, 1, 0.2))
+    mm_over.draw_circle(hp, 6.0, Color(0, 0, 0, 0.5), false, 1.5)
+    if pending_target is Dictionary:
+        var tp := _mm_world_to_px(float(pending_target["x"]), float(pending_target["z"]), sz)
+        mm_over.draw_circle(tp, 5.0, Color(1, 0.15, 0.1))
+
+
+func _mm_input(ev: InputEvent) -> void:
+    var tapped := false
+    var pos := Vector2.ZERO
+    if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+        tapped = true
+        pos = ev.position
+    elif ev is InputEventScreenTouch and ev.pressed:
+        tapped = true
+        pos = ev.position
+    if not tapped:
+        return
+    var sz := mm_over.get_parent_control().size
+    if sz.x < 10.0:
+        sz = Vector2(270, 116)
+    var w := MM_H * float(MM_W_PX) / float(MM_H_PX)
+    var wx := (MM_CX - w * 0.5) + pos.x / sz.x * w
+    var wz := (MM_CZ - MM_H * 0.5) + pos.y / sz.y * MM_H
+    var near := -1
+    var bd := 260.0
+    for i in range(9):
+        var c := _land_center(i)
+        var d := Vector2(wx - c.x, wz - c.z).length()
+        if d < bd:
+            bd = d
+            near = i
+    _enter_map(false)
+    if near >= 0:
+        var lc := _land_center(near)
+        cam_goal = Vector3(lc.x, 0, lc.z)
+        cam_goal_dist = 330.0
+    else:
+        cam_goal = Vector3(wx, 0, wz)
+        cam_goal_dist = 1600.0
+
+
+func _view_ui_update(dt: float) -> void:
+    mm_timer += dt
+    if mm_over != null and mm_timer > 0.25:
+        mm_timer = 0.0
+        mm_over.queue_redraw()
+
+
 
 
 func _on_tap(pos: Vector2) -> void:
@@ -6368,6 +6817,7 @@ func _build_ui() -> void:
     lbl_income = _lbl("", 17, C_DIM)
     th.add_child(lbl_income)
     lbl_pop = _lbl("", 18)
+    lbl_pop.visible = false
     th.add_child(lbl_pop)
     lbl_happy = _lbl("", 18)
     lbl_happy.visible = false
@@ -6425,6 +6875,7 @@ func _build_ui() -> void:
     for t in tabs:
         var key: String = t[1]
         dock.add_child(_btn(t[0], "dark", func(): _open_tab(key), 118, 60, 15))
+    _build_view_ui()
 
     # ---- toasts + banner ----
     toast_box = _vbox(4)
@@ -7082,7 +7533,7 @@ func _tab_world() -> void:
         for j in _wars_of(i):
             wars.append(String(COUNTRIES[j]["short"]))
         vv.add_child(_lbl(String(COUNTRIES[i]["name"]) + ("  (YOU)" if i == me else "") + ("   NUCLEAR" if cs[i]["nuke"] else ""), 19))
-        vv.add_child(_lbl("Pop " + String.num(cs[i]["pop"], 0) + "M   Treasury " + _fmt(cs[i]["money"]) + "   Power " + str(int(_power(i))) + ("   WAR vs " + ", ".join(wars) if wars.size() > 0 else ""), 15, Color(1, 0.6, 0.5) if wars.size() > 0 else C_DIM))
+        vv.add_child(_lbl("Treasury " + _fmt(cs[i]["money"]) + "   Power " + str(int(_power(i))) + ("   WAR vs " + ", ".join(wars) if wars.size() > 0 else ""), 15, Color(1, 0.6, 0.5) if wars.size() > 0 else C_DIM))
         var ii = i
         h.add_child(_btn("GO", "dark", func():
             _focus_country(ii)
@@ -7137,7 +7588,7 @@ func _tab_country(c: int) -> void:
     var vv := _vbox(2)
     h.add_child(vv)
     vv.add_child(_lbl(String(COUNTRIES[c]["title"]) + " of " + String(COUNTRIES[c]["name"]) + "  -  capital " + String(COUNTRIES[c]["cap"]), 19))
-    vv.add_child(_lbl("Status: " + _status_text(me, c) + "     Pop " + String.num(s["pop"], 0) + "M     Power " + str(int(_power(c))) + " (yours " + str(int(_power(me))) + ")", 16, C_DIM))
+    vv.add_child(_lbl("Status: " + _status_text(me, c) + "     Power " + str(int(_power(c))) + " (yours " + str(int(_power(me))) + ")", 16, C_DIM))
     vv.add_child(_lbl(String(COUNTRIES[c]["blurb"]), 15, C_DIM, true))
     var rr := _hbox(8)
     vv.add_child(rr)
@@ -7201,9 +7652,11 @@ func _begin_strike(kind: String, c: int) -> void:
 func _target_picked(tb: Dictionary) -> void:
     mode = "none"
     if not _at_war(me, tb["c"]):
-        _toast("You are not at war with " + String(COUNTRIES[tb["c"]]["name"]), "warn")
+        _toast("Aap " + String(COUNTRIES[tb["c"]]["name"]) + " se jang mein nahi hain", "warn")
         return
-    _open_tab("strike", tb)
+    pending_target = tb
+    _refresh_fire_panel()
+    _toast("Target chun liya. Ab BACK dabao aur FIRE dabao (ya yahin FIRE dabao).", "good")
 
 
 func _tab_strike(tb: Variant) -> void:
@@ -7428,7 +7881,7 @@ func _show_country_panel(c: int) -> void:
     side_body.add_child(_mk_flag(c, 80, 54))
     side_body.add_child(_lbl(String(COUNTRIES[c]["name"]), 22, Color(1, 0.9, 0.5)))
     side_body.add_child(_lbl(_status_text(me, c) + "   relations " + str(int(cs[c]["rel"][me])), 16))
-    side_body.add_child(_lbl("Pop " + String.num(cs[c]["pop"], 0) + "M   power " + str(int(_power(c))), 15, C_DIM))
+    side_body.add_child(_lbl("Power " + str(int(_power(c))), 15, C_DIM))
     side_body.add_child(_btn("DIPLOMACY", "good", func():
         side_panel.visible = false
         _open_tab("country", c), 0, 46))
@@ -7442,6 +7895,9 @@ func _show_country_panel(c: int) -> void:
 var ghost_mat: StandardMaterial3D
 
 func _begin_place(t: String, move_id: int = -1) -> void:
+    if view_mode == "walk":
+        map_auto_back = true
+        _enter_map(true)
     _close_window()
     side_panel.visible = false
     mode = "place"
@@ -7539,6 +7995,9 @@ func _confirm_place() -> void:
 
 
 func _cancel_place() -> void:
+    if map_auto_back and view_mode == "map":
+        map_auto_back = false
+        _enter_walk()
     mode = "none"
     place_type = ""
     place_move_id = -1
@@ -7591,7 +8050,7 @@ func _show_menu(has_save: bool) -> void:
         h.add_child(_mk_flag(i, 72, 48))
         h.add_child(_lbl(String(COUNTRIES[i]["name"]), 22))
         cv.add_child(_lbl(String(COUNTRIES[i]["blurb"]), 14, C_DIM, true))
-        cv.add_child(_lbl("Pop " + String.num(COUNTRIES[i]["pop"], 0) + "M    Economy x" + String.num(COUNTRIES[i]["econ"], 2) + "    " + ("Nuclear" if COUNTRIES[i]["nuke"] else "No nukes"), 14, Color(0.6, 0.85, 1.0)))
+        cv.add_child(_lbl("Economy x" + String.num(COUNTRIES[i]["econ"], 2) + "    " + ("Nuclear" if COUNTRIES[i]["nuke"] else "No nukes"), 14, Color(0.6, 0.85, 1.0)))
         var ii := i
         cv.add_child(_btn("PLAY AS " + String(COUNTRIES[i]["short"]), "good", func():
             _start_game(ii), 0, 46))
@@ -7602,6 +8061,8 @@ func _show_menu(has_save: bool) -> void:
 #  MAIN LOOP
 # =====================================================================
 func _process(delta: float) -> void:
+    _hero_update(delta)
+    _view_ui_update(delta)
     _update_camera(delta)
     _update_markers()
     _fx_update(delta)
@@ -7729,14 +8190,27 @@ func _shot_setup() -> void:
         if i != 5:
             _demo_city(i) if i == 4 else null
     var cam := args_cam.split(",")
-    if cam.size() >= 3:
+    var walk_shot := args_gui.begins_with("walk")
+    if walk_shot:
+        if cam.size() >= 2:
+            hero_pos = Vector3(float(cam[0]), 0, float(cam[1]))
+        if cam.size() >= 4:
+            walk_yaw = deg_to_rad(float(cam[3]))
+        if cam.size() >= 3:
+            walk_dist = float(cam[2])
+        if cam.size() >= 5:
+            day_t = float(cam[4])
+        hero_face = walk_yaw + PI
+    else:
+        _enter_map(false)
+    if cam.size() >= 3 and not walk_shot:
         cam_target = Vector3(float(cam[0]), 0, float(cam[1]))
         cam_goal = cam_target
         cam_dist = float(cam[2])
         cam_goal_dist = cam_dist
-    if cam.size() >= 4:
+    if cam.size() >= 4 and not walk_shot:
         cam_yaw = deg_to_rad(float(cam[3]))
-    if cam.size() >= 5:
+    if cam.size() >= 5 and not walk_shot:
         day_t = float(cam[4])
     cs[5]["money"] = 900000.0
     cs[5]["peak"] = 900000.0
