@@ -15,7 +15,7 @@ const MAX_SHIPS := 48
 const GRID := 2.0
 const ZONES := {
     "city": Rect2(-112.0, 14.0, 100.0, 98.0),
-    "service": Rect2(12.0, 14.0, 100.0, 98.0),
+    "msl": Rect2(12.0, 14.0, 100.0, 98.0),
     "mil": Rect2(-112.0, -112.0, 100.0, 98.0),
     "air": Rect2(12.0, -112.0, 100.0, 52.0),
 }
@@ -52,25 +52,25 @@ const COUNTRIES := [
      "def": ["Iron Beam", "Iron Dome", "David's Sling", "Arrow-2", "Arrow-3"],
      "msl": ["Delilah", "Harop drone", "Jericho II", "Rampage hypersonic", "Jericho III ICBM", "Jericho nuclear"],
      "blurb": "Small, tech-rich, best layered air defence in the world."},
-    {"id": "irn", "name": "Iran", "short": "IRN", "pos": Vector2(360.0, 370.0), "col": Color(0.1, 0.6, 0.25),
+    {"id": "irn", "name": "Iran", "short": "IRN", "pos": Vector2(560.0, 370.0), "col": Color(0.1, 0.6, 0.25),
      "pop": 89.0, "econ": 0.8, "nuke": false, "title": "President", "cap": "Tehran", "aggr": 0.65,
      "air": ["F-14A Tomcat", "MiG-29A", "Su-35 (import)", "Su-35 (import)"],
      "def": ["Mersad", "Bavar-373", "Bavar-373", "S-300PMU2", "Bavar-373"],
      "msl": ["Soumar cruise", "Shahed-136 drone", "Fateh-110 / Sejjil", "Fattah hypersonic", "Khorramshahr", "Nuclear warhead"],
      "blurb": "Sanctioned but defiant. Strong missiles and drones, no nuclear weapon yet."},
-    {"id": "pak", "name": "Pakistan", "short": "PAK", "pos": Vector2(860.0, 330.0), "col": Color(0.05, 0.45, 0.2),
+    {"id": "pak", "name": "Pakistan", "short": "PAK", "pos": Vector2(1250.0, 330.0), "col": Color(0.05, 0.45, 0.2),
      "pop": 240.0, "econ": 0.7, "nuke": true, "title": "Prime Minister", "cap": "Islamabad", "aggr": 0.5,
      "air": ["JF-17 Thunder", "F-16 Block 52", "J-10C Vigorous Dragon", "J-35A (planned)"],
      "def": ["Anza-III", "FM-90", "HQ-16FE", "HQ-9/P", "HQ-9B"],
      "msl": ["Babur cruise", "Burraq drone", "Shaheen-II", "Ababeel MIRV", "Shaheen-III", "Shaheen nuclear"],
      "blurb": "Nuclear-armed, close to China. Tough on a small budget."},
-    {"id": "ind", "name": "India", "short": "IND", "pos": Vector2(1000.0, 800.0), "col": Color(0.95, 0.55, 0.1),
+    {"id": "ind", "name": "India", "short": "IND", "pos": Vector2(1500.0, 950.0), "col": Color(0.95, 0.55, 0.1),
      "pop": 1430.0, "econ": 1.0, "nuke": true, "title": "Prime Minister", "cap": "New Delhi", "aggr": 0.5,
      "air": ["Tejas Mk1A", "Su-30MKI", "Rafale", "AMCA (5th gen)"],
      "def": ["Akash-NG", "QRSAM", "Barak-8 MR-SAM", "S-400 Triumf", "Project Kusha"],
      "msl": ["BrahMos", "SkyStriker drone", "Prithvi-II / Agni-II", "BrahMos-II hypersonic", "Agni-V ICBM", "Agni nuclear"],
      "blurb": "Biggest population, growing economy, balanced alliances."},
-    {"id": "chn", "name": "China", "short": "CHN", "pos": Vector2(1750.0, 100.0), "col": Color(0.85, 0.12, 0.1),
+    {"id": "chn", "name": "China", "short": "CHN", "pos": Vector2(2300.0, 100.0), "col": Color(0.85, 0.12, 0.1),
      "pop": 1410.0, "econ": 1.35, "nuke": true, "title": "President", "cap": "Beijing", "aggr": 0.55,
      "air": ["J-10C", "J-16", "J-20 Mighty Dragon", "J-35A"],
      "def": ["Type 730 CIWS", "HQ-16", "HQ-9B", "HQ-22", "HQ-19"],
@@ -94,8 +94,8 @@ const REL0 := [
 # ---- buildings -----------------------------------------------------------
 # cat: city / service / mil / air / navy
 const BDEFS := {
-    "house": {"name": "House", "cat": "city", "w": 10, "d": 10, "cost": 900, "inc": 30, "hp": 100, "up": 0, "time": 5, "unlock": 0,
-              "desc": "Citizens live here. Pays taxes.", "pop": 0.15},
+    "house": {"name": "House", "cat": "city", "w": 10, "d": 10, "cost": 900, "inc": 60, "hp": 100, "up": 0, "time": 5, "unlock": 0,
+              "desc": "Ghar: tax deta hai. Upgrade karte jao, building badi hoti jayegi aur kamai barhti jayegi.", "pop": 0.15},
     "apartment": {"name": "Apartment Block", "cat": "city", "w": 16, "d": 16, "cost": 4200, "inc": 190, "hp": 260, "up": 0, "time": 14, "unlock": 6000,
               "desc": "Dense housing, much more tax.", "pop": 1.2},
     "commerce": {"name": "Shopping Mall", "cat": "city", "w": 28, "d": 20, "cost": 7500, "inc": 380, "hp": 300, "up": 10, "time": 18, "unlock": 14000,
@@ -357,8 +357,8 @@ void fragment() {
         col = mix(col, vec3(0.9, 0.84, 0.66), 1.0 - step(0.0, dc));
         col = mix(col, vec3(0.56, 0.42, 0.28), 1.0 - step(0.0, dm));
         col = mix(col, vec3(0.62, 0.64, 0.68), 1.0 - step(0.0, da));
-        col = mix(col, vec3(0.74, 0.77, 0.84), 1.0 - step(0.0, ds));
-        float edge = (1.0 - step(1.2, abs(dc))) + (1.0 - step(1.2, abs(dm))) + (1.0 - step(1.2, abs(da)));
+        col = mix(col, vec3(0.78, 0.62, 0.6), 1.0 - step(0.0, ds));
+        float edge = (1.0 - step(1.2, abs(dc))) + (1.0 - step(1.2, abs(dm))) + (1.0 - step(1.2, abs(da))) + (1.0 - step(1.2, abs(ds)));
         col = mix(col, vec3(1.0, 0.9, 0.3), clamp(edge, 0.0, 1.0) * 0.55);
         col = mix(col, vec3(0.93, 0.85, 0.62), smoothstep(-5.0, 2.0, d));
         col = mix(col, vec3(0.78, 0.7, 0.5), smoothstep(9.0, 15.0, d));
@@ -803,32 +803,34 @@ func _ac_m(mb: MB, x: float, y: float, z: float) -> void:
 #  MODELS - city buildings
 # =====================================================================
 func _m_house(mb: MB, lvl: int, v: int, acc: Color) -> void:
-    var walls := [Color(0.9, 0.86, 0.76), Color(0.74, 0.42, 0.32), Color(0.93, 0.93, 0.9), Color(0.72, 0.76, 0.62)]
-    var roofs := [Color(0.55, 0.22, 0.14), Color(0.2, 0.22, 0.27), Color(0.36, 0.2, 0.12), Color(0.45, 0.12, 0.1)]
-    var w: Color = walls[v % 4]
-    var rc: Color = roofs[(v + lvl) % 4]
+    var walls := [Color(0.97, 0.9, 0.72), Color(0.95, 0.62, 0.45), Color(0.62, 0.82, 0.95), Color(0.75, 0.9, 0.6), Color(0.95, 0.8, 0.9), Color(0.85, 0.85, 0.92), Color(0.98, 0.85, 0.5), Color(0.7, 0.88, 0.85)]
+    var w: Color = walls[(lvl - 1) % 8]
+    var rc := Color(0.78, 0.25, 0.2).lerp(acc, 0.25)
     _lot(mb, 10.0, 10.0, C_GRASS, 0.12)
-    mb.box(Vector3(1.2, 0.1, 4.2), Vector3(2.6, 0.2, 3.0), Color(0.38, 0.38, 0.4))
-    var floors := 1 if lvl == 1 else 2
-    var bh := 3.2 * float(floors)
-    mb.box(Vector3(-0.4, bh * 0.5 + 0.12, -0.8), Vector3(6.6, bh, 5.2), w, 1.0)
-    mb.gable(Vector3(-0.4, bh + 0.12, -0.8), Vector3(6.6, 2.0 + 0.4 * float(lvl), 5.4), rc, Vector3.ZERO, "bld", w, 0.35)
-    mb.box(Vector3(-0.4, 1.1 + 0.12, 1.85), Vector3(1.1, 2.1, 0.25), Color(0.22, 0.12, 0.07))
-    mb.box(Vector3(1.8, 0.3, 4.2), Vector3(0.1, 0.1, 0.1), w)
-    mb.box(Vector3(-2.6, bh + 2.2, -1.6), Vector3(0.7, 1.6, 0.7), Color(0.55, 0.3, 0.22))
-    if lvl >= 2:
-        mb.box(Vector3(3.6, 1.35 + 0.12, -0.2), Vector3(3.2, 2.7, 4.6), w, 1.0)
-        mb.box(Vector3(3.6, 2.8 + 0.12, -0.2), Vector3(3.4, 0.25, 4.8), Color(0.4, 0.4, 0.42))
-        mb.box(Vector3(3.6, 1.0, 2.4), Vector3(2.6, 2.0, 0.15), Color(0.5, 0.52, 0.55), 0.0, Vector3.ZERO, "metal")
-    if lvl >= 3:
-        mb.box(Vector3(-3.4, 0.25, 3.6), Vector3(3.4, 0.3, 2.4), Color(0.75, 0.75, 0.72))
-        mb.box(Vector3(-3.4, 0.33, 3.6), Vector3(2.8, 0.2, 1.8), Color(0.2, 0.62, 0.85), 0.0, Vector3.ZERO, "metal")
-        mb.box(Vector3(-0.4, bh + 0.2, 1.9), Vector3(5.0, 0.15, 1.4), Color(0.7, 0.7, 0.7))
-    _fence_m(mb, 9.6, 9.6, Color(0.92, 0.92, 0.9), 0.8)
-    _tree_m(mb, -4.0, 3.8, 0.8, v % 2)
-    _tree_m(mb, 4.0, -3.9, 0.7, (v + 1) % 2)
-    if lvl >= 2:
-        _car_m(mb, 1.6, 3.2, 0.0, [Color(0.7, 0.1, 0.1), Color(0.15, 0.2, 0.5), Color(0.8, 0.8, 0.8), Color(0.1, 0.1, 0.1)][v % 4])
+    mb.box(Vector3(0, 0.15, 0), Vector3(9.4, 0.3, 9.4), Color(0.82, 0.82, 0.8))
+    if lvl <= 2:
+        var bh := 3.4 * float(lvl)
+        mb.box(Vector3(0, bh * 0.5 + 0.3, 0), Vector3(6.4, bh, 6.0), w, 1.0 if lvl == 2 else 0.0)
+        mb.gable(Vector3(0, bh + 0.3, 0), Vector3(7.0, 2.4, 6.6), rc, Vector3.ZERO, "bld", w, 0.35)
+        mb.box(Vector3(0, 1.2, 3.05), Vector3(1.3, 2.2, 0.2), Color(0.35, 0.2, 0.1))
+        mb.box(Vector3(-1.9, 1.7, 3.05), Vector3(1.2, 1.1, 0.15), Color(0.6, 0.85, 1.0), 0.0, Vector3.ZERO, "glow")
+        mb.box(Vector3(1.9, 1.7, 3.05), Vector3(1.2, 1.1, 0.15), Color(0.6, 0.85, 1.0), 0.0, Vector3.ZERO, "glow")
+        mb.box(Vector3(2.0, bh + 2.6, -1.0), Vector3(0.9, 2.0, 0.9), Color(0.55, 0.3, 0.22))
+    else:
+        var floors := lvl + 1
+        var bh2 := 3.0 * float(floors)
+        var ww := 6.6 + 0.2 * float(min(lvl, 6))
+        mb.box(Vector3(0, bh2 * 0.5 + 0.3, 0), Vector3(ww, bh2, ww), w, 1.0)
+        mb.box(Vector3(0, bh2 + 0.5, 0), Vector3(ww + 0.6, 0.5, ww + 0.6), Color(0.35, 0.37, 0.42))
+        mb.box(Vector3(0, bh2 + 1.4, 0), Vector3(ww * 0.45, 1.8, ww * 0.45), rc)
+        mb.box(Vector3(0, 1.3, ww * 0.5 + 0.05), Vector3(2.0, 2.2, 0.2), Color(0.2, 0.3, 0.4))
+        if lvl >= 6:
+            mb.cyl(Vector3(0, bh2 + 4.5, 0), 0.12, 5.0, Color(0.85, 0.85, 0.85), 6)
+            mb.sph(Vector3(0, bh2 + 7.1, 0), 0.4, Color(1.0, 0.2, 0.2), 6, 4, Vector3.ONE, "glow")
+        if lvl >= 4:
+            mb.box(Vector3(-4.4, 0.45, 3.4), Vector3(2.0, 0.3, 2.6), Color(0.25, 0.65, 0.95), 0.0, Vector3.ZERO, "metal")
+    _tree_m(mb, -4.2, -4.0, 0.7, 0)
+    _tree_m(mb, 4.2, 4.0, 0.7, 1)
 
 
 func _m_apartment(mb: MB, lvl: int, v: int, acc: Color) -> void:
@@ -1419,20 +1421,27 @@ func _gun_m(mb: MB, x: float, y: float, z: float, s: float = 1.0) -> void:
     mb.cyl(Vector3(x, y + 0.5 * s, z - 1.3 * s), 0.15 * s, 2.4 * s, Color(0.2, 0.22, 0.24), 6, 0.0, Vector3(90, 0, 0), "metal")
 
 
+func _hull_m(mb: MB, len: float, beam: float, bow: float, y0: float, y1: float, hullc: Color) -> void:
+    var ym := y0 * 0.3
+    var yt := y1 * 0.4
+    mb.poly(_hull_pts(len * 0.95, beam * 0.74, bow), y0, ym, Color(0.7, 0.16, 0.14), "metal")
+    mb.poly(_hull_pts(len, beam * 0.92, bow), ym, yt, hullc.darkened(0.12), "metal")
+    mb.poly(_hull_pts(len, beam, bow), yt, y1, hullc, "metal")
+    mb.poly(_hull_pts(len * 0.97, beam * 0.86, bow), y1, y1 + 0.18, Color(0.68, 0.7, 0.72), "metal")
+
+
 func _m_ship(mb: MB, id: String, hullc: Color, acc: Color) -> void:
     var grey := Color(0.5, 0.54, 0.58)
-    var lightg := Color(0.64, 0.67, 0.7)
+    var lightg := Color(0.82, 0.85, 0.88)
     if id == "patrol":
-        mb.poly(_hull_pts(14.0, 3.6, 0.34), -0.8, 1.0, hullc, "metal")
-        mb.poly(_hull_pts(14.0, 3.7, 0.34), -0.9, -0.3, Color(0.4, 0.1, 0.08), "metal")
+        _hull_m(mb, 14.0, 3.6, 0.34, -0.9, 1.0, hullc)
         mb.box(Vector3(0, 1.9, 1.5), Vector3(2.4, 1.8, 4.0), lightg, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 2.2, 0.3), Vector3(2.2, 0.8, 0.12), Color(0.1, 0.16, 0.2), 0.0, Vector3.ZERO, "metal")
         _gun_m(mb, 0, 1.4, -3.2, 0.9)
         mb.cyl(Vector3(0, 4.0, 2.0), 0.1, 3.0, Color(0.8, 0.8, 0.8), 6, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 2.2, 4.2), Vector3(1.6, 0.4, 1.2), Color(0.3, 0.3, 0.3), 0.0, Vector3.ZERO, "metal")
     elif id == "frigate":
-        mb.poly(_hull_pts(26.0, 5.0), -1.1, 1.3, hullc, "metal")
-        mb.poly(_hull_pts(26.0, 5.1), -1.2, -0.4, Color(0.4, 0.1, 0.08), "metal")
+        _hull_m(mb, 26.0, 5.0, 0.28, -1.2, 1.3, hullc)
         mb.box(Vector3(0, 3.4, 1.0), Vector3(3.6, 3.4, 9.0), lightg, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 4.2, -3.4), Vector3(3.0, 1.6, 2.4), lightg, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 4.4, -4.65), Vector3(2.8, 0.7, 0.1), Color(0.1, 0.16, 0.2), 0.0, Vector3.ZERO, "metal")
@@ -1442,8 +1451,7 @@ func _m_ship(mb: MB, id: String, hullc: Color, acc: Color) -> void:
         mb.box(Vector3(0, 1.7, 8.0), Vector3(3.0, 0.5, 3.4), Color(0.3, 0.32, 0.34), 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 2.1, 9.6), Vector3(2.6, 0.3, 2.4), Color(0.2, 0.2, 0.2), 0.0, Vector3.ZERO, "metal")
     elif id == "destroyer":
-        mb.poly(_hull_pts(34.0, 6.0), -1.3, 1.6, hullc, "metal")
-        mb.poly(_hull_pts(34.0, 6.1), -1.4, -0.5, Color(0.4, 0.1, 0.08), "metal")
+        _hull_m(mb, 34.0, 6.0, 0.28, -1.4, 1.6, hullc)
         mb.box(Vector3(0, 4.2, 1.0), Vector3(4.4, 4.2, 12.0), lightg, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 7.0, 0.0), Vector3(3.4, 2.0, 5.0), lightg, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 7.2, -2.55), Vector3(3.2, 0.8, 0.1), Color(0.1, 0.16, 0.2), 0.0, Vector3.ZERO, "metal")
@@ -1455,13 +1463,14 @@ func _m_ship(mb: MB, id: String, hullc: Color, acc: Color) -> void:
         mb.cyl(Vector3(0, 6.5, 6.0), 1.3, 2.4, Color(0.25, 0.25, 0.28), 8, 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 1.9, 14.2), Vector3(3.6, 0.4, 3.0), Color(0.2, 0.2, 0.2), 0.0, Vector3.ZERO, "metal")
     elif id == "sub":
-        mb.sph(Vector3(0, 0.0, 0), 1.0, Color(0.12, 0.13, 0.15), 12, 8, Vector3(2.6, 2.4, 15.0), "metal")
+        mb.cyl(Vector3(0, 0.2, 0), 1.35, 20.0, Color(0.22, 0.25, 0.3), 12, 0.0, Vector3(90, 0, 0), "metal")
+        mb.sph(Vector3(0, 0.2, -10.0), 1.35, Color(0.22, 0.25, 0.3), 10, 6, Vector3(1, 1, 1.5), "metal")
+        mb.sph(Vector3(0, 0.2, 10.0), 1.35, Color(0.22, 0.25, 0.3), 10, 6, Vector3(1, 1, 1.4), "metal")
         mb.box(Vector3(0, 2.8, -1.0), Vector3(1.6, 3.0, 5.0), Color(0.1, 0.11, 0.13), 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 1.8, 11.5), Vector3(0.3, 4.0, 2.4), Color(0.1, 0.11, 0.13), 0.0, Vector3.ZERO, "metal")
         mb.box(Vector3(0, 0.0, 12.0), Vector3(6.0, 0.25, 2.2), Color(0.1, 0.11, 0.13), 0.0, Vector3.ZERO, "metal")
     else:  # carrier
-        mb.poly(_hull_pts(70.0, 11.0, 0.2), -2.0, 3.0, hullc, "metal")
-        mb.poly(_hull_pts(70.0, 11.1, 0.2), -2.2, -1.0, Color(0.4, 0.1, 0.08), "metal")
+        _hull_m(mb, 70.0, 11.0, 0.2, -2.2, 3.0, hullc)
         var deck := PackedVector2Array([Vector2(0, -35.0), Vector2(9.5, -26.0), Vector2(11.0, -4.0), Vector2(11.0, 28.0), Vector2(8.0, 35.0),
             Vector2(-8.0, 35.0), Vector2(-11.0, 28.0), Vector2(-11.0, -4.0), Vector2(-9.5, -26.0)])
         mb.poly(deck, 2.9, 3.6, Color(0.24, 0.26, 0.28), "metal")
@@ -1583,9 +1592,9 @@ var fire_panel: PanelContainer = null
 var fire_lbl: Label = null
 var pending_target: Variant = null
 var map_auto_back := false
-const MM_CX := -325.0
+const MM_CX := -50.0
 const MM_CZ := 20.0
-const MM_H := 2050.0
+const MM_H := 2300.0
 const MM_W_PX := 560
 const MM_H_PX := 240
 
@@ -1876,7 +1885,7 @@ func _start_game(player: int) -> void:
         var cap := _add_building(i, "parliament", pc.x, pc.z, 0, true)
         c["cap_b"] = cap["id"]
         # a few starting homes make the capital feel alive
-        for st_t in ["house", "house", "house", "park"]:
+        for st_t in ["house", "house", "house", "house"]:
             var st_sp: Variant = _auto_spot(i, st_t)
             if st_sp != null:
                 _add_building(i, st_t, st_sp[0], st_sp[1], st_sp[2], true)
@@ -2016,7 +2025,7 @@ func _bdef(t: String, c: int = -1) -> Dictionary:
 func _all_types() -> Array:
     var out := []
     for k in BDEFS.keys():
-        if not BDEFS[k].get("hidden", false) and String(BDEFS[k]["cat"]) != "service" and k != "lab":
+        if not BDEFS[k].get("hidden", false) and k in ["house", "armybase", "missilebase", "radar", "airbase", "port", "enrich"]:
             out.append(k)
     for k in range(5):
         out.append("aa" + str(k))
@@ -2098,7 +2107,15 @@ func _auto_spot(c: int, t: String) -> Variant:
     if t == "port":
         return _auto_port(c)
     var cat := String(d["cat"])
-    var zr: Rect2 = ZONES[cat] if ZONES.has(cat) else ZONES["city"]
+    var zk := "city"
+    match t:
+        "house": zk = "city"
+        "armybase", "radar": zk = "mil"
+        "missilebase", "enrich": zk = "msl"
+        "airbase": zk = "air"
+        _:
+            zk = cat if ZONES.has(cat) else "mil"
+    var zr: Rect2 = ZONES[zk]
     for pass_i in range(3):
         var rect := zr
         if pass_i == 1:
@@ -2244,7 +2261,7 @@ func _kn_mesh(nm: String) -> Mesh:
 
 
 func _apply_kenney(mi: MeshInstance3D, b: Dictionary, d: Dictionary) -> void:
-    if not KN_MAP.has(b["t"]):
+    if not KN_MAP.has(b["t"]) or b["t"] == "house":
         return
     var info: Array = KN_MAP[b["t"]]
     var km := _kn_mesh(String(info[0]))
@@ -2401,13 +2418,23 @@ func _remove_building(b: Dictionary) -> void:
         sel_b = -1
 
 
+func _inc_mult(b: Dictionary) -> float:
+    if b["t"] == "house":
+        return pow(float(b["lvl"]), 2.0)
+    return 1.0 + 0.6 * float(b["lvl"] - 1)
+
+
 func _upgrade_cost(b: Dictionary) -> float:
     var d := _bdef(b["t"], b["c"])
+    if b["t"] == "house":
+        return float(d["cost"]) * pow(1.75, float(b["lvl"]))
     return float(d["cost"]) * pow(1.9, float(b["lvl"]))
 
 
 func _max_level(b: Dictionary) -> int:
     var t: String = b["t"]
+    if t == "house":
+        return 8
     if t in ["house", "apartment", "commerce", "office", "factory", "hospital", "university", "lab", "airbase", "port", "missilebase", "armybase", "radar", "park", "police"]:
         return 3
     return 1
@@ -2535,7 +2562,7 @@ func _update_camera(delta: float) -> void:
         camera.position = camera.position.lerp(want, min(1.0, delta * 14.0)) if delta < 0.5 else want
         camera.look_at(tgt, Vector3.UP)
         sun.directional_shadow_max_distance = clamp(walk_dist * 8.0, 120.0, 400.0)
-        camera.far = 9000.0
+        camera.far = 900.0
         return
     var k = min(1.0, delta * 9.0)
     cam_target = cam_target.lerp(cam_goal, k)
@@ -2545,7 +2572,7 @@ func _update_camera(delta: float) -> void:
     camera.position = cam_target + off
     camera.look_at(cam_target, Vector3.UP)
     sun.directional_shadow_max_distance = clamp(cam_dist * 1.6, 200.0, 1500.0)
-    camera.far = max(9000.0, cam_dist * 4.0)
+    camera.far = clamp(cam_dist * 3.2, 900.0, 9000.0)
 
 
 func _pan(dx: float, dy: float) -> void:
@@ -2665,6 +2692,25 @@ func _unhandled_input(event: InputEvent) -> void:
 # =====================================================================
 #  THIRD PERSON HERO + MAP VIEW
 # =====================================================================
+var hero_parts := {}
+var hero_walk_t := 0.0
+
+func _hero_box(parent: Node3D, nm: String, pos: Vector3, size: Vector3, col: Color) -> void:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = size
+    mi.mesh = bm
+    var m := StandardMaterial3D.new()
+    m.albedo_color = col
+    m.roughness = 1.0
+    mi.material_override = m
+    mi.position = pos
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    parent.add_child(mi)
+    if nm != "":
+        hero_parts[nm] = mi
+
+
 func _make_hero() -> void:
     if hero != null and is_instance_valid(hero):
         hero.queue_free()
@@ -2672,32 +2718,24 @@ func _make_hero() -> void:
     add_child(hero)
     hero_model = null
     hero_anim = null
-    var sc: Node = _kn_scene("character-soldier")
-    if sc != null:
-        sc.scale = Vector3(2.7, 2.7, 2.7)
-        hero.add_child(sc)
-        hero_model = sc
-        var stack := [sc]
-        while stack.size() > 0:
-            var cur: Node = stack.pop_back()
-            if cur is AnimationPlayer and hero_anim == null:
-                hero_anim = cur
-            for ch in cur.get_children():
-                stack.append(ch)
-        if hero_anim != null:
-            for an in ["idle", "walk", "sprint", "holding-both-shoot", "holding-right-shoot"]:
-                if hero_anim.has_animation(an):
-                    var anim: Animation = hero_anim.get_animation(an)
-                    anim.loop_mode = Animation.LOOP_LINEAR if an in ["idle", "walk", "sprint"] else Animation.LOOP_NONE
-            hero_anim.play("idle")
-    else:
-        var cm := MeshInstance3D.new()
-        var cap := CapsuleMesh.new()
-        cap.radius = 0.45
-        cap.height = 1.8
-        cm.mesh = cap
-        cm.position = Vector3(0, 0.9, 0)
-        hero.add_child(cm)
+    hero_parts = {}
+    var skin := Color(0.98, 0.8, 0.3)
+    var cols := {"torso": COUNTRIES[me]["col"].lerp(Color(0.2, 0.4, 0.9), 0.3), "legs": Color(0.25, 0.7, 0.3)}
+    var model := Node3D.new()
+    model.scale = Vector3(1.6, 1.6, 1.6)
+    hero.add_child(model)
+    hero_model = model
+    _hero_box(model, "torso", Vector3(0, 1.5, 0), Vector3(1.0, 1.0, 0.5), cols["torso"])
+    _hero_box(model, "head", Vector3(0, 2.4, 0), Vector3(0.7, 0.7, 0.7), skin)
+    _hero_box(model, "face", Vector3(0, 2.42, 0.36), Vector3(0.42, 0.22, 0.02), Color(0.1, 0.1, 0.1))
+    var lp := Node3D.new(); lp.position = Vector3(-0.25, 1.0, 0); model.add_child(lp); hero_parts["legl"] = lp
+    var rp := Node3D.new(); rp.position = Vector3(0.25, 1.0, 0); model.add_child(rp); hero_parts["legr"] = rp
+    _hero_box(lp, "", Vector3(0, -0.5, 0), Vector3(0.48, 1.0, 0.5), cols["legs"])
+    _hero_box(rp, "", Vector3(0, -0.5, 0), Vector3(0.48, 1.0, 0.5), cols["legs"])
+    var la := Node3D.new(); la.position = Vector3(-0.75, 1.95, 0); model.add_child(la); hero_parts["arml"] = la
+    var ra := Node3D.new(); ra.position = Vector3(0.75, 1.95, 0); model.add_child(ra); hero_parts["armr"] = ra
+    _hero_box(la, "", Vector3(0, -0.45, 0), Vector3(0.48, 1.0, 0.5), skin)
+    _hero_box(ra, "", Vector3(0, -0.45, 0), Vector3(0.48, 1.0, 0.5), skin)
     var cen := _land_center(me)
     hero_pos = Vector3(cen.x, 0.0, cen.z + 34.0)
     hero_face = PI
@@ -2747,9 +2785,17 @@ func _hero_update(dt: float) -> void:
     if view_mode == "map":
         sc = clamp(cam_dist / 60.0, 1.0, 9.0)
     hero.scale = Vector3.ONE * sc
-    if hero_anim != null and hero_anim.has_animation(anim_name):
-        if hero_anim.current_animation != anim_name and hero_shoot_t <= 0.0:
-            hero_anim.play(anim_name, 0.18)
+    if hero_parts.has("legl"):
+        var sw := 0.0
+        if moving:
+            hero_walk_t += dt * (12.0 if anim_name == "sprint" else 8.0)
+            sw = sin(hero_walk_t) * 0.8
+        else:
+            hero_walk_t = 0.0
+        hero_parts["legl"].rotation.x = sw
+        hero_parts["legr"].rotation.x = -sw
+        hero_parts["arml"].rotation.x = -sw * 0.8
+        hero_parts["armr"].rotation.x = sw * 0.8 if hero_shoot_t <= 0.0 else -1.4
     if hero_shoot_t > 0.0:
         hero_shoot_t -= dt
 
@@ -2758,9 +2804,7 @@ var hero_shoot_t := 0.0
 
 
 func _hero_shoot() -> void:
-    if hero_anim != null and hero_anim.has_animation("holding-both-shoot"):
-        hero_anim.play("holding-both-shoot", 0.1)
-        hero_shoot_t = 1.4
+    hero_shoot_t = 1.2
 
 
 func _joy_zone() -> Rect2:
@@ -3497,7 +3541,7 @@ func _compute_income(c: int) -> Dictionary:
         var d := _bdef(b["t"], c)
         if b["st"] == "ok":
             var hpf: float = clamp(b["hp"] / b["mhp"], 0.2, 1.0)
-            inc += float(d["inc"]) * (1.0 + 0.6 * float(b["lvl"] - 1)) * hpf
+            inc += float(d["inc"]) * _inc_mult(b) * hpf
             hap += float(d.get("happy", 0.0)) * float(b["lvl"])
             stab += float(d.get("stab", 0.0)) * float(b["lvl"])
             rp += float(d.get("rp", 0.0)) * float(b["lvl"])
@@ -4941,7 +4985,7 @@ func _ship_mesh(k: int, own: int) -> ArrayMesh:
     if mesh_cache.has(key):
         return mesh_cache[key]
     var mb := MB.new()
-    var col := Color(0.42, 0.46, 0.5)
+    var col := Color(0.5, 0.58, 0.64).lerp(COUNTRIES[own]["col"], 0.25)
     _m_ship(mb, String(SHIPS[k]["id"]), col, COUNTRIES[own]["col"])
     var m := mb.bake(mats)
     mesh_cache[key] = m
@@ -5344,7 +5388,7 @@ func _airspace_step(dt: float) -> void:
                 continue
             var war := _at_war(x, f["own"])
             var hostile: bool = cs[x]["rel"][f["own"]] < -25.0
-            if not war and not hostile and ld > 0.0:
+            if not war and ld > 0.0:
                 continue
             if f["scr"] < 3:
                 var need := 2 if war else 1
@@ -5868,7 +5912,7 @@ func _ai_spend_ok(c: int, cost: float, reserve: float) -> bool:
 
 
 func _ai_build(c: int, t: String) -> bool:
-    if t == "lab" or String(_bdef(t, c)["cat"]) == "service":
+    if t in ["lab", "apartment", "commerce", "office", "factory", "park", "stadium", "hospital", "university", "police", "embassy"]:
         return false
     if not _unlocked(c, t):
         return false
@@ -7852,7 +7896,7 @@ func _show_building_panel(b: Dictionary) -> void:
         return
     side_body.add_child(_lbl(String(d["desc"]), 14, C_DIM, true))
     if float(d["inc"]) > 0.0:
-        side_body.add_child(_lbl("Income " + _fmt(float(d["inc"]) * (1.0 + 0.6 * float(b["lvl"] - 1))) + "/mo", 15, Color(0.6, 1, 0.7)))
+        side_body.add_child(_lbl("Income " + _fmt(float(d["inc"]) * _inc_mult(b)) + "/mo", 15, Color(0.6, 1, 0.7)))
     if _is_aa(b):
         side_body.add_child(_lbl("Range " + str(int(AA_RANGE[_aa_tier(b)])), 15))
     if b["t"] == "airbase":
@@ -8315,6 +8359,10 @@ func _shot_setup() -> void:
             _show_menu(false)
         elif parts[0] == "place":
             _begin_place(parts[1])
+        elif parts[0] == "ships":
+            var o := _land_center(5) + Vector3(0, 0, 220)
+            for k in range(5):
+                _spawn_ship(5, k, o + Vector3(float(k) * 60.0 - 120.0, 0, 0), 0.0)
         elif parts[0] == "war":
             _declare_war(5, 4, "test")
             _war_demo()
