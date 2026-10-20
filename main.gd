@@ -5,7 +5,7 @@ extends Node3D
 # =====================================================================
 
 const LAND := 150.0            # half size of a country's land (300 x 300)
-const SEA_Y := -1.6
+const SEA_Y := -3.4
 const TICK := 4.0              # one "month" in seconds (at 1x)
 const PEACE_TIME := 150.0
 const SAVE_PATH := "user://world_commander_v10.json"
@@ -13,6 +13,12 @@ const MAX_JETS := 56
 const MAX_PROJ := 160
 const MAX_SHIPS := 48
 const GRID := 2.0
+const ZONES := {
+    "city": Rect2(-112.0, 14.0, 100.0, 98.0),
+    "service": Rect2(12.0, 14.0, 100.0, 98.0),
+    "mil": Rect2(-112.0, -112.0, 100.0, 98.0),
+    "air": Rect2(12.0, -112.0, 100.0, 52.0),
+}
 
 # ---- nations: index = id ------------------------------------------------
 const COUNTRIES := [
@@ -355,18 +361,21 @@ void fragment() {
     vec3 col;
     float rough = 0.95;
     if (wn.y < 0.6) {
-        float s = fbm(vec2(wp.x + wp.z, wp.y * 3.0) * 0.4);
-        col = mix(vec3(0.26, 0.23, 0.2), vec3(0.45, 0.4, 0.34), s);
-        col *= 0.75 + 0.25 * smoothstep(-4.0, 0.0, wp.y);
+        float s = fbm(vec2(wp.x + wp.z, wp.y * 2.0) * 0.35);
+        float layer = fract(wp.y * 0.55 + s * 0.5);
+        col = mix(vec3(0.52, 0.34, 0.22), vec3(0.66, 0.46, 0.32), step(0.5, layer));
+        col = mix(col, vec3(0.38, 0.25, 0.17), (1.0 - smoothstep(0.0, 0.12, abs(layer - 0.5))) * 0.6);
+        col *= 0.7 + 0.3 * smoothstep(-6.0, 0.0, wp.y);
+        col = mix(col, vec3(0.25, 0.55, 0.15), smoothstep(-0.9, -0.2, wp.y));
         ALBEDO = col;
         ROUGHNESS = 0.95;
     } else {
         float n1 = fbm(lp * 0.07);
         float n2 = fbm(lp * 0.6 + 4.0);
         float n3 = fbm(lp * 0.02 + 11.0);
-        vec3 g1 = vec3(0.26, 0.6, 0.32);
-        vec3 g2 = vec3(0.32, 0.67, 0.37);
-        vec3 g3 = vec3(0.4, 0.74, 0.42);
+        vec3 g1 = vec3(0.3, 0.58, 0.15);
+        vec3 g2 = vec3(0.36, 0.65, 0.18);
+        vec3 g3 = vec3(0.45, 0.72, 0.22);
         col = mix(g1, g2, n1);
         col = mix(col, g3, smoothstep(0.55, 0.8, n3) * 0.6);
         col *= 0.88 + 0.24 * n2;
@@ -377,15 +386,32 @@ void fragment() {
         float rx = abs(mod(lp.x + 32.0, 64.0) - 32.0);
         float rz = abs(mod(lp.y + 32.0, 64.0) - 32.0);
         float inside = 1.0 - smoothstep(-8.0, -5.0, d + 5.0 - 5.0);
-        float roadm = max(1.0 - step(4.6, rx), 1.0 - step(4.6, rz));
-        float walk = max(1.0 - step(6.3, rx), 1.0 - step(6.3, rz));
+        float roadm = 0.0;
+        float walk = 0.0;
         float inland = 1.0 - step(-4.0, d);
         vec3 asph = vec3(0.27, 0.29, 0.34) * (0.8 + 0.5 * n2);
         col = mix(col, vec3(0.78, 0.8, 0.86), walk * inland);
         col = mix(col, asph, roadm * inland);
-        float dash1 = (1.0 - step(0.18, rx)) * step(0.5, fract(lp.y / 7.0)) * (1.0 - step(4.6, rz));
-        float dash2 = (1.0 - step(0.18, rz)) * step(0.5, fract(lp.x / 7.0)) * (1.0 - step(4.6, rx));
+        float dash1 = 0.0;
+        float dash2 = 0.0;
         col = mix(col, vec3(0.95, 0.95, 0.95), max(dash1, dash2) * inland * 0.9);
+        // zones (city / services / military / air) painted like a base site
+        float wob = (fbm(lp * 0.06 + 7.0) - 0.5) * 12.0;
+        vec2 zc = abs(lp - vec2(-62.0, 63.0)) - vec2(50.0, 49.0);
+        vec2 zs = abs(lp - vec2(62.0, 63.0)) - vec2(50.0, 49.0);
+        vec2 zm = abs(lp - vec2(-62.0, -63.0)) - vec2(50.0, 49.0);
+        vec2 za = abs(lp - vec2(62.0, -86.0)) - vec2(50.0, 26.0);
+        float dc = max(zc.x, zc.y) + wob;
+        float ds = max(zs.x, zs.y) + wob;
+        float dm = max(zm.x, zm.y) + wob;
+        float da = max(za.x, za.y) + wob;
+        float trail = 1.0 - smoothstep(0.0, 0.05, abs(fbm(lp * 0.045 + 3.0) - 0.5));
+        vec3 dirt2 = mix(vec3(0.5, 0.33, 0.21), vec3(0.58, 0.4, 0.26), n2);
+        dirt2 = mix(dirt2, vec3(0.88, 0.78, 0.58), trail * 0.85);
+        col = mix(col, vec3(0.86, 0.8, 0.62) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, dc)) * 0.95);
+        col = mix(col, vec3(0.74, 0.77, 0.84) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, ds)) * 0.95);
+        col = mix(col, dirt2, (1.0 - smoothstep(-2.0, 1.0, dm)) * 0.95);
+        col = mix(col, vec3(0.62, 0.64, 0.68) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, da)) * 0.95);
         // beach
         float beach = smoothstep(-6.0, 4.0, d);
         vec3 sand = mix(vec3(0.72, 0.65, 0.48), vec3(0.8, 0.74, 0.58), n2);
@@ -462,8 +488,8 @@ void fragment() {
     }
     float shallow = 1.0 - smoothstep(0.0, 90.0, d);
     float fres = pow(1.0 - clamp(dot(NORMAL, normalize(VIEW)), 0.0, 1.0), 3.0);
-    vec3 deep = vec3(0.01, 0.1, 0.2);
-    vec3 shal = vec3(0.07, 0.42, 0.5);
+    vec3 deep = vec3(0.05, 0.24, 0.7);
+    vec3 shal = vec3(0.2, 0.62, 0.9);
     vec3 col = mix(deep, shal, shallow * 0.9 + 0.08 * h);
     col = mix(col, vec3(0.55, 0.75, 0.9), fres * 0.4);
     float fw = 7.0 + 3.0 * sin(p.x * 0.35 + p.y * 0.2 + TIME * 1.3);
@@ -1129,21 +1155,37 @@ func _m_parliament(mb: MB, lvl: int, v: int, acc: Color) -> void:
 func _truck_m(mb: MB, x: float, z: float, rot: float, col: Color, len_z: float = 7.0, wheels: int = 3) -> void:
     var r := Vector3(0, rot, 0)
     var bas := Basis.from_euler(Vector3(0, deg_to_rad(rot), 0))
-    mb.box(Vector3(x, 1.2, z) + bas * Vector3(0, 0, -len_z * 0.1), Vector3(2.6, 0.8, len_z), col.darkened(0.2), 0.0, r, "metal")
-    mb.box(Vector3(x, 1.9, z) + bas * Vector3(0, 0, len_z * 0.38), Vector3(2.5, 1.9, 2.2), col, 0.0, r, "metal")
-    mb.box(Vector3(x, 2.2, z) + bas * Vector3(0, 0, len_z * 0.5), Vector3(2.3, 0.8, 0.12), Color(0.05, 0.08, 0.1), 0.0, r, "metal")
+    var dk := col.darkened(0.28)
+    mb.box(Vector3(x, 1.15, z) + bas * Vector3(0, 0, -len_z * 0.1), Vector3(2.6, 0.7, len_z), dk, 0.0, r, "metal")
+    mb.box(Vector3(x, 1.95, z) + bas * Vector3(0, 0, len_z * 0.38), Vector3(2.6, 2.0, 2.3), col, 0.0, r, "metal")
+    mb.box(Vector3(x, 2.2, z) + bas * Vector3(0, 0, len_z * 0.38 + 1.16), Vector3(2.2, 0.95, 0.1), Color(0.1, 0.16, 0.2), 0.0, r, "metal")
+    mb.box(Vector3(x, 2.95, z) + bas * Vector3(0, 0, len_z * 0.38 + 0.3), Vector3(2.7, 0.18, 2.0), dk, 0.0, r, "metal")
+    mb.box(Vector3(x, 1.2, z) + bas * Vector3(0, 0, len_z * 0.38 + 1.18), Vector3(2.0, 0.55, 0.14), Color(0.12, 0.12, 0.12), 0.0, r, "metal")
+    mb.box(Vector3(x, 0.8, z) + bas * Vector3(0, 0, len_z * 0.38 + 1.3), Vector3(2.7, 0.35, 0.3), Color(0.18, 0.18, 0.18), 0.0, r, "metal")
+    for sx2 in [-0.8, 0.8]:
+        mb.box(Vector3(x, 1.45, z) + bas * Vector3(sx2, 0, len_z * 0.38 + 1.2), Vector3(0.4, 0.22, 0.1), Color(1.0, 0.95, 0.7), 0.0, r, "glow")
     for k in range(wheels):
         var zz := len_z * 0.35 - float(k) * (len_z * 0.7 / float(max(wheels - 1, 1)))
         for sx in [-1.0, 1.0]:
-            var wp := bas * Vector3(sx * 1.35, 0, zz) + Vector3(x, 0.65, z)
-            mb.cyl(wp, 0.65, 0.5, Color(0.05, 0.05, 0.05), 8, 0.0, Vector3(0, rot, 90))
+            var wp := bas * Vector3(sx * 1.4, 0, zz) + Vector3(x, 0.7, z)
+            mb.cyl(wp, 0.72, 0.55, Color(0.07, 0.07, 0.07), 10, 0.0, Vector3(0, rot, 90))
+            mb.cyl(wp + bas * Vector3(sx * 0.05, 0, 0), 0.36, 0.6, Color(0.55, 0.57, 0.55), 8, 0.0, Vector3(0, rot, 90), "metal")
+        mb.box(Vector3(x, 1.5, z) + bas * Vector3(-1.5, 0, zz), Vector3(0.18, 0.4, 1.7), dk, 0.0, r, "metal")
+        mb.box(Vector3(x, 1.5, z) + bas * Vector3(1.5, 0, zz), Vector3(0.18, 0.4, 1.7), dk, 0.0, r, "metal")
 
 
 func _missile_m(mb: MB, p: Vector3, rot: Vector3, len: float, r: float, body: Color, nose: Color) -> void:
     var bas := Basis.from_euler(Vector3(deg_to_rad(rot.x), deg_to_rad(rot.y), deg_to_rad(rot.z)), EULER_ORDER_YXZ)
     var up := bas * Vector3(0, 1, 0)
-    mb.cyl(p + up * (len * 0.4), r, len * 0.8, body, 8, 0.0, rot, "metal")
-    mb.cyl(p + up * (len * 0.9), r, len * 0.2, nose, 8, 0.0, rot, "metal", 0.02)
+    var rt := bas * Vector3(1, 0, 0)
+    var fw := bas * Vector3(0, 0, 1)
+    mb.cyl(p + up * (len * 0.4), r, len * 0.8, body, 10, 0.0, rot, "metal")
+    mb.cyl(p + up * (len * 0.92), r, len * 0.24, nose, 10, 0.0, rot, "metal", 0.03)
+    mb.cyl(p + up * (len * 0.5), r * 1.06, len * 0.05, Color(0.95, 0.85, 0.2), 10, 0.0, rot, "metal")
+    for k in range(4):
+        var dir := rt if k % 2 == 0 else fw
+        var sg := 1.0 if k < 2 else -1.0
+        mb.box(p + up * (len * 0.06) + dir * (sg * r * 1.5), Vector3(r * 0.2, len * 0.14, r * 1.4) if k % 2 == 0 else Vector3(r * 1.4, len * 0.14, r * 0.2), nose.darkened(0.1), 0.0, rot, "metal")
 
 
 func _m_armybase(mb: MB, lvl: int, v: int, acc: Color) -> void:
@@ -1673,8 +1715,8 @@ func _make_mats() -> void:
     mats["bld"] = m
     var mm := StandardMaterial3D.new()
     mm.vertex_color_use_as_albedo = true
-    mm.metallic = 0.55
-    mm.roughness = 0.38
+    mm.metallic = 0.12
+    mm.roughness = 0.5
     mats["metal"] = mm
     var gm := StandardMaterial3D.new()
     gm.vertex_color_use_as_albedo = true
@@ -1683,6 +1725,7 @@ func _make_mats() -> void:
     var lm := StandardMaterial3D.new()
     lm.vertex_color_use_as_albedo = true
     lm.roughness = 0.9
+    lm.cull_mode = BaseMaterial3D.CULL_DISABLED
     mats["lod"] = lm
 
 
@@ -1797,7 +1840,7 @@ func _make_world() -> void:
         slab.material_override = gm
         node.add_child(slab)
         ground_mats.append(gm)
-        _make_traffic(node)
+        _add_rocks(node)
         # trees
         var trs := []
         for kind in range(2):
@@ -1811,21 +1854,7 @@ func _make_world() -> void:
             node.add_child(inst)
             trs.append(mm)
         tree_mm.append(trs)
-        var tr := RandomNumberGenerator.new()
-        tr.seed = 1000 + i
-        for kind in range(2):
-            var mm: MultiMesh = tree_mm[i][kind]
-            for k in range(90):
-                var lx := 0.0
-                var lz := 0.0
-                for tries in range(20):
-                    lx = tr.randf_range(-LAND + 6.0, LAND - 6.0)
-                    lz = tr.randf_range(-LAND + 6.0, LAND - 6.0)
-                    if abs(fposmod(lx + 32.0, 64.0) - 32.0) > 9.0 and abs(fposmod(lz + 32.0, 64.0) - 32.0) > 9.0 and (abs(lx) > 24.0 or abs(lz) > 18.0):
-                        break
-                var s := tr.randf_range(0.8, 1.5)
-                var t := Transform3D(Basis(Vector3.UP, tr.randf() * TAU).scaled(Vector3(s, s * tr.randf_range(0.9, 1.3), s)), Vector3(lx, 0, lz))
-                mm.set_instance_transform(k, t)
+        _scatter_trees(i)
         # far LOD blob multimesh
         var lm := MultiMesh.new()
         lm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1927,9 +1956,10 @@ func _start_game(player: int) -> void:
         var cap := _add_building(i, "parliament", pc.x, pc.z, 0, true)
         c["cap_b"] = cap["id"]
         # a few starting homes make the capital feel alive
-        _add_building(i, "house", pc.x - 52.0, pc.z + 46.0, 0, true)
-        _add_building(i, "house", pc.x - 40.0, pc.z + 46.0, 0, true)
-        _add_building(i, "park", pc.x + 48.0, pc.z + 20.0, 0, true)
+        for st_t in ["house", "house", "house", "park"]:
+            var st_sp: Variant = _auto_spot(i, st_t)
+            if st_sp != null:
+                _add_building(i, st_t, st_sp[0], st_sp[1], st_sp[2], true)
     cs[player]["money"] = 45000.0
     cs[player]["peak"] = 45000.0
     for i in range(9):
@@ -1960,6 +1990,19 @@ func _clear_country_nodes(c: Dictionary) -> void:
 
 
 func _reset_trees(i: int) -> void:
+    _scatter_trees(i)
+    lod_dirty[i] = true
+
+
+func _in_zones(lx: float, lz: float, pad: float) -> bool:
+    for k in ZONES.keys():
+        var r: Rect2 = ZONES[k]
+        if lx > r.position.x - pad and lx < r.end.x + pad and lz > r.position.y - pad and lz < r.end.y + pad:
+            return true
+    return false
+
+
+func _scatter_trees(i: int) -> void:
     var tr := RandomNumberGenerator.new()
     tr.seed = 1000 + i
     for kind in range(2):
@@ -1967,15 +2010,59 @@ func _reset_trees(i: int) -> void:
         for k in range(90):
             var lx := 0.0
             var lz := 0.0
-            for tries in range(20):
-                lx = tr.randf_range(-LAND + 6.0, LAND - 6.0)
-                lz = tr.randf_range(-LAND + 6.0, LAND - 6.0)
-                if abs(fposmod(lx + 32.0, 64.0) - 32.0) > 9.0 and abs(fposmod(lz + 32.0, 64.0) - 32.0) > 9.0 and (abs(lx) > 24.0 or abs(lz) > 18.0):
+            for tries in range(40):
+                if tr.randf() < 0.82:
+                    var edge := tr.randf_range(LAND - 34.0, LAND - 9.0)
+                    var along := tr.randf_range(-LAND + 9.0, LAND - 9.0)
+                    var side := tr.randi() % 4
+                    if side == 0:
+                        lx = along
+                        lz = edge
+                    elif side == 1:
+                        lx = along
+                        lz = -edge
+                    elif side == 2:
+                        lx = edge
+                        lz = along
+                    else:
+                        lx = -edge
+                        lz = along
+                else:
+                    lx = tr.randf_range(-LAND + 8.0, LAND - 8.0)
+                    lz = tr.randf_range(-LAND + 8.0, LAND - 8.0)
+                if not _in_zones(lx, lz, 2.0) and (abs(lx) > 26.0 or abs(lz) > 20.0):
                     break
-            var s := tr.randf_range(0.8, 1.5)
-            var t := Transform3D(Basis(Vector3.UP, tr.randf() * TAU).scaled(Vector3(s, s * tr.randf_range(0.9, 1.3), s)), Vector3(lx, 0, lz))
+            var sc := tr.randf_range(0.9, 1.7)
+            var t := Transform3D(Basis(Vector3.UP, tr.randf() * TAU).scaled(Vector3(sc, sc * tr.randf_range(0.9, 1.3), sc)), Vector3(lx, 0, lz))
             mm.set_instance_transform(k, t)
-    lod_dirty[i] = true
+
+
+func _add_rocks(node: Node3D) -> void:
+    var mb := MB.new()
+    mb.sph(Vector3(0, 0.5, 0), 1.0, Color(0.66, 0.66, 0.7), 8, 5, Vector3(1.0, 0.75, 1.0), "lod")
+    var mm := MultiMesh.new()
+    mm.transform_format = MultiMesh.TRANSFORM_3D
+    mm.mesh = mb.bake(mats)
+    mm.instance_count = 70
+    var rr := RandomNumberGenerator.new()
+    rr.seed = 4242 + node.get_instance_id() % 997
+    for k in range(70):
+        var side := rr.randi() % 4
+        var edge := LAND + rr.randf_range(-3.0, 13.0)
+        var along := rr.randf_range(-LAND - 4.0, LAND + 4.0)
+        var p := Vector3(along, 0.0, edge)
+        if side == 1:
+            p = Vector3(along, 0.0, -edge)
+        elif side == 2:
+            p = Vector3(edge, 0.0, along)
+        elif side == 3:
+            p = Vector3(-edge, 0.0, along)
+        var sc := rr.randf_range(1.6, 5.2)
+        mm.set_instance_transform(k, Transform3D(Basis(Vector3.UP, rr.randf() * TAU).scaled(Vector3(sc, sc * rr.randf_range(0.8, 1.3), sc)), p))
+    var inst := MultiMeshInstance3D.new()
+    inst.multimesh = mm
+    inst.visibility_range_end = 1100.0
+    node.add_child(inst)
 
 
 func _clear_trees_rect(i: int, x: float, z: float, hw: float, hd: float) -> void:
@@ -2034,6 +2121,7 @@ func _fp_half(t: String, r: int, c: int = -1) -> Vector2:
 
 
 func _road_overlap(c: int, x: float, z: float, hw: float, hd: float) -> bool:
+    return false
     var p: Vector2 = COUNTRIES[c]["pos"]
     var lx := x - p.x
     var lz := z - p.y
@@ -2054,7 +2142,7 @@ func _road_overlap(c: int, x: float, z: float, hw: float, hd: float) -> bool:
     return false
 
 
-func _can_place(c: int, t: String, x: float, z: float, r: int, ignore_id: int = -1) -> String:
+func _can_place(c: int, t: String, x: float, z: float, r: int, ignore_id: int = -1, gap: float = 0.6) -> String:
     var d := _bdef(t, c)
     var h := _fp_half(t, r, c)
     var p: Vector2 = COUNTRIES[c]["pos"]
@@ -2075,18 +2163,87 @@ func _can_place(c: int, t: String, x: float, z: float, r: int, ignore_id: int = 
     else:
         if abs(lx) + h.x > lim or abs(lz) + h.y > lim:
             return "Outside your land"
-    var big := float(d["w"]) > 40.0 or float(d["d"]) > 40.0 or String(d["cat"]) in ["mil", "air", "navy"]
-    if not big:
-        var rr := _road_overlap(c, x, z, h.x, h.y)
-        if rr:
-            return "Blocked by road"
     for b in cs[c]["bl"]:
         if b["id"] == ignore_id or b["st"] == "ruin":
             continue
         var bh := _fp_half(b["t"], b["r"], c)
-        if abs(x - b["x"]) < h.x + bh.x + 0.6 and abs(z - b["z"]) < h.y + bh.y + 0.6:
+        if abs(x - b["x"]) < h.x + bh.x + gap and abs(z - b["z"]) < h.y + bh.y + gap:
             return "Overlaps another building"
     return ""
+
+
+func _auto_spot(c: int, t: String) -> Variant:
+    var d := _bdef(t, c)
+    var cen := _land_center(c)
+    if t == "port":
+        return _auto_port(c)
+    var cat := String(d["cat"])
+    var zr: Rect2 = ZONES[cat] if ZONES.has(cat) else ZONES["city"]
+    for pass_i in range(3):
+        var rect := zr
+        if pass_i == 1:
+            rect = Rect2(-LAND + 36.0, -LAND + 36.0, 2.0 * (LAND - 36.0), 2.0 * (LAND - 36.0))
+        elif pass_i == 2:
+            rect = Rect2(-LAND + 6.0, -LAND + 6.0, 2.0 * (LAND - 6.0), 2.0 * (LAND - 6.0))
+        for r in [0, 1]:
+            var h := _fp_half(t, r, c)
+            var zz := rect.position.y + h.y + 1.0
+            while zz <= rect.end.y - h.y:
+                var xx := rect.position.x + h.x + 1.0
+                while xx <= rect.end.x - h.x:
+                    var wx := _snap(cen.x + xx)
+                    var wz := _snap(cen.z + zz)
+                    if _can_place(c, t, wx, wz, r, -1, 3.0) == "":
+                        return [wx, wz, r]
+                    xx += 4.0
+                zz += 4.0
+    return null
+
+
+func _auto_port(c: int) -> Variant:
+    var cen := _land_center(c)
+    for side in [0, 1, 3, 2]:
+        for k in range(-14, 15):
+            var lat := float(k) * 8.0
+            var x := 0.0
+            var z := 0.0
+            match side:
+                0:
+                    x = cen.x + lat
+                    z = cen.z + LAND - 2.0
+                1:
+                    x = cen.x + LAND - 2.0
+                    z = cen.z + lat
+                2:
+                    x = cen.x + lat
+                    z = cen.z - LAND + 2.0
+                _:
+                    x = cen.x - LAND + 2.0
+                    z = cen.z + lat
+            x = _snap(x)
+            z = _snap(z)
+            var r := _port_rot(c, x, z)
+            if _can_place(c, "port", x, z, r, -1, 3.0) == "":
+                return [x, z, r]
+    return null
+
+
+func _buy_auto(t: String) -> void:
+    var sp: Variant = _auto_spot(me, t)
+    if sp == null:
+        _toast("Jagah nahi mili. Purani building bech do ya upgrade karo.", "warn")
+        return
+    var e := _buy_building(me, t, sp[0], sp[1], sp[2])
+    if e != "":
+        _toast(e, "warn")
+        return
+    _snd("build")
+    _close_window()
+    map_auto_back = false
+    _focus(Vector3(sp[0], 0, sp[1]), 230.0)
+    _toast(String(_bdef(t, me)["name"]) + " ban rahi hai. Wapis jaane ke liye BACK dabao.", "good")
+
+
 
 
 func _port_rot(c: int, x: float, z: float) -> int:
@@ -2463,7 +2620,7 @@ func _update_camera(delta: float) -> void:
     var k = min(1.0, delta * 9.0)
     cam_target = cam_target.lerp(cam_goal, k)
     cam_dist = lerp(cam_dist, cam_goal_dist, k)
-    var pitch := deg_to_rad(lerp(50.0, 82.0, clamp((cam_dist - 90.0) / 1500.0, 0.0, 1.0)))
+    var pitch := deg_to_rad(lerp(40.0, 68.0, clamp((cam_dist - 90.0) / 1700.0, 0.0, 1.0)))
     var off := Vector3(sin(cam_yaw) * cos(pitch), sin(pitch), cos(cam_yaw) * cos(pitch)) * cam_dist
     camera.position = cam_target + off
     camera.look_at(cam_target, Vector3.UP)
@@ -2476,7 +2633,7 @@ func _pan(dx: float, dy: float) -> void:
     var u := 2.0 * cam_dist * tan(deg_to_rad(camera.fov) * 0.5) / vh
     var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
     var fwd := Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
-    var pitch := deg_to_rad(lerp(50.0, 82.0, clamp((cam_dist - 90.0) / 1500.0, 0.0, 1.0)))
+    var pitch := deg_to_rad(lerp(40.0, 68.0, clamp((cam_dist - 90.0) / 1700.0, 0.0, 1.0)))
     cam_goal -= right * dx * u
     cam_goal += fwd * dy * u / max(sin(pitch), 0.3)
     cam_goal.x = clamp(cam_goal.x, -2900.0, 2200.0)
@@ -2729,10 +2886,11 @@ func _enter_map(focus_hero: bool = true) -> void:
     joy_vec = Vector2.ZERO
     cam_yaw = walk_yaw
     cam_target = Vector3(hero_pos.x, 0.0, hero_pos.z)
-    cam_dist = 140.0
+    cam_dist = 200.0
     if focus_hero:
-        cam_goal = cam_target
-        cam_goal_dist = 240.0
+        var lc := _land_center(me)
+        cam_goal = Vector3(lc.x, 0.0, lc.z + 20.0)
+        cam_goal_dist = 430.0
     _view_ui_apply()
     _update_camera(1.0)
 
@@ -5782,32 +5940,7 @@ func _ai_update(dt: float) -> void:
 
 
 func _ai_find_spot(c: int, t: String) -> Variant:
-    var cen := _land_center(c)
-    var d := _bdef(t, c)
-    var cnt: int = cs[c]["bl"].size()
-    var rad: float = clamp(35.0 + sqrt(float(cnt)) * 22.0, 40.0, LAND - 12.0)
-    for i in range(70):
-        var x := 0.0
-        var z := 0.0
-        var r := rng.randi() % 2
-        if t == "port":
-            var side := rng.randi() % 4
-            var lat := rng.randf_range(-LAND + 40.0, LAND - 40.0)
-            match side:
-                0: x = cen.x + lat; z = cen.z + LAND - 2.0
-                1: x = cen.x + LAND - 2.0; z = cen.z + lat
-                2: x = cen.x + lat; z = cen.z - LAND + 2.0
-                _: x = cen.x - LAND + 2.0; z = cen.z + lat
-        else:
-            x = cen.x + rng.randf_range(-rad, rad)
-            z = cen.z + rng.randf_range(-rad, rad)
-        x = _snap(x)
-        z = _snap(z)
-        if t == "port":
-            r = _port_rot(c, x, z)
-        if _can_place(c, t, x, z, r) == "":
-            return [x, z, r]
-    return null
+    return _auto_spot(c, t)
 
 
 func _ai_spend_ok(c: int, cost: float, reserve: float) -> bool:
@@ -7200,7 +7333,7 @@ func _grid(cols: int) -> GridContainer:
 var build_cat := "city"
 
 func _tab_build() -> void:
-    win_title.text = "BUILD  -  place anything anywhere on your land"
+    win_title.text = "BUILD  -  khareedo, jagah khud mil jaati hai"
     var tabs := _hbox(6)
     win_body.add_child(tabs)
     for t in [["City", "city"], ["Services", "service"], ["Military", "mil"], ["Air Force", "air"], ["Navy", "navy"]]:
@@ -7221,7 +7354,7 @@ func _tab_build() -> void:
         cv.add_child(_lbl(String(d["desc"]), 15, C_DIM, true))
         if unl:
             var tt = t
-            cv.add_child(_btn("PLACE", "good", func(): _begin_place(tt), 0, 46))
+            cv.add_child(_btn("KHAREEDO", "good", func(): _buy_auto(tt), 0, 46))
         else:
             cv.add_child(_lbl("LOCKED: " + _unlock_reason(me, t), 15, Color(1, 0.6, 0.4), true))
         _add_card(g, cv)
@@ -8172,7 +8305,12 @@ func _demo_city(c: int) -> void:
         var t: String = p[0]
         var x: float = cen.x + float(p[1])
         var z: float = cen.z + float(p[2])
-        var b := _add_building(c, t, x, z, 0, true)
+        var dsp: Variant = _auto_spot(c, t)
+        if dsp == null:
+            continue
+        x = dsp[0]
+        z = dsp[1]
+        var b := _add_building(c, t, x, z, dsp[2], true)
         if t == "port":
             b["r"] = _port_rot(c, x, z)
             _make_node(b)
