@@ -183,6 +183,12 @@ const SHIPS := [
      "rng": 0.0, "dmg": 0.0, "interval": 99.0, "len": 70.0, "up": 450, "aa": 0.5},
 ]
 
+func _all_tech() -> Dictionary:
+    var d := {}
+    for k in TECHS.keys():
+        d[k] = true
+    return d
+
 # ---- research ---------------------------------------------------------------
 const TECHS := {
     "drone": {"name": "Loitering Drones", "cost": 40, "lab": 1, "req": "", "desc": "Cheap long-range drones (Shahed / Harop style)."},
@@ -1763,9 +1769,9 @@ func _build_environment() -> void:
     sun.light_energy = 1.45
     sun.light_color = Color(1.0, 0.96, 0.88)
     sun.shadow_enabled = true
-    sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+    sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
     sun.light_angular_distance = 1.2
-    sun.shadow_blur = 1.6
+    sun.shadow_blur = 1.0
     sun.directional_shadow_max_distance = 500.0
     sun.shadow_bias = 0.08
     add_child(sun)
@@ -1802,8 +1808,10 @@ func _build_environment() -> void:
     cl.layers = 2
     add_child(cl)
 
-    get_viewport().msaa_3d = Viewport.MSAA_4X
-    RenderingServer.directional_shadow_atlas_set_size(4096, true)
+    get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+    get_viewport().scaling_3d_scale = 0.8
+    Engine.max_fps = 60
+    RenderingServer.directional_shadow_atlas_set_size(2048, true)
     camera = Camera3D.new()
     camera.fov = 48.0
     camera.near = 2.0
@@ -1915,7 +1923,7 @@ func _new_country(i: int) -> Dictionary:
         "bl": [], "rel": rel, "st": st, "cease_t": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         "trade": [false, false, false, false, false, false, false, false, false],
         "sanc": [false, false, false, false, false, false, false, false, false],
-        "pol": {}, "rp": 0.0, "tech": {}, "cur": "", "unl": {}, "ammo": [0, 0, 0, 0, 0, 0],
+        "pol": {}, "rp": 0.0, "tech": _all_tech(), "cur": "", "unl": {}, "ammo": [0, 0, 0, 0, 0, 0],
         "war_w": 0.0, "rep": 0.0, "ai": true, "nuke": false, "income": 0.0, "upkeep": 0.0,
         "next_elec": 40, "think": rng.randf_range(2.0, 6.0), "ops": rng.randf_range(10.0, 25.0),
         "prot": 0.0, "stab": 0.0, "casual": 0.0, "dead_pop": 0.0, "aggr": float(cd["aggr"]),
@@ -2096,7 +2104,7 @@ func _bdef(t: String, c: int = -1) -> Dictionary:
 func _all_types() -> Array:
     var out := []
     for k in BDEFS.keys():
-        if not BDEFS[k].get("hidden", false):
+        if not BDEFS[k].get("hidden", false) and String(BDEFS[k]["cat"]) != "service" and k != "lab":
             out.append(k)
     for k in range(5):
         out.append("aa" + str(k))
@@ -2933,7 +2941,7 @@ func _build_view_ui() -> void:
     # ---- minimap (small map at the side) ----
     mm_vp = SubViewport.new()
     mm_vp.size = Vector2i(MM_W_PX, MM_H_PX)
-    mm_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    mm_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
     mm_vp.msaa_3d = Viewport.MSAA_DISABLED
     add_child(mm_vp)
     mm_cam = Camera3D.new()
@@ -5948,6 +5956,8 @@ func _ai_spend_ok(c: int, cost: float, reserve: float) -> bool:
 
 
 func _ai_build(c: int, t: String) -> bool:
+    if t == "lab" or String(_bdef(t, c)["cat"]) == "service":
+        return false
     if not _unlocked(c, t):
         return false
     var d := _bdef(t, c)
@@ -7004,7 +7014,7 @@ func _build_ui() -> void:
     ui_root.add_child(dock_panel)
     dock = _hbox(6)
     dock_panel.add_child(dock)
-    var tabs := [["BUILD\n(Banao)", "build"], ["MILITARY\n(Fauj)", "mil"], ["AIR\n(Hawai)", "air"], ["NAVY\n(Behri)", "navy"], ["RESEARCH\n(Tehqeeq)", "res"], ["WORLD\n(Dunya)", "world"]]
+    var tabs := [["BUILD\n(Banao)", "build"], ["MILITARY\n(Fauj)", "mil"], ["AIR\n(Hawai)", "air"], ["NAVY\n(Behri)", "navy"], ["WORLD\n(Dunya)", "world"]]
     for t in tabs:
         var key: String = t[1]
         dock.add_child(_btn(t[0], "dark", func(): _open_tab(key), 118, 60, 15))
@@ -7151,7 +7161,7 @@ func _refresh_hud() -> void:
     var hp: float = s["happy"]
     lbl_happy.text = "Approval " + str(int(hp)) + "%"
     lbl_happy.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6) if hp >= 55.0 else (Color(1, 0.8, 0.3) if hp >= 38.0 else Color(1, 0.4, 0.4)))
-    lbl_rp.text = ("RP " + str(int(s["rp"])) + "/" + str(int(TECHS[s["cur"]]["cost"]))) if s["cur"] != "" else "RP -"
+    lbl_rp.text = ""
     var mn := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     lbl_date.text = mn[month % 12] + " " + str(2026 + month / 12)
     var sv := [0, 1, 2, 4]
@@ -7336,7 +7346,7 @@ func _tab_build() -> void:
     win_title.text = "BUILD  -  khareedo, jagah khud mil jaati hai"
     var tabs := _hbox(6)
     win_body.add_child(tabs)
-    for t in [["City", "city"], ["Services", "service"], ["Military", "mil"], ["Air Force", "air"], ["Navy", "navy"]]:
+    for t in [["City", "city"], ["Military / AA", "mil"], ["Air Force", "air"], ["Navy", "navy"]]:
         var key: String = t[1]
         tabs.add_child(_btn(t[0], "good" if build_cat == key else "dark", func():
             build_cat = key
@@ -7354,7 +7364,10 @@ func _tab_build() -> void:
         cv.add_child(_lbl(String(d["desc"]), 15, C_DIM, true))
         if unl:
             var tt = t
-            cv.add_child(_btn("KHAREEDO", "good", func(): _buy_auto(tt), 0, 46))
+            if String(t).begins_with("aa"):
+                cv.add_child(_btn("LAGAO (apni marzi)", "good", func(): _begin_place(tt), 0, 46))
+            else:
+                cv.add_child(_btn("KHAREEDO", "good", func(): _buy_auto(tt), 0, 46))
         else:
             cv.add_child(_lbl("LOCKED: " + _unlock_reason(me, t), 15, Color(1, 0.6, 0.4), true))
         _add_card(g, cv)
@@ -8193,7 +8206,12 @@ func _show_menu(has_save: bool) -> void:
 # =====================================================================
 #  MAIN LOOP
 # =====================================================================
+var mm_t := 0.0
 func _process(delta: float) -> void:
+    mm_t += delta
+    if mm_t > 0.7 and mm_vp != null:
+        mm_t = 0.0
+        mm_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
     _hero_update(delta)
     _view_ui_update(delta)
     _update_camera(delta)
