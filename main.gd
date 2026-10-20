@@ -315,15 +315,6 @@ void fragment() {
     METALLIC = metal;
     EMISSION = em;
 }
-void light() {
-    float nl = dot(NORMAL, LIGHT);
-    float t = smoothstep(-0.2, 0.6, nl);
-    t = mix(t, smoothstep(0.0, 0.35, nl), 0.35);
-    DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * t / PI;
-    vec3 hv = normalize(LIGHT + VIEW);
-    float sp = pow(max(dot(NORMAL, hv), 0.0), mix(8.0, 90.0, 1.0 - ROUGHNESS));
-    SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * sp * (1.0 - ROUGHNESS) * 0.5 / PI * step(0.0, nl);
-}
 """
 
 const GROUND_SHADER := """
@@ -342,93 +333,39 @@ void vertex() {
     wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
     wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
-float h21(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-float vn(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-float fbm(vec2 p) {
-    float a = 0.5;
-    float s = 0.0;
-    for (int i = 0; i < 4; i++) {
-        s += a * vn(p);
-        p = p * 2.03 + vec2(1.7, 9.2);
-        a *= 0.5;
-    }
-    return s;
+float zone(vec2 lp, vec2 c, vec2 h) {
+    vec2 q = abs(lp - c) - h;
+    return max(q.x, q.y);
 }
 void fragment() {
     vec2 lp = wp.xz - center;
     float d = max(abs(lp.x), abs(lp.y)) - half_size;
     vec3 col;
-    float rough = 0.95;
     if (wn.y < 0.6) {
-        float s = fbm(vec2(wp.x + wp.z, wp.y * 2.0) * 0.35);
-        float layer = fract(wp.y * 0.55 + s * 0.5);
-        col = mix(vec3(0.52, 0.34, 0.22), vec3(0.66, 0.46, 0.32), step(0.5, layer));
-        col = mix(col, vec3(0.38, 0.25, 0.17), (1.0 - smoothstep(0.0, 0.12, abs(layer - 0.5))) * 0.6);
-        col *= 0.7 + 0.3 * smoothstep(-6.0, 0.0, wp.y);
-        col = mix(col, vec3(0.25, 0.55, 0.15), smoothstep(-0.9, -0.2, wp.y));
+        float layer = step(0.5, fract(wp.y * 0.4));
+        col = mix(vec3(0.55, 0.38, 0.25), vec3(0.64, 0.45, 0.31), layer);
+        col = mix(col, vec3(0.35, 0.6, 0.2), smoothstep(-0.9, -0.2, wp.y));
         ALBEDO = col;
-        ROUGHNESS = 0.95;
+        ROUGHNESS = 1.0;
     } else {
-        float n1 = fbm(lp * 0.07);
-        float n2 = fbm(lp * 0.6 + 4.0);
-        float n3 = fbm(lp * 0.02 + 11.0);
-        vec3 g1 = vec3(0.3, 0.58, 0.15);
-        vec3 g2 = vec3(0.36, 0.65, 0.18);
-        vec3 g3 = vec3(0.45, 0.72, 0.22);
-        col = mix(g1, g2, n1);
-        col = mix(col, g3, smoothstep(0.55, 0.8, n3) * 0.6);
-        col *= 0.88 + 0.24 * n2;
-        col *= 0.975 + 0.05 * step(0.5, fract(lp.x / 14.0 + floor(lp.y / 14.0) * 0.5));
-        float dirt = smoothstep(0.62, 0.72, fbm(lp * 0.035 + 31.0));
-        col = mix(col, vec3(0.5, 0.72, 0.45), dirt * 0.25);
-        // roads
-        float rx = abs(mod(lp.x + 32.0, 64.0) - 32.0);
-        float rz = abs(mod(lp.y + 32.0, 64.0) - 32.0);
-        float inside = 1.0 - smoothstep(-8.0, -5.0, d + 5.0 - 5.0);
-        float roadm = 0.0;
-        float walk = 0.0;
-        float inland = 1.0 - step(-4.0, d);
-        vec3 asph = vec3(0.27, 0.29, 0.34) * (0.8 + 0.5 * n2);
-        col = mix(col, vec3(0.78, 0.8, 0.86), walk * inland);
-        col = mix(col, asph, roadm * inland);
-        float dash1 = 0.0;
-        float dash2 = 0.0;
-        col = mix(col, vec3(0.95, 0.95, 0.95), max(dash1, dash2) * inland * 0.9);
-        // zones (city / services / military / air) painted like a base site
-        float wob = (fbm(lp * 0.06 + 7.0) - 0.5) * 12.0;
-        vec2 zc = abs(lp - vec2(-62.0, 63.0)) - vec2(50.0, 49.0);
-        vec2 zs = abs(lp - vec2(62.0, 63.0)) - vec2(50.0, 49.0);
-        vec2 zm = abs(lp - vec2(-62.0, -63.0)) - vec2(50.0, 49.0);
-        vec2 za = abs(lp - vec2(62.0, -86.0)) - vec2(50.0, 26.0);
-        float dc = max(zc.x, zc.y) + wob;
-        float ds = max(zs.x, zs.y) + wob;
-        float dm = max(zm.x, zm.y) + wob;
-        float da = max(za.x, za.y) + wob;
-        float trail = 1.0 - smoothstep(0.0, 0.05, abs(fbm(lp * 0.045 + 3.0) - 0.5));
-        vec3 dirt2 = mix(vec3(0.5, 0.33, 0.21), vec3(0.58, 0.4, 0.26), n2);
-        dirt2 = mix(dirt2, vec3(0.88, 0.78, 0.58), trail * 0.85);
-        col = mix(col, vec3(0.86, 0.8, 0.62) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, dc)) * 0.95);
-        col = mix(col, vec3(0.74, 0.77, 0.84) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, ds)) * 0.95);
-        col = mix(col, dirt2, (1.0 - smoothstep(-2.0, 1.0, dm)) * 0.95);
-        col = mix(col, vec3(0.62, 0.64, 0.68) * (0.96 + 0.08 * n2), (1.0 - smoothstep(-2.0, 1.0, da)) * 0.95);
-        // beach
-        float beach = smoothstep(-6.0, 4.0, d);
-        vec3 sand = mix(vec3(0.72, 0.65, 0.48), vec3(0.8, 0.74, 0.58), n2);
-        col = mix(col, sand, beach);
-        float wet = smoothstep(11.0, 17.0, d);
-        col = mix(col, vec3(0.42, 0.38, 0.28), wet * 0.8);
-        // editor grid + ghost
+        float chk = step(0.5, fract(lp.x / 16.0 + floor(lp.y / 16.0) * 0.5));
+        col = mix(vec3(0.36, 0.7, 0.2), vec3(0.4, 0.74, 0.23), chk);
+        float dc = zone(lp, vec2(-62.0, 63.0), vec2(50.0, 49.0));
+        float dm = zone(lp, vec2(-62.0, -63.0), vec2(50.0, 49.0));
+        float da = zone(lp, vec2(62.0, -86.0), vec2(50.0, 26.0));
+        float ds = zone(lp, vec2(62.0, 63.0), vec2(50.0, 49.0));
+        col = mix(col, vec3(0.9, 0.84, 0.66), 1.0 - step(0.0, dc));
+        col = mix(col, vec3(0.56, 0.42, 0.28), 1.0 - step(0.0, dm));
+        col = mix(col, vec3(0.62, 0.64, 0.68), 1.0 - step(0.0, da));
+        col = mix(col, vec3(0.74, 0.77, 0.84), 1.0 - step(0.0, ds));
+        float edge = (1.0 - step(1.2, abs(dc))) + (1.0 - step(1.2, abs(dm))) + (1.0 - step(1.2, abs(da)));
+        col = mix(col, vec3(1.0, 0.9, 0.3), clamp(edge, 0.0, 1.0) * 0.55);
+        col = mix(col, vec3(0.93, 0.85, 0.62), smoothstep(-5.0, 2.0, d));
+        col = mix(col, vec3(0.78, 0.7, 0.5), smoothstep(9.0, 15.0, d));
         if (grid_on > 0.5) {
             vec2 gl = abs(fract(lp / 10.0 + 0.5) - 0.5) * 10.0;
-            float gline = (1.0 - step(0.12, min(gl.x, gl.y))) * inland;
-            col = mix(col, vec3(1.0), gline * 0.18);
+            float gline = (1.0 - step(0.12, min(gl.x, gl.y))) * (1.0 - step(-4.0, d));
+            col = mix(col, vec3(1.0), gline * 0.25);
         }
         if (ghost.z > 0.0) {
             vec2 gp = abs(wp.xz - ghost.xy);
@@ -439,72 +376,40 @@ void fragment() {
         for (int i = 0; i < 6; i++) {
             vec4 sc = scorch[i];
             if (sc.w > 0.0) {
-                float dd = length(wp.xz - sc.xy);
-                float k = 1.0 - smoothstep(sc.z * 0.4, sc.z, dd + n2 * sc.z * 0.25);
-                col = mix(col, vec3(0.03, 0.025, 0.02), k * sc.w);
+                float k = 1.0 - smoothstep(sc.z * 0.5, sc.z, length(wp.xz - sc.xy));
+                col = mix(col, vec3(0.05, 0.04, 0.03), k * sc.w);
             }
         }
-        col *= tint;
-        ALBEDO = col;
-        ROUGHNESS = mix(0.95, 0.9, roadm * inland);
-        float gx = fbm(lp * 0.9 + vec2(0.3, 0.0)) - fbm(lp * 0.9 - vec2(0.3, 0.0));
-        float gz = fbm(lp * 0.9 + vec2(0.0, 0.3)) - fbm(lp * 0.9 - vec2(0.0, 0.3));
-        vec3 nn = normalize(vec3(-gx * 0.9, 1.0, -gz * 0.9));
-        NORMAL = normalize((VIEW_MATRIX * vec4(nn, 0.0)).xyz);
+        ALBEDO = col * tint;
+        ROUGHNESS = 1.0;
     }
 }
 """
 
 const WATER_SHADER := """
 shader_type spatial;
+render_mode unshaded;
 global uniform float night;
 uniform vec4 lands[9];
 varying vec3 wpos;
 void vertex() {
     wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
-float hgt(vec2 p, float amp) {
-    return (sin(p.x * 0.11 + TIME * 0.7) * 0.5 + sin(p.y * 0.09 - TIME * 0.55) * 0.5 + sin((p.x - p.y) * 0.21 + TIME) * 0.25
-        + sin(p.x * 0.43 + p.y * 0.37 + TIME * 1.7) * 0.12 + sin(p.x * 0.8 - p.y * 0.6 - TIME * 2.2) * 0.06) * amp;
-}
-float h21(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-float vn(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
-}
 void fragment() {
     vec2 p = wpos.xz;
-    float dist = length(CAMERA_POSITION_WORLD - wpos);
-    float amp = 1.0 / (1.0 + dist * 0.0025);
-    float e = 0.4;
-    float h = hgt(p, amp);
-    float hx = hgt(p + vec2(e, 0.0), amp);
-    float hz = hgt(p + vec2(0.0, e), amp);
-    vec3 n = normalize(vec3((h - hx) * 0.8, 1.0, (h - hz) * 0.8));
-    NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
     float d = 9999.0;
     for (int i = 0; i < 9; i++) {
         vec4 l = lands[i];
-        float dd = max(abs(p.x - l.x), abs(p.y - l.y)) - l.z;
-        d = min(d, dd);
+        d = min(d, max(abs(p.x - l.x), abs(p.y - l.y)) - l.z);
     }
-    float shallow = 1.0 - smoothstep(0.0, 90.0, d);
-    float fres = pow(1.0 - clamp(dot(NORMAL, normalize(VIEW)), 0.0, 1.0), 3.0);
-    vec3 deep = vec3(0.05, 0.24, 0.7);
-    vec3 shal = vec3(0.2, 0.62, 0.9);
-    vec3 col = mix(deep, shal, shallow * 0.9 + 0.08 * h);
-    col = mix(col, vec3(0.55, 0.75, 0.9), fres * 0.4);
-    float fw = 7.0 + 3.0 * sin(p.x * 0.35 + p.y * 0.2 + TIME * 1.3);
-    float foam = (1.0 - smoothstep(0.0, fw, d)) * (0.6 + 0.4 * vn(p * 0.5 + TIME * 0.6));
-    float foam2 = (1.0 - smoothstep(fw, fw + 4.0, d)) * smoothstep(fw - 2.0, fw, d) * 0.5;
-    col = mix(col, vec3(0.95, 0.98, 1.0), clamp(foam + foam2, 0.0, 1.0) * step(0.0, d + 1.0));
+    float shallow = 1.0 - smoothstep(0.0, 70.0, d);
+    float rip = sin(p.x * 0.18 + TIME * 0.8) * sin(p.y * 0.16 - TIME * 0.6);
+    vec3 col = mix(vec3(0.1, 0.45, 0.9), vec3(0.3, 0.75, 1.0), shallow);
+    col += rip * 0.04;
+    float fw = 6.0 + 2.0 * sin(p.x * 0.3 + p.y * 0.2 + TIME * 1.3);
+    float foam = 1.0 - smoothstep(fw - 1.0, fw, d);
+    col = mix(col, vec3(1.0), foam * step(0.0, d + 1.0) * 0.85);
     ALBEDO = col * mix(1.0, 0.45, night);
-    ROUGHNESS = 0.1;
-    SPECULAR = 0.8;
 }
 """
 
@@ -1608,6 +1513,7 @@ var rng := RandomNumberGenerator.new()
 var mesh_cache := {}
 var args_shot := ""
 var args_selftest := false
+var args_timing := false
 var args_cam := ""
 var args_gui := ""
 var peace_left := PEACE_TIME
@@ -1687,7 +1593,9 @@ const MM_H_PX := 240
 func _ready() -> void:
     rng.randomize()
     for a in OS.get_cmdline_user_args():
-        if a == "--selftest":
+        if a == "--timing":
+            args_timing = true
+        elif a == "--selftest":
             args_selftest = true
         elif a.begins_with("--shot="):
             args_shot = a.substr(7)
@@ -1701,6 +1609,9 @@ func _ready() -> void:
     _make_sounds()
     _make_world()
     _build_ui()
+    if args_timing:
+        call_deferred("_timing")
+        return
     if args_selftest:
         call_deferred("_selftest")
         return
@@ -1732,6 +1643,7 @@ func _make_mats() -> void:
     lm.vertex_color_use_as_albedo = true
     lm.roughness = 0.9
     lm.cull_mode = BaseMaterial3D.CULL_DISABLED
+    lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     mats["lod"] = lm
 
 
@@ -1768,7 +1680,7 @@ func _build_environment() -> void:
     sun.rotation_degrees = Vector3(-52.0, -35.0, 0.0)
     sun.light_energy = 1.45
     sun.light_color = Color(1.0, 0.96, 0.88)
-    sun.shadow_enabled = true
+    sun.shadow_enabled = false
     sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
     sun.light_angular_distance = 1.2
     sun.shadow_blur = 1.0
@@ -1806,10 +1718,10 @@ func _build_environment() -> void:
     cl.material_override = cmat
     cl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     cl.layers = 2
-    add_child(cl)
+    cl.visible = false
 
     get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-    get_viewport().scaling_3d_scale = 0.8
+    get_viewport().scaling_3d_scale = 0.75
     Engine.max_fps = 60
     RenderingServer.directional_shadow_atlas_set_size(2048, true)
     camera = Camera3D.new()
@@ -2403,7 +2315,7 @@ func _add_building(c: int, t: String, x: float, z: float, r: int, instant: bool 
     if t == "port":
         r = _port_rot(c, x, z)
     var b := {"id": uid_counter, "t": t, "c": c, "x": x, "z": z, "r": r, "lvl": 1, "hp": float(d["hp"]), "mhp": float(d["hp"]),
-        "st": "ok" if instant else "build", "prog": 1.0 if instant else 0.0, "v": rng.randi() % 4, "node": null,
+        "st": "ok" if instant else "build", "prog": 1.0 if instant else 0.0, "v": 0 if t == "house" else rng.randi() % 4, "node": null,
         "jets": [], "cap": 0, "cool": 0.0, "ammo_c": 0.0, "queue": [], "face": 0.0, "shots": 0, "spin": null, "parked": []}
     uid_counter += 1
     bmap[b["id"]] = b
@@ -2609,7 +2521,7 @@ func _lod_rebuild() -> void:
         # country marker block (shows ownership at strategic zoom)
         var tr2 := Transform3D(Basis().scaled(Vector3(LAND * 2.0, 2.0, LAND * 2.0)), Vector3(p.x, 1.0, p.y))
         lm.set_instance_transform(list.size(), tr2)
-        lm.set_instance_color(list.size(), Color(col.r * 0.55, col.g * 0.55, col.b * 0.55))
+        lm.set_instance_color(list.size(), Color(col.r * 0.8, col.g * 0.8, col.b * 0.8))
 
 
 # =====================================================================
@@ -6028,7 +5940,7 @@ func _ai_economy(c: int) -> void:
         built = _ai_build(c, "embassy")
     # military infrastructure
     var aggr: float = s["aggr"]
-    if not built and m > 5 and _count_b(c, "airbase", false) < 1 + int(m / 45):
+    if not built and m > 5 and _count_b(c, "airbase", false) < 1:
         built = _ai_build(c, "airbase")
     if not built and m > 7 and _count_b(c, "lab", false) < 1 + int(m / 60):
         built = _ai_build(c, "lab")
@@ -6036,7 +5948,7 @@ func _ai_economy(c: int) -> void:
         built = _ai_build(c, "radar")
     if not built and m > 9 and _count_b(c, "missilebase", false) < 1 + int(m / 40):
         built = _ai_build(c, "missilebase")
-    if not built and m > 8 and _count_b(c, "port", false) < 1 + int(m / 50):
+    if not built and m > 8 and _count_b(c, "port", false) < 1:
         built = _ai_build(c, "port")
     if not built and m > 14 and _count_b(c, "armybase", false) < 1:
         built = _ai_build(c, "armybase")
@@ -6467,6 +6379,8 @@ func _buy_building(c: int, t: String, x: float, z: float, r: int) -> String:
     if not _unlocked(c, t):
         return "Locked: " + _unlock_reason(c, t)
     var d := _bdef(t, c)
+    if (t == "airbase" or t == "port") and _count_b(c, t, false) >= 1:
+        return "Sirf 1 " + String(d["name"]) + " ban sakta hai (upgrade karo)"
     if cs[c]["money"] < float(d["cost"]):
         return "Not enough money (" + _fmt(float(d["cost"])) + ")"
     var err := _can_place(c, t, x, z, r)
@@ -8224,7 +8138,29 @@ func _process(delta: float) -> void:
     _lod_rebuild()
 
 
+var builder_t := 0.0
+func _builder_update(dt: float) -> void:
+    # auto builder: keeps adding houses in the city zone while there is money
+    builder_t += dt
+    if builder_t < 12.0 or me < 0 or cs.size() < 9:
+        return
+    builder_t = 0.0
+    var building := 0
+    for b in cs[me]["bl"]:
+        if b["st"] == "build":
+            building += 1
+    if building >= 2:
+        return
+    var cost := float(_bdef("house", me)["cost"])
+    if cs[me]["money"] < cost * 3.0 or _count_b(me, "house", false) >= 30:
+        return
+    var sp: Variant = _auto_spot(me, "house")
+    if sp != null:
+        _buy_building(me, "house", sp[0], sp[1], sp[2])
+
+
 func _sim(dt: float) -> void:
+    _builder_update(dt)
     gtime += dt
     day_t = fposmod(day_t + dt / 420.0, 1.0)
     _update_daylight()
@@ -8496,3 +8432,23 @@ func _selftest() -> void:
     for n in news_log.slice(0, 12):
         print("  NEWS: ", n["text"])
     get_tree().quit(1 if fails > 0 else 0)
+
+
+func _timing() -> void:
+    var t0 := Time.get_ticks_usec()
+    _start_game(5)
+    print("start_game ms ", (Time.get_ticks_usec() - t0) / 1000)
+    var types := ["house","apartment","commerce","office","factory","armybase","missilebase","radar","airbase","port","enrich","aa0","aa1","aa2","aa3","aa4"]
+    for t in types:
+        var t1 := Time.get_ticks_usec()
+        var b := _add_building(5, t, 0.0, 0.0, 0, true)
+        print(t, " add ms ", (Time.get_ticks_usec() - t1) / 1000)
+    var t2 := Time.get_ticks_usec()
+    for i in range(60):
+        _sim(0.5)
+    print("sim30s ms ", (Time.get_ticks_usec() - t2) / 1000, " per call ", (Time.get_ticks_usec() - t2) / 60000)
+    var t3 := Time.get_ticks_usec()
+    for i in range(60):
+        _lod_rebuild(); _update_markers()
+    print("misc ms ", (Time.get_ticks_usec() - t3) / 1000)
+    get_tree().quit()
