@@ -94,7 +94,7 @@ const REL0 := [
 # ---- buildings -----------------------------------------------------------
 # cat: city / service / mil / air / navy
 const BDEFS := {
-    "house": {"name": "House", "cat": "city", "w": 10, "d": 10, "cost": 900, "inc": 60, "hp": 100, "up": 0, "time": 5, "unlock": 0,
+    "house": {"name": "House", "cat": "city", "w": 10, "d": 10, "cost": 900, "inc": 60, "hp": 100, "up": 0, "time": 40, "unlock": 0,
               "desc": "Ghar: tax deta hai. Upgrade karte jao, building badi hoti jayegi aur kamai barhti jayegi.", "pop": 0.15},
     "apartment": {"name": "Apartment Block", "cat": "city", "w": 16, "d": 16, "cost": 4200, "inc": 190, "hp": 260, "up": 0, "time": 14, "unlock": 6000,
               "desc": "Dense housing, much more tax.", "pop": 1.2},
@@ -119,7 +119,7 @@ const BDEFS := {
     "parliament": {"name": "Parliament", "cat": "service", "w": 40, "d": 26, "cost": 0, "inc": 100, "hp": 700, "up": 0, "time": 1, "unlock": 0,
               "desc": "Seat of government.", "hidden": true},
     "armybase": {"name": "Engineer Army Base", "cat": "mil", "w": 34, "d": 26, "cost": 10000, "inc": 0, "hp": 400, "up": 90, "time": 20, "unlock": 10000,
-              "desc": "Troops and engineers. Auto-repairs buildings nearby.", "rep": 2.0},
+              "desc": "Troops and engineers. Barracks for your army.", "rep": 0.0},
     "missilebase": {"name": "Missile Base", "cat": "mil", "w": 28, "d": 28, "cost": 15000, "inc": 0, "hp": 420, "up": 120, "time": 24, "unlock": 14000,
               "desc": "Stores and launches missiles (30 per level)."},
     "radar": {"name": "Radar Station", "cat": "mil", "w": 12, "d": 12, "cost": 4000, "inc": 0, "hp": 130, "up": 30, "time": 10, "unlock": 6000,
@@ -1137,10 +1137,21 @@ func _m_missilebase(mb: MB, lvl: int, v: int, acc: Color) -> void:
         var x := 5.0 + float(k) * 5.5
         _truck_m(mb, x, 8.5, 0.0, C_OLIVE, 9.0, 3)
         _missile_m(mb, Vector3(x, 2.0, 7.2), Vector3(-55, 0, 0), 8.0, 0.55, Color(0.85, 0.85, 0.82), Color(0.2, 0.2, 0.22))
+    # cruise-missile launcher trucks (right side)
+    for k in range(2):
+        var zc := -8.0 + float(k) * 8.0
+        _truck_m(mb, 12.0, zc, 0.0, C_OLIVE, 7.0, 3)
+        _missile_m(mb, Vector3(12.0, 3.4, zc - 2.0), Vector3(-28, 0, 0), 5.5, 0.45, Color(0.85, 0.85, 0.82), Color(0.8, 0.2, 0.15))
+        mb.box(Vector3(12.0, 3.1, zc - 0.4), Vector3(1.5, 0.9, 5.0), Color(0.3, 0.34, 0.28), 0.0, Vector3(-28, 0, 0), "metal")
+    # drone rail launcher (left side)
+    mb.box(Vector3(-12.0, 0.6, -8.0), Vector3(2.6, 1.0, 5.0), Color(0.3, 0.34, 0.28), 0.0, Vector3.ZERO, "metal")
+    mb.box(Vector3(-12.0, 1.9, -8.0), Vector3(0.7, 0.4, 6.0), Color(0.5, 0.52, 0.5), 0.0, Vector3(-22, 0, 0), "metal")
+    mb.cyl(Vector3(-12.0, 2.3, -8.4), 0.35, 3.0, Color(0.9, 0.9, 0.88), 8, 0.0, Vector3(68, 0, 0), "metal")
+    mb.box(Vector3(-12.0, 2.5, -8.2), Vector3(3.4, 0.12, 0.8), Color(0.9, 0.9, 0.88), 0.0, Vector3(-22, 0, 0), "metal")
     for k in range(2):
         var sx := -1.0 if k == 0 else 1.0
-        mb.cyl(Vector3(sx * 12.0, 4.0, -12.0), 0.2, 8.0, Color(0.6, 0.6, 0.62), 6, 0.0, Vector3.ZERO, "metal")
-        mb.box(Vector3(sx * 12.0, 8.2, -12.0), Vector3(1.6, 0.4, 0.8), Color(1.0, 0.95, 0.8), 0.0, Vector3.ZERO, "glow")
+        mb.cyl(Vector3(sx * 12.0, 4.0, 12.5), 0.2, 8.0, Color(0.6, 0.6, 0.62), 6, 0.0, Vector3.ZERO, "metal")
+        mb.box(Vector3(sx * 12.0, 8.2, 12.5), Vector3(1.6, 0.4, 0.8), Color(1.0, 0.95, 0.8), 0.0, Vector3.ZERO, "glow")
 
 
 func _m_aa(mb: MB, tier: int, acc: Color) -> void:
@@ -1591,6 +1602,23 @@ var back_btn: Button = null
 var fire_panel: PanelContainer = null
 var fire_lbl: Label = null
 var pending_target: Variant = null
+var fire_k := -1
+var fire_n := 1
+var fire_box: VBoxContainer = null
+var fire_sig := ""
+var cam_btn_row: HBoxContainer = null
+var cast_panel: PanelContainer = null
+var cast_lbl: Label = null
+var cast_kind := ""
+var cast_unit: Variant = null
+var cast_prev := "walk"
+var cast_angle := 0
+var cast_last := Vector3.ZERO
+var cast_dir := Vector3(0, 0, -1)
+var cast_orbit := 0.0
+var cast_lost := 0.0
+var sel_ring: MeshInstance3D = null
+var ring_t := 0.0
 var map_auto_back := false
 const MM_CX := -50.0
 const MM_CZ := 20.0
@@ -1905,6 +1933,7 @@ func _start_game(player: int) -> void:
     _news("Aap " + String(COUNTRIES[player]["name"]) + " ke leader hain. Shehar banao, fauj banao, aur dunya par raaj karo.", "good")
     pending_target = null
     _make_hero()
+    _workers_reset()
     _enter_walk()
     _refresh_hud()
     if menu_root:
@@ -2458,7 +2487,8 @@ func _destroy_building(b: Dictionary, attacker: int) -> void:
     var wasst: String = b["st"]
     b["st"] = "ruin"
     var t: String = b["t"]
-    _make_node(b)
+    if not _is_equipment(t):
+        _make_node(b)
     lod_dirty[c] = true
     _fx_explosion(Vector3(b["x"], 3.0, b["z"]), 14.0, false)
     if t == "airbase":
@@ -2478,6 +2508,13 @@ func _destroy_building(b: Dictionary, attacker: int) -> void:
         cs[c]["happy"] = max(5.0, cs[c]["happy"] - 12.0)
     if attacker >= 0 and attacker != c and (c == me or attacker == me):
         _news(String(COUNTRIES[attacker]["short"]) + " destroyed a " + String(_bdef(t, c)["name"]) + " in " + String(COUNTRIES[c]["short"]) + ".", "bad" if c == me else "good")
+    # equipment (air defence, missile launchers, radar) is not repairable: it is simply gone, buy a new one
+    if _is_equipment(t):
+        call_deferred("_remove_building", b)
+
+
+func _is_equipment(t: String) -> bool:
+    return t.begins_with("aa") or t == "missilebase" or t == "radar"
 
 
 func _repair_cost(b: Dictionary) -> float:
@@ -2491,15 +2528,7 @@ func _building_update(delta: float) -> void:
     for c in cs:
         for b in c["bl"]:
             if b["st"] == "build":
-                var d := _bdef(b["t"], b["c"])
-                b["prog"] = b["prog"] + delta / float(d["time"])
-                if b["prog"] >= 1.0:
-                    b["prog"] = 1.0
-                    b["st"] = "ok"
-                    _make_node(b)
-                    _on_built(b)
-                else:
-                    b["node"].scale = Vector3(1, max(0.05, b["prog"]), 1)
+                continue
             elif b["st"] == "ok" and b["spin"] != null and is_instance_valid(b["spin"]):
                 b["spin"].rotation.y += delta * 1.4
 
@@ -2555,6 +2584,9 @@ func _lod_rebuild() -> void:
 #  CAMERA + INPUT
 # =====================================================================
 func _update_camera(delta: float) -> void:
+    if view_mode == "cast":
+        _cast_camera(delta)
+        return
     if view_mode == "walk" and hero != null and is_instance_valid(hero):
         var tgt := hero_pos + Vector3(0, 1.7, 0)
         var cp := Vector3(sin(walk_yaw) * cos(walk_pitch), sin(walk_pitch), cos(walk_yaw) * cos(walk_pitch)) * walk_dist
@@ -2692,6 +2724,213 @@ func _unhandled_input(event: InputEvent) -> void:
 # =====================================================================
 #  THIRD PERSON HERO + MAP VIEW
 # =====================================================================
+# =====================================================================
+#  WORKERS: builder / upgrade builder / repairman (visible, animated)
+# =====================================================================
+var workers: Array = []
+
+func _char_box(parent: Node3D, parts: Dictionary, nm: String, pos: Vector3, size: Vector3, col: Color) -> void:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = size
+    mi.mesh = bm
+    var m := StandardMaterial3D.new()
+    m.albedo_color = col
+    m.roughness = 1.0
+    mi.material_override = m
+    mi.position = pos
+    mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    parent.add_child(mi)
+    if nm != "":
+        parts[nm] = mi
+
+
+func _make_worker(role: String, shirt: Color, hat: Color, label: String) -> Dictionary:
+    var node := Node3D.new()
+    var model := Node3D.new()
+    model.scale = Vector3(1.4, 1.4, 1.4)
+    node.add_child(model)
+    var parts := {}
+    var skin := Color(0.98, 0.8, 0.3)
+    _char_box(model, parts, "torso", Vector3(0, 1.5, 0), Vector3(1.0, 1.0, 0.5), shirt)
+    _char_box(model, parts, "head", Vector3(0, 2.4, 0), Vector3(0.7, 0.7, 0.7), skin)
+    _char_box(model, parts, "hat", Vector3(0, 2.85, 0), Vector3(0.82, 0.3, 0.82), hat)
+    _char_box(model, parts, "brim", Vector3(0, 2.72, 0.3), Vector3(0.82, 0.08, 0.5), hat)
+    var lp := Node3D.new(); lp.position = Vector3(-0.25, 1.0, 0); model.add_child(lp); parts["legl"] = lp
+    var rp := Node3D.new(); rp.position = Vector3(0.25, 1.0, 0); model.add_child(rp); parts["legr"] = rp
+    _char_box(lp, parts, "", Vector3(0, -0.5, 0), Vector3(0.48, 1.0, 0.5), Color(0.2, 0.25, 0.4))
+    _char_box(rp, parts, "", Vector3(0, -0.5, 0), Vector3(0.48, 1.0, 0.5), Color(0.2, 0.25, 0.4))
+    var la := Node3D.new(); la.position = Vector3(-0.75, 1.95, 0); model.add_child(la); parts["arml"] = la
+    var ra := Node3D.new(); ra.position = Vector3(0.75, 1.95, 0); model.add_child(ra); parts["armr"] = ra
+    _char_box(la, parts, "", Vector3(0, -0.45, 0), Vector3(0.48, 1.0, 0.5), skin)
+    _char_box(ra, parts, "", Vector3(0, -0.45, 0), Vector3(0.48, 1.0, 0.5), skin)
+    # hammer / tool in the right hand
+    _char_box(ra, parts, "", Vector3(0, -1.0, 0.45), Vector3(0.14, 0.14, 0.9), Color(0.5, 0.33, 0.18))
+    _char_box(ra, parts, "", Vector3(0, -1.0, 0.95), Vector3(0.3, 0.4, 0.3), Color(0.55, 0.57, 0.6))
+    var lb := Label3D.new()
+    lb.text = label
+    lb.font_size = 40
+    lb.pixel_size = 0.014
+    lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+    lb.position = Vector3(0, 5.2, 0)
+    lb.modulate = hat.lightened(0.3)
+    lb.outline_size = 10
+    node.add_child(lb)
+    add_child(node)
+    return {"role": role, "node": node, "parts": parts, "job": null, "t": 0.0, "home": Vector3.ZERO, "working": false}
+
+
+func _workers_reset() -> void:
+    for w in workers:
+        if w["node"] != null and is_instance_valid(w["node"]):
+            w["node"].queue_free()
+    workers = []
+    var defs := [["build", Color(0.95, 0.5, 0.1), Color(1.0, 0.85, 0.1), "BUILDER"],
+        ["upg", Color(0.2, 0.45, 0.9), Color(0.95, 0.95, 0.95), "UPGRADE"],
+        ["rep", Color(0.85, 0.15, 0.15), Color(1.0, 0.55, 0.1), "REPAIR"]]
+    for c in range(9):
+        var cen := _land_center(c)
+        var home := Vector3(cen.x, 0.0, cen.z + 26.0)
+        var k := 0
+        for df in defs:
+            var w: Dictionary
+            if c == me:
+                w = _make_worker(df[0], df[1], df[2], df[3])
+            else:
+                w = {"role": df[0], "node": null, "parts": {}, "job": null, "t": 0.0, "working": false}
+            w["c"] = c
+            w["home"] = home + Vector3(float(k) * 4.0 - 4.0, 0, 0)
+            w["pos"] = w["home"]
+            if w["node"] != null:
+                w["node"].position = w["pos"]
+            workers.append(w)
+            k += 1
+
+
+func _worker_find_job(w: Dictionary) -> Variant:
+    var best: Variant = null
+    var bd := 1e18
+    var wp: Vector3 = w["pos"]
+    for b in cs[w["c"]]["bl"]:
+        var ok := false
+        match String(w["role"]):
+            "build":
+                ok = b["st"] == "build"
+            "upg":
+                ok = b["st"] == "ok" and b.get("upg", null) != null
+            "rep":
+                ok = b["st"] == "ok" and b.get("rep", false) and b["hp"] < b["mhp"] - 0.5 and not _is_equipment(String(b["t"]))
+        if not ok:
+            continue
+        var d := _dist2(wp, Vector3(b["x"], 0, b["z"]))
+        if d < bd:
+            bd = d
+            best = b
+    return best
+
+
+func _worker_job_valid(w: Dictionary) -> bool:
+    var b: Variant = w["job"]
+    if b == null or not bmap.has(b["id"]):
+        return false
+    match String(w["role"]):
+        "build":
+            return b["st"] == "build"
+        "upg":
+            return b["st"] == "ok" and b.get("upg", null) != null
+        "rep":
+            return b["st"] == "ok" and b.get("rep", false) and b["hp"] < b["mhp"] - 0.5 and not _is_equipment(String(b["t"]))
+    return false
+
+
+func _workers_update(dt: float) -> void:
+    if game_state != "playing" or cs.is_empty():
+        return
+    if workers.is_empty():
+        _workers_reset()
+    var sc := 1.0
+    if view_mode == "map":
+        sc = clamp(cam_dist / 70.0, 1.0, 8.0)
+    for w in workers:
+        var c: int = w["c"]
+        if not _worker_job_valid(w):
+            w["job"] = _worker_find_job(w)
+        var target: Vector3 = w["home"]
+        var job: Variant = w["job"]
+        if job != null:
+            var h := _fp_half(job["t"], job["r"], c)
+            target = Vector3(job["x"], 0, float(job["z"]) + h.y + 1.6)
+        var pos: Vector3 = w["pos"]
+        var to := target - pos
+        to.y = 0
+        var dist := to.length()
+        var moving := dist > 1.2
+        w["working"] = false
+        var face := 0.0
+        if moving:
+            pos += to.normalized() * min(dist, 11.0 * dt)
+            w["pos"] = pos
+            face = atan2(to.x, to.z)
+        elif job != null:
+            w["working"] = true
+            _worker_progress(w, job, dt)
+        var node: Variant = w["node"]
+        if node == null or not is_instance_valid(node):
+            continue
+        node.position = pos
+        if moving:
+            node.rotation.y = lerp_angle(node.rotation.y, face, min(1.0, dt * 10.0))
+        elif job != null:
+            node.rotation.y = lerp_angle(node.rotation.y, PI, min(1.0, dt * 8.0))
+        node.scale = Vector3.ONE * sc
+        var parts: Dictionary = w["parts"]
+        w["t"] += dt
+        var t: float = w["t"]
+        if moving:
+            var sw := sin(t * 11.0) * 0.8
+            parts["legl"].rotation.x = sw
+            parts["legr"].rotation.x = -sw
+            parts["arml"].rotation.x = -sw * 0.8
+            parts["armr"].rotation.x = sw * 0.8
+            parts["torso"].position.y = 1.5
+        elif w["working"]:
+            var hit := sin(t * 13.0)
+            parts["legl"].rotation.x = 0.0
+            parts["legr"].rotation.x = 0.0
+            parts["armr"].rotation.x = -1.7 + hit * 0.9
+            parts["arml"].rotation.x = -0.9 + hit * 0.3
+            parts["torso"].position.y = 1.5 + abs(hit) * 0.06
+        else:
+            parts["legl"].rotation.x = 0.0
+            parts["legr"].rotation.x = 0.0
+            parts["arml"].rotation.x = 0.0
+            parts["armr"].rotation.x = 0.0
+            parts["torso"].position.y = 1.5
+
+
+func _worker_progress(w: Dictionary, b: Dictionary, dt: float) -> void:
+    match String(w["role"]):
+        "build":
+            var d := _bdef(b["t"], b["c"])
+            b["prog"] = b["prog"] + dt / float(d["time"])
+            if b["prog"] >= 1.0:
+                b["prog"] = 1.0
+                b["st"] = "ok"
+                _make_node(b)
+                _on_built(b)
+            elif is_instance_valid(b["node"]):
+                b["node"].scale = Vector3(1, max(0.05, b["prog"]), 1)
+        "upg":
+            b["upg"] = float(b["upg"]) + dt / _upgrade_time(b)
+            if float(b["upg"]) >= 1.0:
+                _finish_upgrade(b)
+        "rep":
+            b["hp"] = min(b["mhp"], b["hp"] + b["mhp"] / 18.0 * dt)
+            if b["hp"] >= b["mhp"] - 0.5:
+                b["hp"] = b["mhp"]
+                b["rep"] = false
+
+
 var hero_parts := {}
 var hero_walk_t := 0.0
 
@@ -2874,22 +3113,26 @@ func _view_ui_apply() -> void:
     if mm_panel == null:
         return
     var w := view_mode == "walk"
+    var cst := view_mode == "cast"
     mm_panel.visible = w
     back_btn.visible = not w
+    back_btn.text = "< BACK" if cst else "< BACK (character)"
     joy_ui.visible = w
+    cam_btn_row.visible = not cst
+    cast_panel.visible = cst
     _refresh_fire_panel()
 
 
 func _refresh_fire_panel() -> void:
     if fire_panel == null:
         return
-    if pending_target is Dictionary and bmap.has(pending_target["id"]):
-        var tb: Dictionary = pending_target
-        var d := _bdef(tb["t"], tb["c"])
-        fire_lbl.text = "TARGET: " + String(d["name"]) + " (" + String(COUNTRIES[tb["c"]]["short"]) + ")"
+    if _fire_valid() and view_mode != "cast":
         fire_panel.visible = true
+        _fire_rebuild()
+        fire_sig = _fire_signature()
     else:
-        pending_target = null
+        if not _fire_valid():
+            pending_target = null
         fire_panel.visible = false
 
 
@@ -2933,7 +3176,11 @@ func _build_view_ui() -> void:
     tr.add_child(mm_over)
     mm_over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     # ---- back button (map view) ----
-    back_btn = _btn("< BACK (character)", "warn", func(): _enter_walk(), 0, 52, 18)
+    back_btn = _btn("< BACK (character)", "warn", func():
+        if view_mode == "cast":
+            _cast_exit()
+        else:
+            _enter_walk(), 0, 52, 18)
     back_btn.anchor_left = 0.0
     back_btn.offset_left = 12
     back_btn.offset_top = 68
@@ -2946,34 +3193,359 @@ func _build_view_ui() -> void:
     joy_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
     joy_ui.draw.connect(_joy_draw)
     ui_root.add_child(joy_ui)
-    # ---- fire panel ----
+    # ---- fire panel (missile select + HIT / CANCEL) ----
     fire_panel = PanelContainer.new()
-    fire_panel.add_theme_stylebox_override("panel", _sb(Color(0.3, 0.06, 0.06, 0.95), 12, Color(1, 0.4, 0.3), 2))
+    fire_panel.add_theme_stylebox_override("panel", _sb(Color(0.25, 0.05, 0.05, 0.95), 12, Color(1, 0.4, 0.3), 2))
     fire_panel.anchor_left = 1.0
     fire_panel.anchor_right = 1.0
     fire_panel.anchor_top = 1.0
     fire_panel.anchor_bottom = 1.0
-    fire_panel.offset_left = -300
+    fire_panel.offset_left = -310
     fire_panel.offset_right = -10
-    fire_panel.offset_top = -230
+    fire_panel.offset_top = -420
     fire_panel.offset_bottom = -96
     fire_panel.visible = false
     ui_root.add_child(fire_panel)
-    var fv := _vbox(6)
-    fire_panel.add_child(fv)
-    fire_lbl = _lbl("TARGET", 16, Color(1, 0.85, 0.7), true)
-    fv.add_child(fire_lbl)
-    var fh := _hbox(8)
-    fv.add_child(fh)
-    var fb := _btn("FIRE!", "bad", func():
-        if pending_target is Dictionary:
-            _hero_shoot()
-            _open_tab("strike", pending_target), 150, 56, 22)
-    fh.add_child(fb)
-    fh.add_child(_btn("X", "dark", func():
-        pending_target = null
-        _refresh_fire_panel(), 56, 56, 20))
+    fire_box = _vbox(5)
+    fire_panel.add_child(fire_box)
+    # ---- camera buttons (broadcast cameras) ----
+    cam_btn_row = _hbox(4)
+    cam_btn_row.anchor_left = 1.0
+    cam_btn_row.anchor_right = 1.0
+    cam_btn_row.offset_left = -310
+    cam_btn_row.offset_right = -10
+    cam_btn_row.offset_top = 218
+    cam_btn_row.offset_bottom = 262
+    ui_root.add_child(cam_btn_row)
+    cam_btn_row.add_child(_btn("MISSILE CAM", "dark", func(): _cast_start("msl"), 96, 44, 13))
+    cam_btn_row.add_child(_btn("JET CAM", "dark", func(): _cast_start("jet"), 96, 44, 13))
+    cam_btn_row.add_child(_btn("NAVY CAM", "dark", func(): _cast_start("ship"), 96, 44, 13))
+    # ---- broadcast camera panel ----
+    cast_panel = PanelContainer.new()
+    cast_panel.add_theme_stylebox_override("panel", _sb(Color(0.05, 0.08, 0.14, 0.9), 10, Color(1.0, 0.8, 0.2), 2))
+    cast_panel.anchor_left = 0.5
+    cast_panel.anchor_right = 0.5
+    cast_panel.offset_left = -230
+    cast_panel.offset_right = 230
+    cast_panel.offset_top = 68
+    cast_panel.offset_bottom = 170
+    cast_panel.visible = false
+    ui_root.add_child(cast_panel)
+    var cv := _vbox(4)
+    cast_panel.add_child(cv)
+    cast_lbl = _lbl("CAMERA", 18, Color(1, 0.9, 0.5), true)
+    cv.add_child(cast_lbl)
+    var ch := _hbox(6)
+    cv.add_child(ch)
+    ch.add_child(_btn("< PREV", "dark", func(): _cast_next(-1), 100, 44, 16))
+    ch.add_child(_btn("ANGLE", "good", func():
+        cast_angle = (cast_angle + 1) % 3, 100, 44, 16))
+    ch.add_child(_btn("NEXT >", "dark", func(): _cast_next(1), 100, 44, 16))
     _view_ui_apply()
+
+
+# =====================================================================
+#  FIRE PANEL (select missile, then HIT or CANCEL)
+# =====================================================================
+func _fire_valid() -> bool:
+    return pending_target is Dictionary and bmap.has(pending_target["id"]) and pending_target["st"] != "ruin"
+
+
+func _fire_signature() -> String:
+    if not _fire_valid():
+        return ""
+    return str(pending_target["id"]) + "|" + str(fire_k) + "|" + str(fire_n) + "|" + str(cs[me]["ammo"]) + "|" + view_mode
+
+
+func _fire_rebuild() -> void:
+    _clear(fire_box)
+    var tb: Dictionary = pending_target
+    var d := _bdef(tb["t"], tb["c"])
+    var tx := Vector3(tb["x"], 0, tb["z"])
+    fire_box.add_child(_lbl("TARGET: " + String(d["name"]) + " (" + String(COUNTRIES[tb["c"]]["short"]) + ")", 16, Color(1, 0.85, 0.7), true))
+    var have := []
+    for k in range(6):
+        if cs[me]["ammo"][k] > 0:
+            have.append(k)
+    if have.is_empty():
+        fire_box.add_child(_lbl("Missile stock khatam. MILITARY mein khareedo.", 15, Color(1, 0.7, 0.5), true))
+    else:
+        if fire_k < 0 or not have.has(fire_k):
+            fire_k = have[0]
+            for kk in have:
+                if not _missile_origins(me, kk, tx).is_empty():
+                    fire_k = kk
+                    break
+        var g := GridContainer.new()
+        g.columns = 2
+        g.add_theme_constant_override("h_separation", 4)
+        g.add_theme_constant_override("v_separation", 4)
+        fire_box.add_child(g)
+        for k in have:
+            var kk2: int = k
+            var inr := not _missile_origins(me, k, tx).is_empty()
+            var nm := _msl_name(me, k)
+            if nm.length() > 14:
+                nm = nm.substr(0, 14)
+            var bt := _btn(nm + " x" + str(cs[me]["ammo"][k]) + ("" if inr else " (door)"), "good" if fire_k == k else "dark", func():
+                fire_k = kk2
+                fire_sig = "", 140, 40, 13)
+            g.add_child(bt)
+        var nh := _hbox(4)
+        fire_box.add_child(nh)
+        nh.add_child(_lbl("Kitni:", 14, C_DIM))
+        for n in [1, 3, 6]:
+            var nn: int = n
+            nh.add_child(_btn(str(n), "good" if fire_n == n else "dark", func():
+                fire_n = nn
+                fire_sig = "", 56, 38, 16))
+    var ready := not have.is_empty() and fire_k >= 0 and not _missile_origins(me, fire_k, tx).is_empty()
+    fire_box.add_child(_btn("HIT!" if ready else "HIT (range/stock nahi)", "bad" if ready else "off", func(): _fire_hit(), 0, 54, 22))
+    var bh := _hbox(4)
+    fire_box.add_child(bh)
+    bh.add_child(_btn("LAUNCH PAD", "warn", func(): _goto_pad(), 140, 42, 14))
+    bh.add_child(_btn("CANCEL", "dark", func():
+        pending_target = null
+        _refresh_fire_panel(), 140, 42, 14))
+
+
+func _fire_hit() -> void:
+    if not _fire_valid() or fire_k < 0:
+        return
+    var tb: Dictionary = pending_target
+    if MSL[fire_k]["nuke"]:
+        _popup("NUCLEAR STRIKE", "You are about to use a nuclear weapon on " + String(COUNTRIES[tb["c"]]["name"]) + ". The world will condemn you, allies will turn against you, and retaliation is likely.", [["LAUNCH", "nuke:" + str(tb["id"])], ["Cancel", ""]])
+        return
+    var n: int = min(fire_n, int(cs[me]["ammo"][fire_k]))
+    var f := _fire_salvo(me, fire_k, n, tb)
+    if f == 0:
+        _toast("Launch nahi hua (range ya stock)", "warn")
+    else:
+        _hero_shoot()
+        _toast(str(f) + " missile chhod diye. MISSILE CAM se dekho.", "good")
+    fire_sig = ""
+
+
+func _goto_pad() -> void:
+    if not _fire_valid() or fire_k < 0:
+        _toast("Pehle missile chuno", "warn")
+        return
+    var tb: Dictionary = pending_target
+    var tx := Vector3(tb["x"], 0, tb["z"])
+    var org := _missile_origins(me, fire_k, tx)
+    if org.is_empty():
+        _toast("Yeh missile is target tak nahi pahunchta", "warn")
+        return
+    var slot := _launch_slot(org[0], fire_k, 0)
+    var dir := Vector3(slot.x - tx.x, 0, slot.z - tx.z)
+    if dir.length() < 1.0:
+        dir = Vector3(0, 0, 1)
+    dir = dir.normalized()
+    hero_pos = Vector3(slot.x, 0, slot.z) + dir * 16.0
+    walk_yaw = atan2(dir.x, dir.z)
+    hero_face = walk_yaw + PI
+    walk_dist = 26.0
+    walk_pitch = 0.3
+    if view_mode != "walk":
+        view_mode = "map"
+        _enter_walk()
+    _view_ui_apply()
+
+
+# =====================================================================
+#  BROADCAST CAMERA (missile / jet / ship)
+# =====================================================================
+func _cast_list(kind: String) -> Array:
+    var out := []
+    match kind:
+        "msl":
+            for p in projs:
+                if p["kind"] == "msl" and not p["dead"] and is_instance_valid(p["node"]):
+                    out.append(p)
+        "jet":
+            for f in flights:
+                if not f["dead"] and f["state"] != "dying" and is_instance_valid(f["node"]):
+                    out.append(f)
+        "ship":
+            for sh in ships:
+                if not sh["dead"] and is_instance_valid(sh["node"]):
+                    out.append(sh)
+    out.sort_custom(func(a, b): return (1 if a["own"] != me else 0) < (1 if b["own"] != me else 0))
+    return out
+
+
+func _cast_unit_valid() -> bool:
+    if cast_unit == null:
+        return false
+    match cast_kind:
+        "msl":
+            return projs.has(cast_unit) and not cast_unit["dead"] and is_instance_valid(cast_unit["node"])
+        "jet":
+            return flights.has(cast_unit) and not cast_unit["dead"] and cast_unit["state"] != "dying" and is_instance_valid(cast_unit["node"])
+        "ship":
+            return ships.has(cast_unit) and not cast_unit["dead"] and is_instance_valid(cast_unit["node"])
+    return false
+
+
+func _cast_name() -> String:
+    var u: Dictionary = cast_unit
+    match cast_kind:
+        "msl":
+            return "MISSILE CAM: " + _msl_name(u["own"], u["k"]) + " (" + String(COUNTRIES[u["own"]]["short"]) + ")"
+        "jet":
+            return "JET CAM: " + _jet_name(u["own"], u["tier"]) + " (" + String(COUNTRIES[u["own"]]["short"]) + ")"
+        "ship":
+            return "NAVY CAM: " + String(SHIPS[u["k"]]["name"]) + " (" + String(COUNTRIES[u["own"]]["short"]) + ")"
+    return "CAMERA"
+
+
+func _cast_start(kind: String) -> void:
+    var list := _cast_list(kind)
+    if list.is_empty():
+        _toast({"msl": "Abhi koi missile hawa mein nahi", "jet": "Abhi koi jet udh nahi raha", "ship": "Koi jahaz nahi hai"}[kind], "warn")
+        return
+    _cast_set(kind, list[0])
+
+
+func _cast_set(kind: String, u: Dictionary) -> void:
+    if view_mode != "cast":
+        cast_prev = view_mode
+    cast_kind = kind
+    cast_unit = u
+    cast_lost = 0.0
+    cast_last = u["node"].global_position
+    cast_dir = -u["node"].global_transform.basis.z
+    view_mode = "cast"
+    mode = "none"
+    side_panel.visible = false
+    _hide_all_windows()
+    _view_ui_apply()
+
+
+func _cast_next(step: int) -> void:
+    var list := _cast_list(cast_kind)
+    if list.is_empty():
+        _cast_exit()
+        return
+    var i := list.find(cast_unit)
+    i = (i + step + list.size() * 4) % list.size() if i >= 0 else 0
+    cast_unit = list[i]
+    cast_lost = 0.0
+    cast_last = cast_unit["node"].global_position
+
+
+func _cast_exit() -> void:
+    if view_mode != "cast":
+        return
+    view_mode = cast_prev
+    cast_unit = null
+    _ring_clear()
+    _view_ui_apply()
+    if view_mode == "walk":
+        _update_camera(1.0)
+
+
+func _cast_camera(dt: float) -> void:
+    if not _cast_unit_valid():
+        cast_lost += dt
+        if cast_lost > 1.6:
+            var list := _cast_list(cast_kind)
+            if list.is_empty():
+                _toast("Camera ka target khatam ho gaya", "info")
+                _cast_exit()
+            else:
+                cast_unit = list[0]
+                cast_lost = 0.0
+                cast_last = cast_unit["node"].global_position
+        return
+    var u: Dictionary = cast_unit
+    var node: Node3D = u["node"]
+    var p: Vector3 = node.global_position
+    var mv := p - cast_last
+    if dt > 0.0 and mv.length() > 0.02:
+        cast_dir = cast_dir.lerp(mv.normalized(), min(1.0, dt * 5.0)).normalized()
+    cast_last = p
+    var back := 22.0
+    var up := 7.0
+    var orbit_r := 28.0
+    var smooth := 9.0
+    match cast_kind:
+        "jet":
+            back = 36.0
+            up = 9.0
+            orbit_r = 50.0
+            smooth = 6.0
+        "ship":
+            var sl: float = float(SHIPS[u["k"]]["len"])
+            back = sl * 2.4
+            up = sl * 0.8
+            orbit_r = sl * 2.6
+            smooth = 4.0
+    var want := p
+    match cast_angle:
+        0:
+            want = p - cast_dir * back + Vector3(0, up, 0)
+        1:
+            cast_orbit += dt * 0.5
+            want = p + Vector3(sin(cast_orbit), 0.0, cos(cast_orbit)) * orbit_r + Vector3(0, up * 0.7, 0)
+        _:
+            want = p + cast_dir * back * 1.1 + Vector3(0, up * 0.5, 0)
+    camera.position = camera.position.lerp(want, min(1.0, dt * smooth)) if dt < 0.5 else want
+    if camera.position.y < 1.5:
+        camera.position.y = 1.5
+    camera.look_at(p, Vector3.UP)
+    camera.far = 9000.0
+
+
+func _ring_clear() -> void:
+    if sel_ring != null and is_instance_valid(sel_ring):
+        sel_ring.queue_free()
+    sel_ring = null
+
+
+func _ring_for(node: Node3D, base_scale: float) -> void:
+    if sel_ring == null or not is_instance_valid(sel_ring):
+        sel_ring = MeshInstance3D.new()
+        var tm := TorusMesh.new()
+        tm.inner_radius = 0.9
+        tm.outer_radius = 1.0
+        tm.rings = 16
+        tm.ring_segments = 6
+        sel_ring.mesh = tm
+        var mt := StandardMaterial3D.new()
+        mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        mt.albedo_color = Color(1.0, 0.85, 0.1)
+        mt.no_depth_test = true
+        sel_ring.material_override = mt
+        sel_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    if sel_ring.get_parent() != node:
+        if sel_ring.get_parent() != null:
+            sel_ring.get_parent().remove_child(sel_ring)
+        node.add_child(sel_ring)
+    var ns: float = max(node.scale.x, 0.05)
+    var pulse := 1.0 + 0.12 * sin(ring_t * 6.0)
+    var mapk: float = clamp(cam_dist / 120.0, 1.0, 12.0) if view_mode == "map" else 1.0
+    sel_ring.scale = Vector3.ONE * base_scale * pulse * mapk / ns
+
+
+func _ring_update(dt: float) -> void:
+    ring_t += dt
+    var node: Node3D = null
+    var sc := 4.0
+    if view_mode == "cast" and _cast_unit_valid():
+        node = cast_unit["node"]
+        sc = {"msl": 3.5, "jet": 9.0, "ship": float(SHIPS[cast_unit["k"]]["len"]) * 0.7 if cast_kind == "ship" else 4.0}[cast_kind]
+        if cast_angle == 0 and cast_kind != "ship":
+            node = null
+    elif sel_ship >= 0:
+        var sh: Variant = _find_ship(sel_ship)
+        if sh != null and is_instance_valid(sh["node"]):
+            node = sh["node"]
+            sc = float(SHIPS[sh["k"]]["len"]) * 0.7
+    if node == null:
+        _ring_clear()
+    else:
+        _ring_for(node, sc)
 
 
 func _joy_draw() -> void:
@@ -3016,6 +3588,9 @@ func _mm_draw() -> void:
     if pending_target is Dictionary:
         var tp := _mm_world_to_px(float(pending_target["x"]), float(pending_target["z"]), sz)
         mm_over.draw_circle(tp, 5.0, Color(1, 0.15, 0.1))
+    if sel_ring != null and sel_ring.get_parent() is Node3D:
+        var rp: Vector3 = (sel_ring.get_parent() as Node3D).global_position
+        mm_over.draw_arc(_mm_world_to_px(rp.x, rp.z, sz), 6.0, 0.0, TAU, 14, Color(1, 0.85, 0.1), 2.5)
 
 
 func _mm_input(ev: InputEvent) -> void:
@@ -3054,6 +3629,13 @@ func _mm_input(ev: InputEvent) -> void:
 
 
 func _view_ui_update(dt: float) -> void:
+    if fire_panel != null:
+        if fire_panel.visible or pending_target != null:
+            if _fire_signature() != fire_sig:
+                _refresh_fire_panel()
+    if cast_lbl != null and view_mode == "cast" and _cast_unit_valid():
+        cast_lbl.text = _cast_name()
+    _ring_update(dt)
     mm_timer += dt
     if mm_over != null and mm_timer > 0.25:
         mm_timer = 0.0
@@ -3063,6 +3645,8 @@ func _view_ui_update(dt: float) -> void:
 
 
 func _on_tap(pos: Vector2) -> void:
+    if view_mode == "cast":
+        return
     var g := _screen_to_ground(pos)
     if mode == "place":
         place_x = _snap(g.x)
@@ -4678,6 +5262,33 @@ func _ammo_total(c: int) -> int:
     return s
 
 
+func _launch_slot(ob: Dictionary, k: int, i: int) -> Vector3:
+    var lx := 0.0
+    var lz := 0.0
+    var ly := 2.0
+    match k:
+        0:
+            lx = 12.0
+            lz = -8.0 + float(i % 2) * 8.0
+            ly = 4.5
+        1:
+            lx = -12.0
+            lz = -9.0
+            ly = 3.0
+        2, 3:
+            lx = 5.0 + float(i % 2) * 5.5
+            lz = 7.5
+            ly = 5.5
+        _:
+            var j := i % (4 + int(ob["lvl"]))
+            lx = -8.0 + float(j % 3) * 8.0
+            lz = -8.0 + float(j / 3) * 7.0
+            ly = 1.0
+    var basis := Basis(Vector3.UP, deg_to_rad(90.0 * float(ob["r"])))
+    var o := basis * Vector3(lx, 0.0, lz)
+    return Vector3(ob["x"] + o.x, ly, ob["z"] + o.z)
+
+
 func _fire_salvo(c: int, k: int, n: int, tb: Dictionary) -> int:
     var tx := Vector3(tb["x"], 0, tb["z"])
     var origins := _missile_origins(c, k, tx)
@@ -4688,7 +5299,7 @@ func _fire_salvo(c: int, k: int, n: int, tb: Dictionary) -> int:
     n = min(n, have)
     for i in range(n):
         var ob: Dictionary = origins[i % origins.size()]
-        var from := Vector3(ob["x"] + rng.randf_range(-8, 8), 2.0, ob["z"] + rng.randf_range(-8, 8))
+        var from := _launch_slot(ob, k, i)
         # stagger launches slightly via queue time
         var ok := _launch_missile(c, k, from, tx, tb, 1.0, tb["c"])
         if ok:
@@ -5475,15 +6086,9 @@ func _rearm_step(dt: float) -> void:
                         j["state"] = "ready"
 
 
-func _repair_step(dt: float) -> void:
-    # army bases auto-repair nearby buildings, parliament slowly self-repairs
-    for c in range(9):
-        for b in cs[c]["bl"]:
-            if b["st"] == "ok" and b["t"] == "armybase":
-                var rate: float = 2.0 * float(b["lvl"])
-                for o in cs[c]["bl"]:
-                    if o["st"] == "ok" and o["hp"] < o["mhp"] and _dist2(Vector3(o["x"], 0, o["z"]), Vector3(b["x"], 0, b["z"])) < 110.0:
-                        o["hp"] = min(o["mhp"], o["hp"] + rate * dt)
+func _repair_step(_dt: float) -> void:
+    # repairs are done only by repairmen (same rule for every country)
+    return
 
 
 func _war_update(dt: float) -> void:
@@ -5912,6 +6517,12 @@ func _ai_spend_ok(c: int, cost: float, reserve: float) -> bool:
 
 
 func _ai_build(c: int, t: String) -> bool:
+    var queued := 0
+    for qb in cs[c]["bl"]:
+        if qb["st"] == "build":
+            queued += 1
+    if queued >= 2:
+        return false
     if t in ["lab", "apartment", "commerce", "office", "factory", "park", "stadium", "hospital", "university", "police", "embassy"]:
         return false
     if not _unlocked(c, t):
@@ -6025,10 +6636,10 @@ func _ai_economy(c: int) -> void:
             _upgrade_building(b, false)
     # repairs
     for b in s["bl"]:
-        if b["st"] == "ruin" and s["money"] > _repair_cost(b) * 3.0 and rng.randf() < 0.3:
-            _repair_building(b)
+        if b["st"] == "ruin" and rng.randf() < 0.3:
+            _sell_building(b)
             break
-        elif b["st"] == "ok" and b["hp"] < b["mhp"] * 0.5 and s["money"] > 8000.0:
+        elif b["st"] == "ok" and b["hp"] < b["mhp"] * 0.5 and s["money"] > 8000.0 and not _is_equipment(String(b["t"])):
             _repair_building(b)
             break
     # weapons
@@ -6444,9 +7055,26 @@ func _upgrade_building(b: Dictionary, charge_player: bool = true) -> String:
     var cost := _upgrade_cost(b)
     if cs[c]["money"] < cost:
         return "Not enough money (" + _fmt(cost) + ")"
-    if b["t"] in ["lab"] and false:
-        pass
+    if true:
+        if b.get("upg", null) != null:
+            return "Upgrade pehle se chal raha hai"
+        cs[c]["money"] -= cost
+        b["upg"] = 0.0
+        return ""
     cs[c]["money"] -= cost
+    _finish_upgrade(b)
+    return ""
+
+
+func _upgrade_time(b: Dictionary) -> float:
+    if b["t"] == "house":
+        return 20.0 + 12.0 * float(b["lvl"])
+    return 40.0 + 20.0 * float(b["lvl"])
+
+
+func _finish_upgrade(b: Dictionary) -> void:
+    var c: int = b["c"]
+    b["upg"] = null
     b["lvl"] += 1
     var d := _bdef(b["t"], c)
     b["mhp"] = float(d["hp"]) * (1.0 + 0.4 * float(b["lvl"] - 1))
@@ -6457,23 +7085,23 @@ func _upgrade_building(b: Dictionary, charge_player: bool = true) -> String:
         _refresh_airbase_parked(b)
     if c == me:
         _snd("build")
-    return ""
 
 
 func _repair_building(b: Dictionary) -> String:
     var c: int = b["c"]
+    if _is_equipment(String(b["t"])):
+        return "Sirf imaarat repair hoti hai. Yeh system tabah ho to naya khareedo."
+    if b["st"] == "ruin":
+        return "Tabah ho chuki hai. Hata kar naya khareedo."
+    if b["hp"] >= b["mhp"] - 0.5:
+        return "Pehle se theek hai"
+    if b.get("rep", false):
+        return "Repairman pehle se kaam kar raha hai"
     var cost := _repair_cost(b)
     if cs[c]["money"] < cost:
         return "Not enough money (" + _fmt(cost) + ")"
     cs[c]["money"] -= cost
-    if b["st"] == "ruin":
-        b["st"] = "build"
-        b["prog"] = 0.0
-        b["hp"] = b["mhp"]
-        _make_node(b)
-        lod_dirty[c] = true
-    else:
-        b["hp"] = b["mhp"]
+    b["rep"] = true
     return ""
 
 
@@ -7760,7 +8388,7 @@ func _target_picked(tb: Dictionary) -> void:
         return
     pending_target = tb
     _refresh_fire_panel()
-    _toast("Target chun liya. Ab BACK dabao aur FIRE dabao (ya yahin FIRE dabao).", "good")
+    _toast("Target chun liya. Missile chuno, phir HIT dabao (ya BACK dabao aur LAUNCH PAD par jao).", "good")
 
 
 func _tab_strike(tb: Variant) -> void:
@@ -7889,9 +8517,12 @@ func _show_building_panel(b: Dictionary) -> void:
     side_body.add_child(_lbl(st, 16))
     if b["c"] != me:
         if _at_war(me, b["c"]):
-            side_body.add_child(_btn("STRIKE THIS", "bad", func():
-                strike_kind = "missile"
-                _open_tab("strike", b), 0, 48))
+            side_body.add_child(_btn("TARGET BANAO", "bad", func():
+                side_panel.visible = false
+                _target_picked(b), 0, 48))
+            side_body.add_child(_btn("JET STRIKE", "dark", func():
+                strike_kind = "air"
+                _open_tab("strike", b), 0, 42, 16))
         side_body.add_child(_btn("CLOSE", "dark", func(): side_panel.visible = false; sel_b = -1, 0, 44))
         return
     side_body.add_child(_lbl(String(d["desc"]), 14, C_DIM, true))
@@ -7910,13 +8541,19 @@ func _show_building_panel(b: Dictionary) -> void:
         side_body.add_child(_btn("SHIPS", "good", func(): _open_tab("navy"), 0, 44))
     if b["t"] == "parliament" or b["t"] == "embassy":
         side_body.add_child(_btn("GOVERNMENT" if b["t"] == "parliament" else "DIPLOMACY", "good", func(): _open_tab("gov" if b["t"] == "parliament" else "dip"), 0, 44))
-    if b["st"] == "ok" and b["lvl"] < _max_level(b):
+    if b.get("upg", null) != null:
+        side_body.add_child(_lbl("Upgrade ho raha hai: " + str(int(float(b["upg"]) * 100.0)) + "% (upgrade builder kaam kar raha hai)", 15, Color(0.6, 0.8, 1.0), true))
+    if b.get("rep", false):
+        side_body.add_child(_lbl("Repairman is building ko theek kar raha hai", 15, Color(1.0, 0.8, 0.5), true))
+    if b["st"] == "ruin":
+        side_body.add_child(_lbl("TABAH ho gayi. Repair nahi hoti: hata kar naya khareedo.", 15, Color(1.0, 0.5, 0.4), true))
+    if b["st"] == "ok" and b["lvl"] < _max_level(b) and b.get("upg", null) == null:
         side_body.add_child(_btn("UPGRADE " + _fmt(_upgrade_cost(b)), "good", func():
             var e := _upgrade_building(b)
             if e != "":
                 _toast(e, "warn")
             _show_building_panel(b), 0, 44, 17))
-    if b["st"] == "ruin" or b["hp"] < b["mhp"]:
+    if b["st"] == "ok" and b["hp"] < b["mhp"] - 0.5 and not b.get("rep", false) and not _is_equipment(String(b["t"])):
         side_body.add_child(_btn("REPAIR " + _fmt(_repair_cost(b)), "warn", func():
             var e2 := _repair_building(b)
             if e2 != "":
@@ -7957,6 +8594,7 @@ func _show_ship_panel() -> void:
         mode = "shipdest"
         _toast("Tap a point on the sea", "info"), 0, 46))
     side_body.add_child(_btn("STOP", "dark", func(): s["wp"] = [], 0, 42))
+    side_body.add_child(_btn("BROADCAST CAMERA", "warn", func(): _cast_set("ship", s), 0, 44, 16))
     if s["k"] == 4:
         var rd := 0
         for j in s["jets"]:
@@ -8171,6 +8809,7 @@ func _process(delta: float) -> void:
         mm_t = 0.0
         mm_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
     _hero_update(delta)
+    _workers_update(delta)
     _view_ui_update(delta)
     _update_camera(delta)
     _update_markers()
@@ -8363,15 +9002,36 @@ func _shot_setup() -> void:
             var o := _land_center(5) + Vector3(0, 0, 220)
             for k in range(5):
                 _spawn_ship(5, k, o + Vector3(float(k) * 60.0 - 120.0, 0, 0), 0.0)
+        elif parts[0] == "warcast":
+            _declare_war(5, 4, "test")
+            cs[5]["ammo"][0] = 12
+            cs[5]["ammo"][2] = 6
+            var tbx: Variant = _pick_target(5, 4, true)
+            pending_target = tbx
+            _refresh_fire_panel()
+            if parts.size() > 1:
+                fire_k = 0
+                fire_n = 3
+                _fire_hit()
+                for q in range(3):
+                    _sim(0.5)
+                speed = 0
+                if parts[1] == "msl":
+                    _cast_start("msl")
+                    cast_angle = int(parts[2]) if parts.size() > 2 else 0
         elif parts[0] == "war":
             _declare_war(5, 4, "test")
             _war_demo()
     var frames := 0
     var wait := 24
-    if args_gui.begins_with("war"):
+    if args_gui.begins_with("warcast"):
+        wait = 50
+    elif args_gui.begins_with("war"):
         wait = 420
     set_process(true)
     var timer := get_tree().create_timer(2.0 if wait < 100 else 14.0)
+    if args_gui.begins_with("warcast"):
+        timer = get_tree().create_timer(2.5)
     await timer.timeout
     for k in range(wait):
         await get_tree().process_frame
@@ -8483,20 +9143,24 @@ func _selftest() -> void:
 
 
 func _timing() -> void:
-    var t0 := Time.get_ticks_usec()
     _start_game(5)
-    print("start_game ms ", (Time.get_ticks_usec() - t0) / 1000)
-    var types := ["house","apartment","commerce","office","factory","armybase","missilebase","radar","airbase","port","enrich","aa0","aa1","aa2","aa3","aa4"]
-    for t in types:
-        var t1 := Time.get_ticks_usec()
-        var b := _add_building(5, t, 0.0, 0.0, 0, true)
-        print(t, " add ms ", (Time.get_ticks_usec() - t1) / 1000)
-    var t2 := Time.get_ticks_usec()
-    for i in range(60):
+    var cen := _land_center(5)
+    var sh: Variant = _spawn_ship(5, 2, cen + Vector3(0, 0, 220), 0.0)
+    _cast_start("ship")
+    for i in range(30):
+        _cast_camera(0.1)
+        _ring_update(0.1)
+    print("ship cast ok ", view_mode, " ", _cast_name())
+    _cast_next(1)
+    _cast_exit()
+    print("exit ", view_mode)
+    _buy_jet(5, 0)
+    for i in range(40):
         _sim(0.5)
-    print("sim30s ms ", (Time.get_ticks_usec() - t2) / 1000, " per call ", (Time.get_ticks_usec() - t2) / 60000)
-    var t3 := Time.get_ticks_usec()
-    for i in range(60):
-        _lod_rebuild(); _update_markers()
-    print("misc ms ", (Time.get_ticks_usec() - t3) / 1000)
+    _cast_start("jet")
+    print("jet cast: ", view_mode)
+    _cast_exit()
+    sel_ship = sh["id"]
+    _ring_update(0.1)
+    print("ring on select ", sel_ring != null)
     get_tree().quit()
