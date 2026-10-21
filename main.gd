@@ -1603,6 +1603,8 @@ var fire_panel: PanelContainer = null
 var fire_lbl: Label = null
 var pending_target: Variant = null
 var fire_k := -1
+var fire_open := false
+var target_mark: MeshInstance3D = null
 var fire_n := 1
 var fire_box: VBoxContainer = null
 var fire_sig := ""
@@ -1873,7 +1875,7 @@ func _new_country(i: int) -> Dictionary:
         "trade": [false, false, false, false, false, false, false, false, false],
         "sanc": [false, false, false, false, false, false, false, false, false],
         "pol": {}, "rp": 0.0, "tech": _all_tech(), "cur": "", "unl": {}, "ammo": [0, 0, 0, 0, 0, 0],
-        "war_w": 0.0, "rep": 0.0, "ai": true, "nuke": false, "income": 0.0, "upkeep": 0.0,
+        "war_w": 0.0, "rep": 0.0, "ai": true, "nuke": false, "wk": _wk_fresh(), "income": 0.0, "upkeep": 0.0,
         "next_elec": 40, "think": rng.randf_range(2.0, 6.0), "ops": rng.randf_range(10.0, 25.0),
         "prot": 0.0, "stab": 0.0, "casual": 0.0, "dead_pop": 0.0, "aggr": float(cd["aggr"]),
         "pm_away": false, "pm_t": 0.0, "alert": 0.0, "last_inc": 0.0, "cap_b": -1,
@@ -2054,7 +2056,7 @@ func _bdef(t: String, c: int = -1) -> Dictionary:
 func _all_types() -> Array:
     var out := []
     for k in BDEFS.keys():
-        if not BDEFS[k].get("hidden", false) and k in ["house", "armybase", "missilebase", "radar", "airbase", "port", "enrich"]:
+        if not BDEFS[k].get("hidden", false) and k in ["armybase", "missilebase", "radar", "airbase", "port", "enrich"]:
             out.append(k)
     for k in range(5):
         out.append("aa" + str(k))
@@ -2584,6 +2586,8 @@ func _lod_rebuild() -> void:
 #  CAMERA + INPUT
 # =====================================================================
 func _update_camera(delta: float) -> void:
+    if view_mode == "walk" and (hero == null or not is_instance_valid(hero)) and not cs.is_empty():
+        _make_hero()
     if view_mode == "cast":
         _cast_camera(delta)
         return
@@ -2780,38 +2784,130 @@ func _make_worker(role: String, shirt: Color, hat: Color, label: String) -> Dict
     return {"role": role, "node": node, "parts": parts, "job": null, "t": 0.0, "home": Vector3.ZERO, "working": false}
 
 
+const WORKER_DEFS := {
+    "build": {"name": "Builder", "desc": "Auto-build: ghar khud banata hai, buildings banata hai", "max": 5, "base": 3500.0, "start": 1,
+        "shirt": Color(0.95, 0.5, 0.1), "hat": Color(1.0, 0.85, 0.1), "label": "BUILDER"},
+    "upg": {"name": "Upgrade Builder", "desc": "Buildings ko upgrade karta hai (ghar bada banata hai)", "max": 5, "base": 5000.0, "start": 0,
+        "shirt": Color(0.2, 0.45, 0.9), "hat": Color(0.95, 0.95, 0.95), "label": "UPGRADE"},
+    "rep": {"name": "Repairman", "desc": "Damaged imaarat theek karta hai", "max": 3, "base": 8000.0, "start": 0,
+        "shirt": Color(0.85, 0.15, 0.15), "hat": Color(1.0, 0.55, 0.1), "label": "REPAIR"},
+}
+const WORKER_ROLES := ["build", "upg", "rep"]
+var auto_house := true
+var worker_sub := "hire"
+var worker_uid := 1
+
+
+func _wk_fresh() -> Dictionary:
+    var d := {}
+    for r in WORKER_ROLES:
+        d[r] = {"n": int(WORKER_DEFS[r]["start"]), "lvl": 1}
+    return d
+
+
+func _wk_n(c: int, role: String) -> int:
+    return int(cs[c]["wk"][role]["n"])
+
+
+func _wk_lvl(c: int, role: String) -> int:
+    return int(cs[c]["wk"][role]["lvl"])
+
+
+func _wk_speed(c: int, role: String) -> float:
+    return 1.0 + 0.3 * float(_wk_lvl(c, role) - 1)
+
+
+func _wk_hire_cost(c: int, role: String) -> float:
+    var df: Dictionary = WORKER_DEFS[role]
+    var hired := _wk_n(c, role) - int(df["start"])
+    return float(df["base"]) * (1.0 + 0.7 * float(hired))
+
+
+func _wk_upgrade_cost(c: int, role: String) -> float:
+    return 1200.0 * pow(1.8, float(_wk_lvl(c, role) - 1))
+
+
+func _hire_worker(c: int, role: String) -> String:
+    var df: Dictionary = WORKER_DEFS[role]
+    if _wk_n(c, role) >= int(df["max"]):
+        return "Maximum ho gaye (" + str(df["max"]) + ")"
+    var cost := _wk_hire_cost(c, role)
+    if cs[c]["money"] < cost:
+        return "Paise kam hain (" + _fmt(cost) + ")"
+    cs[c]["money"] -= cost
+    cs[c]["wk"][role]["n"] = _wk_n(c, role) + 1
+    _workers_sync(c)
+    return ""
+
+
+func _upgrade_worker(c: int, role: String) -> String:
+    if _wk_lvl(c, role) >= 10:
+        return "Max level"
+    if _wk_n(c, role) <= 0:
+        return "Pehle hire karo"
+    var cost := _wk_upgrade_cost(c, role)
+    if cs[c]["money"] < cost:
+        return "Paise kam hain (" + _fmt(cost) + ")"
+    cs[c]["money"] -= cost
+    cs[c]["wk"][role]["lvl"] = _wk_lvl(c, role) + 1
+    return ""
+
+
 func _workers_reset() -> void:
     for w in workers:
         if w["node"] != null and is_instance_valid(w["node"]):
             w["node"].queue_free()
     workers = []
-    var defs := [["build", Color(0.95, 0.5, 0.1), Color(1.0, 0.85, 0.1), "BUILDER"],
-        ["upg", Color(0.2, 0.45, 0.9), Color(0.95, 0.95, 0.95), "UPGRADE"],
-        ["rep", Color(0.85, 0.15, 0.15), Color(1.0, 0.55, 0.1), "REPAIR"]]
     for c in range(9):
-        var cen := _land_center(c)
-        var home := Vector3(cen.x, 0.0, cen.z + 26.0)
-        var k := 0
-        for df in defs:
+        for b in cs[c]["bl"]:
+            b["wk_by"] = -1
+    for c in range(9):
+        _workers_sync(c)
+
+
+func _workers_sync(c: int) -> void:
+    var cen := _land_center(c)
+    var home := Vector3(cen.x, 0.0, cen.z + 26.0)
+    for role in WORKER_ROLES:
+        var have := 0
+        for w in workers:
+            if w["c"] == c and w["role"] == role:
+                have += 1
+        var want := _wk_n(c, role)
+        var df: Dictionary = WORKER_DEFS[role]
+        while have < want:
             var w: Dictionary
             if c == me:
-                w = _make_worker(df[0], df[1], df[2], df[3])
+                w = _make_worker(role, df["shirt"], df["hat"], df["label"])
             else:
-                w = {"role": df[0], "node": null, "parts": {}, "job": null, "t": 0.0, "working": false}
+                w = {"role": role, "node": null, "parts": {}, "job": null, "t": 0.0, "working": false}
             w["c"] = c
-            w["home"] = home + Vector3(float(k) * 4.0 - 4.0, 0, 0)
+            w["wid"] = worker_uid
+            worker_uid += 1
+            var idx := WORKER_ROLES.find(role)
+            w["home"] = home + Vector3(float(idx) * 5.0 - 5.0, 0, float(have) * 3.0)
             w["pos"] = w["home"]
             if w["node"] != null:
                 w["node"].position = w["pos"]
             workers.append(w)
-            k += 1
+            have += 1
+
+
+func _builder_update(_dt: float) -> void:
+    return
+
+
+func _worker_claimed(b: Dictionary, w: Dictionary) -> bool:
+    var by: int = int(b.get("wk_by", -1))
+    return by >= 0 and by != int(w["wid"])
 
 
 func _worker_find_job(w: Dictionary) -> Variant:
+    var c: int = w["c"]
     var best: Variant = null
     var bd := 1e18
     var wp: Vector3 = w["pos"]
-    for b in cs[w["c"]]["bl"]:
+    for b in cs[c]["bl"]:
         var ok := false
         match String(w["role"]):
             "build":
@@ -2820,13 +2916,31 @@ func _worker_find_job(w: Dictionary) -> Variant:
                 ok = b["st"] == "ok" and b.get("upg", null) != null
             "rep":
                 ok = b["st"] == "ok" and b.get("rep", false) and b["hp"] < b["mhp"] - 0.5 and not _is_equipment(String(b["t"]))
-        if not ok:
+        if not ok or _worker_claimed(b, w):
             continue
         var d := _dist2(wp, Vector3(b["x"], 0, b["z"]))
         if d < bd:
             bd = d
             best = b
+    if best == null and w["role"] == "build" and c == me and auto_house:
+        best = _auto_house_job()
+    if best != null:
+        best["wk_by"] = int(w["wid"])
     return best
+
+
+func _auto_house_job() -> Variant:
+    if _count_b(me, "house", false) >= 30:
+        return null
+    var cost := float(_bdef("house", me)["cost"])
+    if cs[me]["money"] < cost + 1500.0:
+        return null
+    var sp: Variant = _auto_spot(me, "house")
+    if sp == null:
+        return null
+    if _buy_building(me, "house", sp[0], sp[1], sp[2]) != "":
+        return null
+    return cs[me]["bl"][cs[me]["bl"].size() - 1]
 
 
 func _worker_job_valid(w: Dictionary) -> bool:
@@ -2854,12 +2968,14 @@ func _workers_update(dt: float) -> void:
     for w in workers:
         var c: int = w["c"]
         if not _worker_job_valid(w):
+            if w["job"] != null and w["job"] is Dictionary and int(w["job"].get("wk_by", -1)) == int(w["wid"]):
+                w["job"]["wk_by"] = -1
             w["job"] = _worker_find_job(w)
         var target: Vector3 = w["home"]
         var job: Variant = w["job"]
         if job != null:
             var h := _fp_half(job["t"], job["r"], c)
-            target = Vector3(job["x"], 0, float(job["z"]) + h.y + 1.6)
+            target = Vector3(job["x"], 0, float(job["z"]) + h.y + 1.6 + float(w["wid"] % 3) * 2.0)
         var pos: Vector3 = w["pos"]
         var to := target - pos
         to.y = 0
@@ -2867,13 +2983,14 @@ func _workers_update(dt: float) -> void:
         var moving := dist > 1.2
         w["working"] = false
         var face := 0.0
+        var spd := _wk_speed(c, String(w["role"]))
         if moving:
-            pos += to.normalized() * min(dist, 11.0 * dt)
+            pos += to.normalized() * min(dist, 11.0 * (0.8 + 0.2 * spd) * dt)
             w["pos"] = pos
             face = atan2(to.x, to.z)
         elif job != null:
             w["working"] = true
-            _worker_progress(w, job, dt)
+            _worker_progress(w, job, dt * spd)
         var node: Variant = w["node"]
         if node == null or not is_instance_valid(node):
             continue
@@ -2916,6 +3033,7 @@ func _worker_progress(w: Dictionary, b: Dictionary, dt: float) -> void:
             if b["prog"] >= 1.0:
                 b["prog"] = 1.0
                 b["st"] = "ok"
+                b["wk_by"] = -1
                 _make_node(b)
                 _on_built(b)
             elif is_instance_valid(b["node"]):
@@ -2923,12 +3041,14 @@ func _worker_progress(w: Dictionary, b: Dictionary, dt: float) -> void:
         "upg":
             b["upg"] = float(b["upg"]) + dt / _upgrade_time(b)
             if float(b["upg"]) >= 1.0:
+                b["wk_by"] = -1
                 _finish_upgrade(b)
         "rep":
             b["hp"] = min(b["mhp"], b["hp"] + b["mhp"] / 18.0 * dt)
             if b["hp"] >= b["mhp"] - 0.5:
                 b["hp"] = b["mhp"]
                 b["rep"] = false
+                b["wk_by"] = -1
 
 
 var hero_parts := {}
@@ -3126,13 +3246,11 @@ func _view_ui_apply() -> void:
 func _refresh_fire_panel() -> void:
     if fire_panel == null:
         return
-    if _fire_valid() and view_mode != "cast":
+    if fire_open and view_mode != "cast":
         fire_panel.visible = true
         _fire_rebuild()
         fire_sig = _fire_signature()
     else:
-        if not _fire_valid():
-            pending_target = null
         fire_panel.visible = false
 
 
@@ -3202,7 +3320,7 @@ func _build_view_ui() -> void:
     fire_panel.anchor_bottom = 1.0
     fire_panel.offset_left = -310
     fire_panel.offset_right = -10
-    fire_panel.offset_top = -420
+    fire_panel.offset_top = -410
     fire_panel.offset_bottom = -96
     fire_panel.visible = false
     ui_root.add_child(fire_panel)
@@ -3217,9 +3335,10 @@ func _build_view_ui() -> void:
     cam_btn_row.offset_top = 218
     cam_btn_row.offset_bottom = 262
     ui_root.add_child(cam_btn_row)
-    cam_btn_row.add_child(_btn("MISSILE CAM", "dark", func(): _cast_start("msl"), 96, 44, 13))
-    cam_btn_row.add_child(_btn("JET CAM", "dark", func(): _cast_start("jet"), 96, 44, 13))
-    cam_btn_row.add_child(_btn("NAVY CAM", "dark", func(): _cast_start("ship"), 96, 44, 13))
+    cam_btn_row.add_child(_btn("FIRE", "bad", func(): _fire_toggle(), 66, 44, 15))
+    cam_btn_row.add_child(_btn("MSL CAM", "dark", func(): _cast_start("msl"), 72, 44, 12))
+    cam_btn_row.add_child(_btn("JET CAM", "dark", func(): _cast_start("jet"), 72, 44, 12))
+    cam_btn_row.add_child(_btn("NAVY CAM", "dark", func(): _cast_start("ship"), 72, 44, 12))
     # ---- broadcast camera panel ----
     cast_panel = PanelContainer.new()
     cast_panel.add_theme_stylebox_override("panel", _sb(Color(0.05, 0.08, 0.14, 0.9), 10, Color(1.0, 0.8, 0.2), 2))
@@ -3252,17 +3371,49 @@ func _fire_valid() -> bool:
 
 
 func _fire_signature() -> String:
-    if not _fire_valid():
+    if not fire_open:
         return ""
-    return str(pending_target["id"]) + "|" + str(fire_k) + "|" + str(fire_n) + "|" + str(cs[me]["ammo"]) + "|" + view_mode
+    var tid := -1
+    if _fire_valid():
+        tid = int(pending_target["id"])
+    return str(tid) + "|" + str(fire_k) + "|" + str(fire_n) + "|" + str(cs[me]["ammo"]) + "|" + view_mode + "|" + str(_wars_of(me))
+
+
+func _fire_toggle() -> void:
+    if fire_open:
+        fire_open = false
+        pending_target = null
+        _refresh_fire_panel()
+        return
+    fire_open = true
+    var wars := _wars_of(me)
+    if wars.size() > 0:
+        if view_mode == "walk":
+            _enter_map(true)
+        _focus_country(int(wars[0]), 330.0)
+        _toast("Missile chuno, phir dushman ki building dabao, phir HIT.", "info")
+    else:
+        _toast("Abhi kisi se jang nahi hai", "warn")
+    _refresh_fire_panel()
 
 
 func _fire_rebuild() -> void:
     _clear(fire_box)
-    var tb: Dictionary = pending_target
-    var d := _bdef(tb["t"], tb["c"])
-    var tx := Vector3(tb["x"], 0, tb["z"])
-    fire_box.add_child(_lbl("TARGET: " + String(d["name"]) + " (" + String(COUNTRIES[tb["c"]]["short"]) + ")", 16, Color(1, 0.85, 0.7), true))
+    var wars := _wars_of(me)
+    var th := _hbox(4)
+    fire_box.add_child(th)
+    var tl := _lbl("MISSILE FIRE", 17, Color(1, 0.85, 0.6))
+    tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    th.add_child(tl)
+    th.add_child(_btn("X", "dark", func(): _fire_toggle(), 44, 34, 16))
+    if wars.is_empty():
+        fire_box.add_child(_lbl("Abhi kisi se jang nahi hai.", 15, Color(1, 0.7, 0.5), true))
+        return
+    var wr := _hbox(4)
+    fire_box.add_child(wr)
+    for c in wars:
+        var cc: int = c
+        wr.add_child(_btn("-> " + String(COUNTRIES[cc]["short"]), "dark", func(): _focus_country(cc, 330.0), 70, 34, 13))
     var have := []
     for k in range(6):
         if cs[me]["ammo"][k] > 0:
@@ -3272,10 +3423,6 @@ func _fire_rebuild() -> void:
     else:
         if fire_k < 0 or not have.has(fire_k):
             fire_k = have[0]
-            for kk in have:
-                if not _missile_origins(me, kk, tx).is_empty():
-                    fire_k = kk
-                    break
         var g := GridContainer.new()
         g.columns = 2
         g.add_theme_constant_override("h_separation", 4)
@@ -3283,30 +3430,39 @@ func _fire_rebuild() -> void:
         fire_box.add_child(g)
         for k in have:
             var kk2: int = k
-            var inr := not _missile_origins(me, k, tx).is_empty()
             var nm := _msl_name(me, k)
-            if nm.length() > 14:
-                nm = nm.substr(0, 14)
-            var bt := _btn(nm + " x" + str(cs[me]["ammo"][k]) + ("" if inr else " (door)"), "good" if fire_k == k else "dark", func():
+            if nm.length() > 13:
+                nm = nm.substr(0, 13)
+            var sel: bool = fire_k == k
+            g.add_child(_btn(("✓ " if sel else "") + nm + " x" + str(cs[me]["ammo"][k]), "good" if sel else "dark", func():
                 fire_k = kk2
-                fire_sig = "", 140, 40, 13)
-            g.add_child(bt)
-        var nh := _hbox(4)
-        fire_box.add_child(nh)
-        nh.add_child(_lbl("Kitni:", 14, C_DIM))
-        for n in [1, 3, 6]:
-            var nn: int = n
-            nh.add_child(_btn(str(n), "good" if fire_n == n else "dark", func():
-                fire_n = nn
-                fire_sig = "", 56, 38, 16))
-    var ready := not have.is_empty() and fire_k >= 0 and not _missile_origins(me, fire_k, tx).is_empty()
-    fire_box.add_child(_btn("HIT!" if ready else "HIT (range/stock nahi)", "bad" if ready else "off", func(): _fire_hit(), 0, 54, 22))
+                fire_sig = "", 142, 40, 13))
+    var tb_ok := _fire_valid()
+    if tb_ok:
+        var tb: Dictionary = pending_target
+        var d := _bdef(tb["t"], tb["c"])
+        var tx := Vector3(tb["x"], 0, tb["z"])
+        var inr := fire_k >= 0 and not _missile_origins(me, fire_k, tx).is_empty()
+        fire_box.add_child(_lbl("✓ TARGET: " + String(d["name"]) + " (" + String(COUNTRIES[tb["c"]]["short"]) + ")" + ("" if inr else "   - DOOR HAI"), 15, Color(0.6, 1, 0.7) if inr else Color(1, 0.6, 0.4), true))
+    else:
+        fire_box.add_child(_lbl("Target: map par dushman ki building dabao", 15, Color(1, 0.8, 0.4), true))
+    var hr := _hbox(4)
+    fire_box.add_child(hr)
+    for n in [1, 3, 6]:
+        var nn: int = n
+        hr.add_child(_btn("x" + str(n), "good" if fire_n == n else "dark", func():
+            fire_n = nn
+            fire_sig = "", 44, 54, 15))
+    var ready := tb_ok and not have.is_empty() and fire_k >= 0 and not _missile_origins(me, fire_k, Vector3(pending_target["x"], 0, pending_target["z"])).is_empty()
+    var hb := _btn("HIT!", "bad" if ready else "off", func(): _fire_hit(), 0, 54, 24)
+    hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    hr.add_child(hb)
     var bh := _hbox(4)
     fire_box.add_child(bh)
-    bh.add_child(_btn("LAUNCH PAD", "warn", func(): _goto_pad(), 140, 42, 14))
-    bh.add_child(_btn("CANCEL", "dark", func():
+    bh.add_child(_btn("LAUNCH PAD (3rd person)", "warn", func(): _goto_pad(), 190, 40, 13))
+    bh.add_child(_btn("CLEAR", "dark", func():
         pending_target = null
-        _refresh_fire_panel(), 140, 42, 14))
+        _refresh_fire_panel(), 90, 40, 13))
 
 
 func _fire_hit() -> void:
@@ -3497,6 +3653,35 @@ func _cast_camera(dt: float) -> void:
     camera.far = 9000.0
 
 
+func _target_mark_update(dt: float) -> void:
+    if not (fire_open and _fire_valid() and view_mode != "cast"):
+        if target_mark != null and is_instance_valid(target_mark):
+            target_mark.visible = false
+        return
+    if target_mark == null or not is_instance_valid(target_mark):
+        target_mark = MeshInstance3D.new()
+        var tm := TorusMesh.new()
+        tm.inner_radius = 0.88
+        tm.outer_radius = 1.0
+        tm.rings = 20
+        tm.ring_segments = 6
+        target_mark.mesh = tm
+        var mt := StandardMaterial3D.new()
+        mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        mt.albedo_color = Color(1.0, 0.15, 0.1)
+        mt.no_depth_test = true
+        target_mark.material_override = mt
+        target_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        add_child(target_mark)
+    var tb: Dictionary = pending_target
+    var h := _fp_half(tb["t"], tb["r"], tb["c"])
+    var pulse := 1.0 + 0.1 * sin(ring_t * 6.0)
+    var mapk: float = clamp(cam_dist / 160.0, 1.0, 10.0) if view_mode == "map" else 1.0
+    target_mark.visible = true
+    target_mark.position = Vector3(tb["x"], 2.5, tb["z"])
+    target_mark.scale = Vector3.ONE * (max(h.x, h.y) * 1.3 + 3.0) * pulse * mapk
+
+
 func _ring_clear() -> void:
     if sel_ring != null and is_instance_valid(sel_ring):
         sel_ring.queue_free()
@@ -3629,10 +3814,13 @@ func _mm_input(ev: InputEvent) -> void:
 
 
 func _view_ui_update(dt: float) -> void:
+    if back_btn != null and game_state == "playing":
+        if back_btn.visible == (view_mode == "walk") or cam_btn_row.visible == (view_mode == "cast"):
+            _view_ui_apply()
     if fire_panel != null:
-        if fire_panel.visible or pending_target != null:
-            if _fire_signature() != fire_sig:
-                _refresh_fire_panel()
+        if fire_open and _fire_signature() != fire_sig:
+            _refresh_fire_panel()
+    _target_mark_update(dt)
     if cast_lbl != null and view_mode == "cast" and _cast_unit_valid():
         cast_lbl.text = _cast_name()
     _ring_update(dt)
@@ -3648,6 +3836,16 @@ func _on_tap(pos: Vector2) -> void:
     if view_mode == "cast":
         return
     var g := _screen_to_ground(pos)
+    if fire_open and view_mode == "map" and mode == "none":
+        var fc := _country_at(g.x, g.z, 24.0)
+        var ftb = _building_at(g.x, g.z, fc if fc >= 0 else -1)
+        if ftb != null and ftb["c"] != me and _at_war(me, ftb["c"]) and ftb["st"] != "ruin":
+            pending_target = ftb
+            _snd("click")
+            _refresh_fire_panel()
+        else:
+            _toast("Dushman ki building par dabao (jang wale mulk ki)", "warn")
+        return
     if mode == "place":
         place_x = _snap(g.x)
         place_z = _snap(g.z)
@@ -6634,6 +6832,19 @@ func _ai_economy(c: int) -> void:
         if list.size() > 0:
             var b: Dictionary = list[rng.randi() % list.size()]
             _upgrade_building(b, false)
+    # workers (same hire / upgrade rules as the player)
+    var want_n := {"build": 3, "upg": 2, "rep": 1}
+    var hired_one := false
+    for role in WORKER_ROLES:
+        if _wk_n(c, role) < int(want_n[role]) and s["money"] > _wk_hire_cost(c, role) * 2.5:
+            _hire_worker(c, role)
+            hired_one = true
+            break
+    if not hired_one:
+        for role in WORKER_ROLES:
+            if _wk_n(c, role) > 0 and _wk_lvl(c, role) < 5 and s["money"] > _wk_upgrade_cost(c, role) * 6.0:
+                _upgrade_worker(c, role)
+                break
     # repairs
     for b in s["bl"]:
         if b["st"] == "ruin" and rng.randf() < 0.3:
@@ -7148,7 +7359,7 @@ func _save_game() -> void:
     for c in cs:
         var cd := {"money": c["money"], "peak": c["peak"], "pop": c["pop"], "happy": c["happy"], "tax": c["tax"], "rel": c["rel"], "st": c["st"],
             "cease_t": c["cease_t"], "trade": c["trade"], "sanc": c["sanc"], "pol": c["pol"], "rp": c["rp"], "tech": c["tech"], "cur": c["cur"],
-            "unl": c["unl"], "ammo": c["ammo"], "war_w": c["war_w"], "rep": c["rep"], "next_elec": c["next_elec"], "aggr": c["aggr"], "nuke": c["nuke"], "bl": []}
+            "unl": c["unl"], "ammo": c["ammo"], "war_w": c["war_w"], "rep": c["rep"], "next_elec": c["next_elec"], "aggr": c["aggr"], "nuke": c["nuke"], "wk": c["wk"], "bl": []}
         for b in c["bl"]:
             var jets := []
             for j in b["jets"]:
@@ -7209,6 +7420,10 @@ func _load_game() -> bool:
             c[k] = float(cd[k])
         c["next_elec"] = int(cd["next_elec"])
         c["cur"] = String(cd["cur"])
+        if cd.has("wk"):
+            for r in WORKER_ROLES:
+                if cd["wk"].has(r):
+                    c["wk"][r] = {"n": int(cd["wk"][r]["n"]), "lvl": int(cd["wk"][r]["lvl"])}
         c["nuke"] = bool(cd["nuke"])
         c["rel"] = []
         for v in cd["rel"]:
@@ -7226,7 +7441,7 @@ func _load_game() -> bool:
         for v in cd["sanc"]:
             c["sanc"].append(bool(v))
         c["pol"] = cd["pol"]
-        c["tech"] = cd["tech"]
+        c["tech"] = _all_tech()
         c["unl"] = cd["unl"]
         c["ammo"] = []
         for v in cd["ammo"]:
@@ -7264,6 +7479,13 @@ func _load_game() -> bool:
     if menu_root:
         menu_root.visible = false
     _hide_all_windows()
+    pending_target = null
+    fire_open = false
+    cast_unit = null
+    _make_hero()
+    _workers_reset()
+    view_mode = "map"
+    _enter_walk()
     _refresh_hud()
     _news("Game loaded.", "info")
     return true
@@ -7600,7 +7822,7 @@ func _build_ui() -> void:
     ui_root.add_child(dock_panel)
     dock = _hbox(6)
     dock_panel.add_child(dock)
-    var tabs := [["BUILD\n(Banao)", "build"], ["MILITARY\n(Fauj)", "mil"], ["AIR\n(Hawai)", "air"], ["NAVY\n(Behri)", "navy"], ["WORLD\n(Dunya)", "world"]]
+    var tabs := [["BUILD\n(Banao)", "build"], ["MILITARY\n(Fauj)", "mil"], ["AIR\n(Hawai)", "air"], ["NAVY\n(Behri)", "navy"], ["WORKER\n(Mazdoor)", "wrk"], ["WORLD\n(Dunya)", "world"]]
     for t in tabs:
         var key: String = t[1]
         dock.add_child(_btn(t[0], "dark", func(): _open_tab(key), 118, 60, 15))
@@ -7903,6 +8125,7 @@ func _win_refresh() -> void:
     _clear(win_body)
     match win_tab:
         "build": _tab_build()
+        "wrk": _tab_worker()
         "mil": _tab_mil()
         "air": _tab_air()
         "navy": _tab_navy()
@@ -7926,13 +8149,90 @@ func _grid(cols: int) -> GridContainer:
 
 
 # ------------------------------- BUILD -------------------------------------
-var build_cat := "city"
+var build_cat := "mil"
+
+func _tab_worker() -> void:
+    win_title.text = "WORKERS (Mazdoor)"
+    var top := _hbox(6)
+    win_body.add_child(top)
+    top.add_child(_btn("HIRE", "warn" if worker_sub == "hire" else "dark", func():
+        worker_sub = "hire"
+        _win_refresh(), 120, 46, 20))
+    top.add_child(_btn("UPGRADE", "warn" if worker_sub == "upg" else "dark", func():
+        worker_sub = "upg"
+        _win_refresh(), 150, 46, 20))
+    top.add_child(_btn("AUTO GHAR: " + ("ON" if auto_house else "OFF"), "good" if auto_house else "off", func():
+        auto_house = not auto_house
+        _win_refresh(), 190, 46, 16))
+    win_body.add_child(_lbl("Builder ghar ke area mein khud ghar banata hai (jab paise hon). Ghar ka kaam builder ke bina nahi hota.", 14, C_DIM, true))
+    if worker_sub == "hire":
+        var g := _grid(2)
+        win_body.add_child(g)
+        for role in WORKER_ROLES:
+            var df: Dictionary = WORKER_DEFS[role]
+            var rr: String = role
+            var cv := _card()
+            var hh := _hbox(10)
+            cv.add_child(hh)
+            var ic := ColorRect.new()
+            ic.color = df["shirt"]
+            ic.custom_minimum_size = Vector2(54, 54)
+            hh.add_child(ic)
+            var vv := _vbox(2)
+            vv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            hh.add_child(vv)
+            vv.add_child(_lbl(String(df["name"]), 21))
+            vv.add_child(_lbl(String(df["desc"]), 13, Color(0.5, 0.95, 1.0), true))
+            vv.add_child(_lbl(str(_wk_n(me, role)) + " / " + str(df["max"]) + "   (Lv " + str(_wk_lvl(me, role)) + ")", 16, Color(1, 0.9, 0.5)))
+            var maxed := _wk_n(me, role) >= int(df["max"])
+            var cost := _wk_hire_cost(me, role)
+            cv.add_child(_btn("MAX" if maxed else _fmt(cost), "off" if maxed else ("good" if cs[me]["money"] >= cost else "dark"), func():
+                var e := _hire_worker(me, rr)
+                if e != "":
+                    _toast(e, "warn")
+                else:
+                    _toast(String(WORKER_DEFS[rr]["name"]) + " hire ho gaya", "good")
+                _win_refresh(), 0, 46, 20))
+            _add_card(g, cv)
+    else:
+        for role in WORKER_ROLES:
+            var df2: Dictionary = WORKER_DEFS[role]
+            var r2: String = role
+            var cv2 := _card()
+            var h2 := _hbox(10)
+            cv2.add_child(h2)
+            var ic2 := ColorRect.new()
+            ic2.color = df2["shirt"]
+            ic2.custom_minimum_size = Vector2(54, 54)
+            h2.add_child(ic2)
+            var v2 := _vbox(2)
+            v2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            h2.add_child(v2)
+            var lv := _wk_lvl(me, role)
+            v2.add_child(_lbl(String(df2["name"]) + "   Lv " + str(lv), 21))
+            if _wk_n(me, role) <= 0:
+                v2.add_child(_lbl("Pehle HIRE karo", 15, Color(1, 0.7, 0.5)))
+            else:
+                var base_t := float(_bdef("house", me)["time"])
+                var info := "Raftaar x" + String.num(_wk_speed(me, role), 2) + " -> x" + String.num(1.0 + 0.3 * float(lv), 2)
+                if role == "build":
+                    info += "     Ghar ka waqt " + str(int(base_t / _wk_speed(me, role))) + "s -> " + str(int(base_t / (1.0 + 0.3 * float(lv)))) + "s"
+                v2.add_child(_lbl(info, 15, Color(0.5, 0.95, 1.0), true))
+            var ucost := _wk_upgrade_cost(me, role)
+            var can := _wk_n(me, role) > 0 and lv < 10
+            h2.add_child(_btn("MAX" if lv >= 10 else _fmt(ucost) + "\nUPGRADE", "good" if can and cs[me]["money"] >= ucost else "off", func():
+                var e2 := _upgrade_worker(me, r2)
+                if e2 != "":
+                    _toast(e2, "warn")
+                _win_refresh(), 150, 64, 17))
+            _add_card(win_body, cv2)
+
 
 func _tab_build() -> void:
-    win_title.text = "BUILD  -  khareedo, jagah khud mil jaati hai"
+    win_title.text = "BUILD  -  jagah khud milti hai. Ghar Builder khud banata hai (WORKER tab)."
     var tabs := _hbox(6)
     win_body.add_child(tabs)
-    for t in [["City", "city"], ["Military / AA", "mil"], ["Air Force", "air"], ["Navy", "navy"]]:
+    for t in [["Military / AA", "mil"], ["Air Force", "air"], ["Navy", "navy"]]:
         var key: String = t[1]
         tabs.add_child(_btn(t[0], "good" if build_cat == key else "dark", func():
             build_cat = key
@@ -8387,6 +8687,7 @@ func _target_picked(tb: Dictionary) -> void:
         _toast("Aap " + String(COUNTRIES[tb["c"]]["name"]) + " se jang mein nahi hain", "warn")
         return
     pending_target = tb
+    fire_open = true
     _refresh_fire_panel()
     _toast("Target chun liya. Missile chuno, phir HIT dabao (ya BACK dabao aur LAUNCH PAD par jao).", "good")
 
@@ -8821,27 +9122,6 @@ func _process(delta: float) -> void:
     _lod_rebuild()
 
 
-var builder_t := 0.0
-func _builder_update(dt: float) -> void:
-    # auto builder: keeps adding houses in the city zone while there is money
-    builder_t += dt
-    if builder_t < 12.0 or me < 0 or cs.size() < 9:
-        return
-    builder_t = 0.0
-    var building := 0
-    for b in cs[me]["bl"]:
-        if b["st"] == "build":
-            building += 1
-    if building >= 2:
-        return
-    var cost := float(_bdef("house", me)["cost"])
-    if cs[me]["money"] < cost * 3.0 or _count_b(me, "house", false) >= 30:
-        return
-    var sp: Variant = _auto_spot(me, "house")
-    if sp != null:
-        _buy_building(me, "house", sp[0], sp[1], sp[2])
-
-
 func _sim(dt: float) -> void:
     _builder_update(dt)
     gtime += dt
@@ -9009,6 +9289,8 @@ func _shot_setup() -> void:
             var tbx: Variant = _pick_target(5, 4, true)
             pending_target = tbx
             _refresh_fire_panel()
+            fire_open = true
+            _refresh_fire_panel()
             if parts.size() > 1:
                 fire_k = 0
                 fire_n = 3
@@ -9144,23 +9426,24 @@ func _selftest() -> void:
 
 func _timing() -> void:
     _start_game(5)
-    var cen := _land_center(5)
-    var sh: Variant = _spawn_ship(5, 2, cen + Vector3(0, 0, 220), 0.0)
-    _cast_start("ship")
-    for i in range(30):
-        _cast_camera(0.1)
-        _ring_update(0.1)
-    print("ship cast ok ", view_mode, " ", _cast_name())
-    _cast_next(1)
-    _cast_exit()
-    print("exit ", view_mode)
-    _buy_jet(5, 0)
-    for i in range(40):
+    cs[5]["money"] = 60000.0
+    print("builders ", _wk_n(5, "build"), " upg ", _wk_n(5, "upg"))
+    for i in range(1200):
+        _workers_update(0.5)
         _sim(0.5)
-    _cast_start("jet")
-    print("jet cast: ", view_mode)
-    _cast_exit()
-    sel_ship = sh["id"]
-    _ring_update(0.1)
-    print("ring on select ", sel_ring != null)
+        if i == 400:
+            print("hire upg: ", _hire_worker(5, "upg"), " hire builder: ", _hire_worker(5, "build"))
+            for b in cs[5]["bl"]:
+                if b["t"] == "house" and b["st"] == "ok":
+                    print("upgrade house: ", _upgrade_building(b))
+                    break
+        if i % 300 == 0:
+            var hs := 0
+            var lv := 0
+            for b in cs[5]["bl"]:
+                if b["t"] == "house":
+                    hs += 1
+                    lv += b["lvl"]
+            print("t=", int(gtime), " houses ", hs, " sumlvl ", lv, " money ", int(cs[5]["money"]), " AI0 wk ", cs[0]["wk"])
+    print("worker upgrade: ", _upgrade_worker(5, "build"), " lvl ", _wk_lvl(5, "build"))
     get_tree().quit()
